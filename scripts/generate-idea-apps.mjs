@@ -121,13 +121,15 @@ pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active
     section: "drones",
     synth: "Detuned pans",
     sensors: "Compass · touch",
-    learn: "<h2>Compass choir</h2><p><strong>Hold</strong> and turn your body — where you face pans the choir.</p>",
+    learn: "<h2>Compass choir</h2><p><strong>Hold</strong> and turn your body — the section you face sings loudest.</p>",
     script: `${padBase}
-import { enableSensors, onOrientation } from "../../shared/sensors.js";
-let voices=[];
-function build(c){ctx=c;({master}=createMasterBus(c,0.4));for(let i=0;i<5;i++){const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner();g.gain.value=0;o.frequency.value=110*Math.pow(2,i/12);o.connect(g);g.connect(p);p.connect(master);o.start();voices.push({g,p});}built=true;
-enableSensors({needMotion:false,needOrientation:true}).then(ok=>{if(!ok)return;onOrientation(o=>{if(!holding)return;const h=(o.webkitCompassHeading??o.alpha??0)/360;voices.forEach((v,i)=>{const t=ctx.currentTime;v.p.pan.setTargetAtTime(Math.sin((h+i*0.15)*Math.PI*2)*0.85,t,0.08);v.g.gain.setTargetAtTime(0.06,t,0.06);});});});}
-pad.addEventListener("pointerdown",async()=>{await startAudio(!built?build:undefined);holding=true;pad.classList.add("active");});
+import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
+let voices=[],headingDeg=0;
+function headingFrom(o){if(typeof o.webkitCompassHeading==="number")return o.webkitCompassHeading;return o.alpha??headingDeg;}
+function applyHeading(h){headingDeg=((h%360)+360)%360;if(!holding||!ctx)return;const t=ctx.currentTime;let sum=0;const w=[];for(let i=0;i<5;i++){const c=i*72,d=Math.abs(((headingDeg-c+540)%360)-180);w[i]=Math.pow(Math.max(0,1-d/52),2);sum+=w[i];}sum=sum||1;voices.forEach((v,i)=>{const n=w[i]/sum;v.g.gain.setTargetAtTime(0.025+n*0.38,t,0.06);v.p.pan.setTargetAtTime(Math.sin((headingDeg/360+i/5)*Math.PI*2)*0.95,t,0.08);});}
+function build(c){ctx=c;({master}=createMasterBus(c,0.48));for(let i=0;i<5;i++){const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner();g.gain.value=0;o.frequency.value=110*Math.pow(2,i*7/12);o.connect(g);g.connect(p);p.connect(master);o.start();voices.push({g,p});}built=true;}
+primeSensors({needMotion:false,needOrientation:true});enableSensors({needMotion:false,needOrientation:true}).then(ok=>{if(!ok)return;onOrientation(o=>applyHeading(headingFrom(o)));});
+pad.addEventListener("pointerdown",async e=>{e.preventDefault();primeSensors({needMotion:false,needOrientation:true});await startAudio(!built?build:undefined);holding=true;pad.classList.add("active");applyHeading(headingDeg);});
 pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");voices.forEach(v=>v.g.gain.setTargetAtTime(0,ctx.currentTime,0.1));});`,
   },
   {

@@ -158,7 +158,7 @@ export const HUB_APPS = [
   },
   {
     href: "apps/ks-string/",
-    title: "Ks String",
+    title: "KS String",
     section: "synthesis",
     synth: "KS · stage or pocket",
     sensors: "Touch · tilt",

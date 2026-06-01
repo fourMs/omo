@@ -4,37 +4,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#0d0f14" />
-  <title>Ks String — OMO</title>
+  <title>KS String — OMO</title>
   <link rel="stylesheet" href="../../shared/ui.css" />
 </head>
-<body class="app-shell">
+<body class="app-shell ks-string-app">
   <header class="app-header">
     <a class="back-link" href="../../">←</a>
-    <h1>Ks String</h1>
+    <h1>KS String</h1>
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>Karplus–Strong</h2>
     <p>Turn <strong>Audio on</strong>, then tap to pluck. <strong>X</strong> = pitch, <strong>Y</strong> = strength. Tilt = damping.</p>
-    <p><strong>Stage</strong> = lower, longer wire · <strong>Pocket</strong> = wider pitch range (former Pocket Pluck).</p>
-  </div>
-  <div class="control-row" style="margin:0 0.35rem">
-    <label for="rangeSelect">Range</label>
-    <select id="rangeSelect">
-      <option value="stage">Stage</option>
-      <option value="pocket">Pocket</option>
-    </select>
+    <p>Stage range: lower, longer wire with reverb on every pluck.</p>
   </div>
   <div class="main-stage">
     <div id="pad" class="stage-fill play-grid"></div>
-  </div>
-  <div class="readout-row">
-    <p class="value-chip">Pitch <strong id="freqEl">110</strong> Hz</p>
-    <p class="value-chip">Pluck <strong id="pluckEl">0.5</strong></p>
-    <p class="value-chip">Damp <strong id="dampEl">4000</strong> Hz</p>
-    <label class="slide-toggle value-chip">
-      <input type="checkbox" id="reverbOn" checked />
-      Reverb
-    </label>
   </div>
   <script type="module">
     import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
@@ -50,21 +34,8 @@
     let activeId = null;
     const pool = createKSPool(3);
 
-    const rangeSelect = document.getElementById("rangeSelect");
-    let range = new URLSearchParams(location.search).get("range") === "pocket" ? "pocket" : "stage";
-    if (range === "pocket") rangeSelect.value = "pocket";
-
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-    const mapX = (nx) =>
-      range === "pocket" ? 55 * Math.pow(880 / 55, nx) : 40 * Math.pow(300 / 40, nx);
-
-    rangeSelect.addEventListener("change", () => {
-      range = rangeSelect.value;
-      const u = new URL(location.href);
-      if (range === "pocket") u.searchParams.set("range", "pocket");
-      else u.searchParams.delete("range");
-      history.replaceState({}, "", u);
-    });
+    const mapX = (nx) => 40 * Math.pow(300 / 40, nx);
 
     function buildAudio(c) {
       if (built) return;
@@ -83,7 +54,6 @@
         onOrientation((o) => {
           const t = clamp(Math.sqrt((o.beta || 0) ** 2 + (o.gamma || 0) ** 2) / 90, 0, 1);
           currentDamp = 8000 * (300 / 8000) ** t;
-          document.getElementById("dampEl").textContent = currentDamp.toFixed(0);
         });
       }
     }
@@ -106,18 +76,15 @@
       const freq = mapX(nx);
       const strength = 0.1 + (1 - ny) * 0.5;
       const dampHz = currentDamp;
-      const useRev = document.getElementById("reverbOn").checked;
       karplusPluck(ctx, master, pool, freq, {
         strength,
         dampHz,
         level: 0.22 + strength * 0.2,
         feedback: Math.max(0.72, 0.84 - dampHz / 11000),
         decaySec: 1.7,
-        reverbBus: useRev ? reverbBus : null,
-        reverbSend: useRev ? 0.34 : 0,
+        reverbBus,
+        reverbSend: 0.34,
       });
-      document.getElementById("freqEl").textContent = freq.toFixed(0);
-      document.getElementById("pluckEl").textContent = strength.toFixed(2);
       ripple(x, y);
     }
 
@@ -134,16 +101,6 @@
         clamp(ev.clientX - r.left, 0, r.width),
         clamp(ev.clientY - r.top, 0, r.height)
       );
-    });
-
-    pad.addEventListener("pointermove", (ev) => {
-      if (ev.pointerId !== activeId) return;
-      const r = pad.getBoundingClientRect();
-      const x = clamp(ev.clientX - r.left, 0, r.width);
-      const y = clamp(ev.clientY - r.top, 0, r.height);
-      const nx = x / r.width;
-      document.getElementById("freqEl").textContent = mapX(nx).toFixed(0);
-      document.getElementById("pluckEl").textContent = (0.1 + (1 - y / r.height) * 0.5).toFixed(2);
     });
 
     const stop = (ev) => {

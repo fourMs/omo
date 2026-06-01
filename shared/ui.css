@@ -1175,6 +1175,37 @@ html.omo-a11y .hub-header .hub-section-select {
   box-shadow: 0 0 12px rgba(110, 231, 183, 0.45);
 }
 
+/* Heading choir — live compass readout */
+.heading-choir-app .hc-toolbar {
+  flex-shrink: 0;
+  padding: 0 0.65rem 0.3rem;
+}
+
+.heading-choir-app .hc-live {
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.heading-choir-app .hc-live label {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.heading-choir-app .hc-live span {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.heading-choir-app .hc-live strong {
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
+.heading-choir-app #pad.play-grid {
+  touch-action: none;
+}
+
 /* Filter ladder — tappable pad while tilting */
 .filter-ladder-app .stage-fill.play-grid {
   touch-action: none;
