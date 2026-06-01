@@ -63,22 +63,24 @@ export function initHeaderControls() {
     else wrap.appendChild(qrBtn);
   }
 
-  if (!document.getElementById(AUDIO_TOGGLE_ID)) {
-    const audioWrap = document.createElement("div");
-    audioWrap.className = "audio-toggle-wrap";
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.id = AUDIO_TOGGLE_ID;
-    btn.className = "audio-toggle is-off";
-    btn.setAttribute("aria-pressed", "false");
-    btn.setAttribute("aria-label", "Audio off");
-    btn.innerHTML = '<span class="audio-toggle-label">Audio off</span>';
-    btn.addEventListener("click", () => {
-      void (audioOn ? setAudioOff() : setAudioOn());
-    });
-    audioWrap.appendChild(btn);
-    wrap.appendChild(audioWrap);
-    setAudioActive(false);
+  if (!document.body.classList.contains("hub")) {
+    if (!document.getElementById(AUDIO_TOGGLE_ID)) {
+      const audioWrap = document.createElement("div");
+      audioWrap.className = "audio-toggle-wrap";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = AUDIO_TOGGLE_ID;
+      btn.className = "audio-toggle is-off";
+      btn.setAttribute("aria-pressed", "false");
+      btn.setAttribute("aria-label", "Audio off");
+      btn.innerHTML = '<span class="audio-toggle-label">Audio off</span>';
+      btn.addEventListener("click", () => {
+        void (audioOn ? setAudioOff() : setAudioOn());
+      });
+      audioWrap.appendChild(btn);
+      wrap.appendChild(audioWrap);
+      setAudioActive(false);
+    }
   }
 }
 

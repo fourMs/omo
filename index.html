@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="omo-a11y">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -28,7 +28,6 @@
   <div id="partBanner" class="hub-banner hidden"></div>
 
   <div class="control-row" style="margin:0 0.35rem">
-    <label class="slide-toggle"><input type="checkbox" id="a11yToggle" /> Larger UI</label>
     <label for="sectionFilter">Section</label>
     <select id="sectionFilter">
       <option value="">All</option>
@@ -47,11 +46,10 @@
     import { bindLearn } from "./shared/app.js";
     import { injectLearnPedagogy } from "./shared/learn-pedagogy.js";
     import { HUB_APPS, catalogEntryForHref } from "./shared/hub-catalog.js";
-    import { SECTIONS, getPartFromUrl, getSectionFromUrl, wireA11yToggle } from "./shared/workshop.js";
+    import { SECTIONS, getPartFromUrl, getSectionFromUrl } from "./shared/workshop.js";
 
     bindLearn();
     injectLearnPedagogy("learnPanel", "hub");
-    wireA11yToggle();
 
     const APPS = [...HUB_APPS].sort((a, b) =>
       a.title.localeCompare(b.title, "en", { sensitivity: "base" })

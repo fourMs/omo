@@ -56,32 +56,7 @@ export function getSectionFromUrl(search = location.search) {
   return new URLSearchParams(search).get("section") || null;
 }
 
-export function isA11yEnabled() {
-  try {
-    return localStorage.getItem("omo-a11y") === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function applyA11y(enabled) {
-  document.documentElement.classList.toggle("omo-a11y", !!enabled);
-  try {
-    localStorage.setItem("omo-a11y", enabled ? "1" : "0");
-  } catch {
-    /* noop */
-  }
-}
-
-/** Apply saved preference on any page (hub + instruments). */
+/** Larger UI on every page (hub + instruments). */
 export function loadA11yPreference() {
-  applyA11y(isA11yEnabled());
-}
-
-/** Hub “Larger UI” checkbox — sync state and listen for changes. */
-export function wireA11yToggle(el = document.getElementById("a11yToggle")) {
-  if (!el || el.dataset.a11yWired) return;
-  el.dataset.a11yWired = "1";
-  el.checked = isA11yEnabled();
-  el.addEventListener("change", () => applyA11y(el.checked));
+  document.documentElement.classList.add("omo-a11y");
 }
