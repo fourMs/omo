@@ -81,7 +81,7 @@ export const HUB_APPS = [
   },
   {
     href: "apps/motion-wah/",
-    title: "Motion Wah",
+    title: "Motion Trump",
     section: "drones",
     synth: "Bandpass wah",
     sensors: "Touch · motion",

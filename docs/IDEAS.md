@@ -58,7 +58,7 @@ Phones expose more than mic + tilt. Each row is a candidate **app** (or major up
 
 | Shipped / partial | Sensing |
 |-----------------|---------|
-| [Motion Wah](../apps/motion-wah/), [Compass Wah](../apps/compass-wah/) | Tilt, heading |
+| [Motion Trump](../apps/motion-wah/), [Compass Wah](../apps/compass-wah/) | Tilt, heading |
 | [Firefly](../apps/firefly/), [Harmonizer](../apps/harmonizer/), [Swarm Bloom](../apps/swarm-bloom/) | Mic onsets, chroma, evo soundscape |
 | [Train & Shake](../apps/train-shake/), [Hum vs Clap](../apps/hum-clap/) | Accel features → ML |
 | [Bow Phone](../apps/bow-phone/) | Camera + hand motion |
@@ -179,7 +179,7 @@ Use when designing a new app: pick **one primary sensor** and **one synthesis fa
 ## Enhance existing apps
 
 - ~~**Just Equal**~~ (was Drone Choir) — hold-to-sustain; cents ruler on pad
-- ~~**Motion Wah**~~ — continuous mode toggle
+- ~~**Motion Trump**~~ — continuous mode toggle
 - ~~**Train & Shake**~~ — sway + export/import
 - ~~**Conductor**~~ — QR + visual metronome flash
 - ~~**Synth Pad**~~ — aftertouch

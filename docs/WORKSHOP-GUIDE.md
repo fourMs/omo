@@ -22,7 +22,7 @@
 Open hub → **Synth Pad**. Everyone finds one note. Conductor counts 1–2–3–4, all release on 4.
 
 ### Sensors (10 min)
-**Motion Wah** — “Tilt = vowel.” Conductor points up/down; group sweeps together without looking at screens.
+**Motion Trump** — “Tilt = vowel.” Conductor points up/down; group sweeps together without looking at screens.
 
 ### AI (10 min)
 **Train & Shake** — record **still**, **sway**, and **shake** (3+ each), or **Export set** / **Import set** for a shared demo. Open **Teach** (feature map + confusion matrix), try **k** slider and **Compare both** models.
