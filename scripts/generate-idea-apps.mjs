@@ -64,22 +64,6 @@ const off=e=>{if(e.pointerId!==activeId)return;holding=false;pad.classList.remov
 pad.addEventListener("pointerup",off);pad.addEventListener("pointercancel",off);pad.addEventListener("lostpointercapture",off);`,
   },
   {
-    slug: "gravity-bounce",
-    title: "Drop Bell",
-    section: "synthesis",
-    synth: "KS impact",
-    sensors: "Accel · touch",
-    learn: "<h2>Gravity bounce</h2><p>Set pitch with <strong>X</strong> on the pad. A sharp <strong>downward jerk</strong> triggers a pluck.</p>",
-    script: `${padBase}
-import { createKSPool, karplusPluck } from "../../shared/ks.js";
-import { enableSensors, onMotion, primeSensors } from "../../shared/sensors.js";
-let pool,hz=220,lastM=9.8;
-function build(c){ctx=c;({master}=createMasterBus(c,0.55));pool=createKSPool(4);built=true;
-primeSensors({needMotion:true,needOrientation:false});enableSensors({needMotion:true,needOrientation:false}).then(ok=>{if(!ok)return;onMotion(({x,y,z})=>{const m=Math.sqrt(x*x+y*y+z*z);if(m<lastM-2.2)karplusPluck(ctx,master,pool,hz,{strength:0.55,level:0.35});lastM=m;});});}
-pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio(!built?build:undefined);const r=pad.getBoundingClientRect();hz=110*Math.pow(4,clamp((e.clientX-r.left)/r.width,0,1));pad.classList.add("active");});
-pad.addEventListener("pointerup",()=>pad.classList.remove("active"));`,
-  },
-  {
     slug: "shake-filter",
     title: "Jerk Wah",
     section: "drones",
@@ -232,22 +216,6 @@ function build(c){ctx=c;({master}=createMasterBus(c,0.42));for(let i=0;i<5;i++){
 registerAudioBoot(async c=>{build(c);const stream=await primeMicStream();micSrc=ctx.createMediaStreamSource(stream);analyser=ctx.createAnalyser();analyser.fftSize=2048;micSrc.connect(analyser);const buf=new Float32Array(analyser.fftSize);function tick(){analyser.getFloatTimeDomainData(buf);const hz=detectPitchHz(buf,ctx.sampleRate);if(hz&&holding){partials.forEach((p,i)=>{p.o.frequency.setTargetAtTime(hz*(i+1)*0.98,ctx.currentTime,0.08);p.g.gain.setTargetAtTime(0.05/(i+1),ctx.currentTime,0.06);});}requestAnimationFrame(tick);}tick();},{mic:true});
 pad.addEventListener("pointerdown",async()=>{await startAudio();holding=true;pad.classList.add("active");});
 pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");partials.forEach(p=>p.g.gain.setTargetAtTime(0,ctx.currentTime,0.1));});`,
-  },
-  {
-    slug: "feedback-flute",
-    title: "Whistle Loop",
-    section: "melody",
-    synth: "Resonant bandpass",
-    sensors: "Mic · touch",
-    learn: "<h2>Feedback flute</h2><p>Careful distance — mic drives a resonant whistle. <strong>Hold</strong> to enable.</p>",
-    script: `${padBase}
-import { registerAudioBoot, primeMicStream } from "../../shared/app.js";
-let bp,fb,analyser,micSrc;
-function build(c){ctx=c;({master}=createMasterBus(c,0.35));bp=ctx.createBiquadFilter();bp.type="bandpass";bp.frequency.value=900;bp.Q.value=18;fb=ctx.createGain();fb.gain.value=0;bp.connect(fb);fb.connect(bp);fb.connect(master);built=true;}
-registerAudioBoot(async c=>{build(c);const stream=await primeMicStream();micSrc=ctx.createMediaStreamSource(stream);analyser=ctx.createAnalyser();micSrc.connect(bp);micSrc.connect(analyser);const buf=new Float32Array(256);function tick(){analyser.getFloatTimeDomainData(buf);let s=0;for(let i=0;i<buf.length;i++)s+=buf[i]*buf[i];const rms=Math.sqrt(s/buf.length);fb.gain.setTargetAtTime(holding?clamp(rms*12,0,0.35):0,ctx.currentTime,0.05);requestAnimationFrame(tick);}tick();},{mic:true});
-pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio();holding=true;pad.classList.add("active");const r=pad.getBoundingClientRect();bp.frequency.setTargetAtTime(400+1200*clamp((e.clientY-r.top)/r.height,0,1),ctx.currentTime,0.03);});
-pad.addEventListener("pointermove",e=>{if(!holding)return;const r=pad.getBoundingClientRect();bp.frequency.setTargetAtTime(400+1200*clamp((e.clientY-r.top)/r.height,0,1),ctx.currentTime,0.03);});
-pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");});`,
   },
   {
     slug: "shadow-sequencer",

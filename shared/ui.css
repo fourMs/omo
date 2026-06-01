@@ -1020,85 +1020,159 @@ html.omo-a11y .hub-header .hub-section-select {
   box-shadow: 0 0 12px rgba(110, 231, 183, 0.35);
 }
 
-/* Feedback flute — vertical pitch strip */
-.feedback-flute-app .feedback-flute-stage {
+/* Gesture regression — tilt strip + live readout */
+.gesture-regression-app .gr-toolbar {
+  flex-shrink: 0;
+  padding: 0 0.65rem 0.35rem;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  min-height: 0;
-  padding: 0.5rem 1.25rem calc(0.5rem + var(--safe-b));
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
-.feedback-flute-app .pitch-slider-1d {
+.gesture-regression-app .gr-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.gesture-regression-app .gr-guide {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #cbd5e1;
+  text-align: center;
+}
+
+.gesture-regression-app .gr-live {
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
+}
+
+.gesture-regression-app .gr-live span {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.gesture-regression-app .gr-live strong {
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
+.gesture-regression-app .gr-match[hidden] {
+  display: none !important;
+}
+
+.gesture-regression-app #pad.play-grid {
+  touch-action: none;
   position: relative;
-  flex: 1 1 auto;
-  max-width: 5.5rem;
-  min-height: min(24rem, 68vh);
+}
+
+.gesture-regression-app .gr-tilt-axis {
+  position: absolute;
+  right: 0.65rem;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  width: 2.6rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0.75rem 0.6rem;
-  border-radius: 14px;
-  background: #0b1220;
-  border: 1px solid #334155;
-  touch-action: none;
-  user-select: none;
+  pointer-events: none;
+  z-index: 2;
 }
 
-.feedback-flute-app .pitch-slider-track {
-  position: absolute;
-  left: 50%;
-  top: 1.6rem;
-  bottom: 1.6rem;
-  width: 0.55rem;
-  transform: translateX(-50%);
+.gesture-regression-app .gr-tilt-label {
+  flex-shrink: 0;
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.1;
+  text-align: center;
+}
+
+.gesture-regression-app .gr-tilt-track {
+  position: relative;
+  flex: 1 1 auto;
+  width: 0.5rem;
+  margin: 0.25rem 0;
   border-radius: 999px;
   background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
   border: 1px solid #475569;
-  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, 0.06);
 }
 
-.feedback-flute-app .pitch-slider-thumb {
+.gesture-regression-app .gr-tilt-marker {
   position: absolute;
   left: 50%;
-  top: 50%;
-  width: 2.4rem;
-  height: 2.4rem;
-  margin-left: -1.2rem;
-  margin-top: -1.2rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-left: -0.675rem;
+  margin-top: -0.675rem;
   border-radius: 50%;
-  background: rgba(110, 231, 183, 0.25);
-  border: 2px solid #6ee7b7;
-  box-shadow: 0 0 12px rgba(110, 231, 183, 0.35);
-  pointer-events: none;
-  transition: transform 0.05s linear, box-shadow 0.08s;
+  border: 2px solid #f8fafc;
+  background: rgba(248, 250, 252, 0.2);
+  box-shadow: 0 0 10px rgba(248, 250, 252, 0.35);
+  transition: top 0.06s linear;
 }
 
-.feedback-flute-app .pitch-slider-1d.active .pitch-slider-thumb,
-.feedback-flute-app .pitch-slider-thumb.active {
-  background: rgba(110, 231, 183, 0.45);
-  box-shadow: 0 0 18px rgba(110, 231, 183, 0.55);
-  transform: scale(1.06);
+.gesture-regression-app .gr-tilt-samples {
+  position: absolute;
+  inset: 0;
 }
 
-.feedback-flute-app .pitch-slider-label {
-  flex-shrink: 0;
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.gesture-regression-app .gr-tilt-sample {
+  position: absolute;
+  left: 50%;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-left: -0.325rem;
+  margin-top: -0.325rem;
+  border-radius: 50%;
+  border: 1px solid rgba(15, 23, 42, 0.85);
+  box-shadow: 0 0 6px currentColor;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+
+.gesture-regression-app .gr-tilt-sample--active {
+  transform: scale(1.45);
+  box-shadow: 0 0 12px currentColor;
   z-index: 1;
 }
 
-.feedback-flute-app .pitch-slider-label--high {
-  margin-bottom: 0.35rem;
+.gesture-regression-app .gr-tilt-samples--flash .gr-tilt-sample:last-child {
+  animation: gr-sample-pop 0.18s ease-out;
 }
 
-.feedback-flute-app .pitch-slider-label--low {
-  margin-top: auto;
-  padding-top: 0.35rem;
+@keyframes gr-sample-pop {
+  0% { transform: scale(0.4); }
+  70% { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+
+.gesture-regression-app .gr-pad-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity 0.12s;
+}
+
+.gesture-regression-app #pad.active .gr-pad-hint {
+  opacity: 0.35;
+}
+
+.gesture-regression-app #pad.gr-pad--play .gr-tilt-marker {
+  border-color: #6ee7b7;
+  box-shadow: 0 0 12px rgba(110, 231, 183, 0.45);
 }
 
 /* Filter ladder — tappable pad while tilting */

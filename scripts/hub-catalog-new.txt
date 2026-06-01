@@ -1,5 +1,4 @@
   { href: "apps/gyro-whirl/", title: "Spin Chorus", section: "synthesis", synth: "FM vibrato stack", sensors: "Gyro · touch" },
-  { href: "apps/gravity-bounce/", title: "Drop Bell", section: "synthesis", synth: "KS impact", sensors: "Accel · touch" },
   { href: "apps/shake-filter/", title: "Jerk Wah", section: "drones", synth: "Subtractive", sensors: "Motion · touch" },
   { href: "apps/pocket-metronome/", title: "Pocket Pulse", section: "rhythm", synth: "Pulse + duck", sensors: "Accel · touch" },
   { href: "apps/flat-edge/", title: "Table Drone", section: "drones", synth: "Gated drone", sensors: "Tilt · touch" },
@@ -9,7 +8,6 @@
   { href: "apps/whisper-gate/", title: "Soft Vowel", section: "texture", synth: "Formant noise", sensors: "Mic · touch" },
   { href: "apps/clap-architect/", title: "Clap Grid", section: "rhythm", synth: "Learned kit", sensors: "Mic · touch" },
   { href: "apps/pitch-hive/", title: "Hum Hive", section: "drones", synth: "Additive chord", sensors: "Mic · touch" },
-  { href: "apps/feedback-flute/", title: "Whistle Loop", section: "melody", synth: "Resonant bandpass", sensors: "Mic · touch" },
   { href: "apps/shadow-sequencer/", title: "Shadow Steps", section: "rhythm", synth: "8-step mask", sensors: "Camera · touch" },
   { href: "apps/color-band/", title: "Hue Scale", section: "melody", synth: "Quantized melody", sensors: "Camera · touch" },
   { href: "apps/motion-grid/", title: "Grain Cam", section: "texture", synth: "Granular density", sensors: "Camera · touch" },

@@ -13,23 +13,36 @@
     <h1>Gesture Regression</h1>
   </header>
   <div class="learn-panel panel" id="learnPanel">
-    <h2>Gesture → synthesis</h2>
-    <p>Turn <strong>Audio on</strong> and allow <strong>motion</strong> if asked. Tap <strong>Train</strong>, then <strong>hold</strong> the pad at several different tilts — each pose teaches a filter cutoff.</p>
-    <p>Switch to <strong>Play</strong> and hold again: tilt is matched to your examples and drives the sound.</p>
+    <h2>Teach tilt → sound</h2>
+    <p>You record a few <strong>phone tilts</strong> while holding the pad; each tilt gets its own timbre (filter + pitch). In <strong>Play</strong>, tilting finds the closest example and plays that sound.</p>
+    <p><strong>Train:</strong> hold the pad, tip the phone forward and back at least 3 different angles — watch dots appear on the strip. <strong>Play:</strong> hold and tilt; the highlighted dot is the match.</p>
   </div>
-  <div class="app-toolbar">
-    <button type="button" class="btn btn-sm" id="trainBtn" aria-pressed="true">Train</button>
-    <button type="button" class="btn-secondary btn btn-sm" id="playBtn" aria-pressed="false">Play</button>
-    <button type="button" class="btn-secondary btn btn-sm" id="clearBtn">Clear</button>
+  <div class="gr-toolbar">
+    <div class="gr-mode-row">
+      <button type="button" class="btn btn-sm" id="trainBtn" aria-pressed="true">① Train</button>
+      <button type="button" class="btn-secondary btn btn-sm" id="playBtn" aria-pressed="false">② Play</button>
+      <button type="button" class="btn-secondary btn btn-sm" id="clearBtn">Clear</button>
+    </div>
+    <p class="gr-guide" id="grGuide">Hold pad · tilt phone · each angle saves a dot</p>
+    <div class="control-row gr-live" aria-live="polite">
+      <span>Samples <strong id="countOut">0</strong></span>
+      <span>Tilt <strong id="tiltOut">—</strong>°</span>
+      <span>Sound <strong id="cutOut">—</strong></span>
+      <span class="gr-match" id="matchWrap">Match <strong id="matchOut">—</strong></span>
+    </div>
   </div>
-  <p class="status-bar" id="status">Train mode · hold pad at different tilts</p>
-  <div class="readout-row">
-    <p class="value-chip">Mode <strong id="modeOut">train</strong></p>
-    <p class="value-chip">Samples <strong id="countOut">0</strong></p>
-    <p class="value-chip">Cutoff <strong id="cutOut">—</strong> Hz</p>
-  </div>
+  <p class="status-bar" id="status">Train · hold pad at different tilts</p>
   <div class="main-stage">
     <div id="pad" class="stage-fill play-grid">
+      <div class="gr-tilt-axis" aria-hidden="true">
+        <span class="gr-tilt-label">Forward</span>
+        <div class="gr-tilt-track">
+          <div class="gr-tilt-samples" id="tiltSamples"></div>
+          <div class="gr-tilt-marker" id="tiltMarker"></div>
+        </div>
+        <span class="gr-tilt-label">Back</span>
+      </div>
+      <p class="gr-pad-hint" id="padHint">Hold here</p>
       <div class="touch-dot" id="dot"></div>
     </div>
   </div>
@@ -45,7 +58,16 @@
     const trainBtn = document.getElementById("trainBtn");
     const playBtn = document.getElementById("playBtn");
     const clearBtn = document.getElementById("clearBtn");
+    const grGuide = document.getElementById("grGuide");
+    const padHint = document.getElementById("padHint");
+    const tiltMarker = document.getElementById("tiltMarker");
+    const tiltSamples = document.getElementById("tiltSamples");
+    const matchWrap = document.getElementById("matchWrap");
     const SENSOR_OPTS = { needMotion: false, needOrientation: true };
+
+    const BETA_MIN = -55;
+    const BETA_MAX = 55;
+    const SAMPLE_COLORS = ["#6ee7b7", "#38bdf8", "#f472b6", "#fbbf24", "#a78bfa", "#fb923c"];
 
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -56,9 +78,14 @@
     let train = [];
     let sensorsReady = false;
     let lastBeta = 0;
+    let lastMatchIdx = -1;
+    let lastSampleFlash = 0;
+
+    function betaNorm(b) {
+      return clamp((b - BETA_MIN) / (BETA_MAX - BETA_MIN), 0, 1);
+    }
 
     function betaToCut(b) {
-      // Wider range so training poses sound more distinct.
       return clamp(260 + Math.abs(b) * 85, 120, 12000);
     }
 
@@ -72,43 +99,126 @@
       return curve;
     }
 
+    function cutLabel(cutHz) {
+      const hz = cutHz | 0;
+      if (hz < 450) return "dark";
+      if (hz < 1200) return "mid";
+      if (hz < 3500) return "bright";
+      return "sharp";
+    }
+
     function applySynthFromCut(cut, when = ctx?.currentTime ?? 0) {
       if (!built || !ctx) return;
       const cutHz = clamp(cut, 120, 12000);
-      // Normalize for dramatic timbre shifts.
       const n = clamp((Math.log(cutHz) - Math.log(120)) / (Math.log(12000) - Math.log(120)), 0, 1);
 
-      // Stronger filter movement + resonance + distortion = clearly audible differences.
       filt.frequency.setTargetAtTime(cutHz, when, 0.05);
       filt.Q.setTargetAtTime(3 + n * 14, when, 0.08);
       pre.gain.setTargetAtTime(1.2 + n * 6.5, when, 0.05);
       shaper.curve = shaperCurve(0.35 + n * 0.6);
 
-      // Small pitch shift so gestures sound different even on tiny speakers.
       const baseHz = 95 + n * 190;
       osc.frequency.setTargetAtTime(baseHz, when, 0.06);
       osc2.frequency.setTargetAtTime(baseHz * 2, when, 0.06);
       osc2.detune.setTargetAtTime(-18 + n * 36, when, 0.08);
 
-      document.getElementById("cutOut").textContent = `${cutHz | 0}`;
+      document.getElementById("cutOut").textContent = cutLabel(cutHz);
     }
 
     function predict(b) {
-      if (!train.length) return betaToCut(b);
+      if (!train.length) return { cut: betaToCut(b), idx: -1 };
       let best = train[0];
+      let bestIdx = 0;
       let d = Infinity;
-      for (const s of train) {
+      for (let i = 0; i < train.length; i++) {
+        const s = train[i];
         const dd = (s.b - b) ** 2;
         if (dd < d) {
           d = dd;
           best = s;
+          bestIdx = i;
         }
       }
-      return best.cut;
+      return { cut: best.cut, idx: bestIdx };
     }
 
     function updateCounts() {
       document.getElementById("countOut").textContent = String(train.length);
+      renderSampleDots();
+    }
+
+    function renderSampleDots() {
+      tiltSamples.replaceChildren();
+      train.forEach((s, i) => {
+        const el = document.createElement("span");
+        el.className = "gr-tilt-sample";
+        el.style.top = `${(1 - betaNorm(s.b)) * 100}%`;
+        el.style.background = SAMPLE_COLORS[i % SAMPLE_COLORS.length];
+        el.title = `Example ${i + 1}`;
+        el.dataset.idx = String(i);
+        tiltSamples.appendChild(el);
+      });
+      highlightMatch(lastMatchIdx);
+    }
+
+    function highlightMatch(idx) {
+      tiltSamples.querySelectorAll(".gr-tilt-sample").forEach((el) => {
+        el.classList.toggle("gr-tilt-sample--active", idx >= 0 && el.dataset.idx === String(idx));
+      });
+    }
+
+    function updateTiltUI() {
+      const pct = (1 - betaNorm(lastBeta)) * 100;
+      tiltMarker.style.top = `${pct}%`;
+      document.getElementById("tiltOut").textContent = String(lastBeta | 0);
+
+      if (mode === "play" && train.length) {
+        const { idx } = predict(lastBeta);
+        lastMatchIdx = idx;
+        highlightMatch(idx);
+        const matchEl = document.getElementById("matchOut");
+        if (idx >= 0) {
+          matchEl.textContent = `#${idx + 1}`;
+          matchWrap.hidden = false;
+        } else {
+          matchEl.textContent = "—";
+        }
+      } else {
+        lastMatchIdx = -1;
+        highlightMatch(-1);
+        document.getElementById("matchOut").textContent = "—";
+        matchWrap.hidden = mode === "train";
+      }
+    }
+
+    function flashNewSample() {
+      const now = performance.now();
+      if (now - lastSampleFlash < 120) return;
+      lastSampleFlash = now;
+      tiltSamples.classList.add("gr-tilt-samples--flash");
+      setTimeout(() => tiltSamples.classList.remove("gr-tilt-samples--flash"), 180);
+    }
+
+    function setGuide() {
+      if (mode === "train") {
+        if (!holding) {
+          grGuide.textContent =
+            train.length < 2
+              ? "Hold pad · tilt phone forward/back — each new angle adds a dot"
+              : `Hold pad · tilt to new angles (${train.length} saved — add more or switch to Play)`;
+        } else {
+          grGuide.textContent = "Tilting… move to a clearly different angle to teach another sound";
+        }
+        padHint.textContent = holding ? "Listening to tilt…" : "Hold here to teach";
+      } else if (!train.length) {
+        grGuide.textContent = "No examples yet — tap Train and record a few tilts first";
+        padHint.textContent = "Train first";
+      } else {
+        grGuide.textContent = holding
+          ? "Tilt phone — sound jumps to the nearest colored dot"
+          : "Hold pad · tilt toward a dot to hear that learned sound";
+        padHint.textContent = holding ? "Nearest dot = your sound" : "Hold here to play";
+      }
     }
 
     function setMode(next) {
@@ -119,14 +229,20 @@
       playBtn.classList.toggle("btn", mode === "play");
       playBtn.classList.toggle("btn-secondary", mode !== "play");
       playBtn.setAttribute("aria-pressed", String(mode === "play"));
-      document.getElementById("modeOut").textContent = mode;
+      playBtn.disabled = false;
+
+      pad.classList.toggle("gr-pad--play", mode === "play");
+
       if (mode === "train") {
-        setStatus("status", "Train mode · hold pad at different tilts", "ok");
+        setStatus("status", "Train · hold pad at different tilts", "ok");
       } else if (!train.length) {
-        setStatus("status", "No samples yet — switch to Train first", "warn");
+        setStatus("status", "No samples — use Train first", "warn");
+        playBtn.classList.add("btn-secondary");
       } else {
-        setStatus("status", "Play mode · hold pad and tilt", "ok");
+        setStatus("status", "Play · hold pad and tilt", "ok");
       }
+      setGuide();
+      updateTiltUI();
     }
 
     function build(c) {
@@ -144,7 +260,6 @@
       osc.frequency.value = 140;
       osc2.type = "square";
       osc2.frequency.value = 280;
-      osc2.detune.value = 0;
       amp.gain.value = 0;
       pre.gain.value = 2.2;
       shaper.oversample = "4x";
@@ -167,22 +282,35 @@
       const ok = await enableSensors(SENSOR_OPTS);
       if (!ok) {
         setStatus("status", "Motion blocked — allow in Settings", "warn");
+        grGuide.textContent = "Allow motion/orientation in browser settings, then try again";
         return false;
       }
       onOrientation(({ beta }) => {
         lastBeta = beta;
+        updateTiltUI();
+
         if (!holding || !built || !ctx) return;
-        const cut = mode === "train" ? betaToCut(beta) : predict(beta);
-        applySynthFromCut(cut, ctx.currentTime);
+
+        const pred = mode === "train" ? { cut: betaToCut(beta), idx: -1 } : predict(beta);
+        applySynthFromCut(pred.cut, ctx.currentTime);
+
         if (mode === "train") {
           const last = train[train.length - 1];
           if (!last || Math.abs(last.b - beta) > 2) {
-            train.push({ b: beta, cut });
+            train.push({ b: beta, cut: pred.cut });
             updateCounts();
+            flashNewSample();
+            setGuide();
           }
+        } else {
+          lastMatchIdx = pred.idx;
+          highlightMatch(pred.idx);
+          const matchEl = document.getElementById("matchOut");
+          matchEl.textContent = pred.idx >= 0 ? `#${pred.idx + 1}` : "—";
         }
       });
       sensorsReady = true;
+      updateTiltUI();
       return true;
     }
 
@@ -197,11 +325,15 @@
       pad.setPointerCapture(activeId);
       pad.classList.add("active");
       dot.style.opacity = "1";
-      osc.frequency.setTargetAtTime(120, ctx.currentTime, 0.02);
-      osc2.frequency.setTargetAtTime(240, ctx.currentTime, 0.02);
       amp.gain.setTargetAtTime(0.22, ctx.currentTime, 0.02);
-      const cut = mode === "train" ? betaToCut(lastBeta) : predict(lastBeta);
-      applySynthFromCut(cut, ctx.currentTime);
+      const pred = mode === "train" ? { cut: betaToCut(lastBeta), idx: -1 } : predict(lastBeta);
+      applySynthFromCut(pred.cut, ctx.currentTime);
+      if (mode === "play") {
+        lastMatchIdx = pred.idx;
+        highlightMatch(pred.idx);
+        document.getElementById("matchOut").textContent = pred.idx >= 0 ? `#${pred.idx + 1}` : "—";
+      }
+      setGuide();
     }
 
     function release(e) {
@@ -211,6 +343,7 @@
       pad.classList.remove("active");
       dot.style.opacity = "0";
       if (ctx && amp) amp.gain.setTargetAtTime(0, ctx.currentTime, 0.06);
+      setGuide();
     }
 
     pad.addEventListener("pointerdown", (e) => void arm(e));
@@ -224,18 +357,30 @@
     });
     playBtn.addEventListener("click", () => {
       primeSensors(SENSOR_OPTS);
+      if (!train.length) {
+        setStatus("status", "Record tilts in Train first", "warn");
+        grGuide.textContent = "Switch to Train · hold pad · tilt at 2–3 different angles";
+        return;
+      }
       setMode("play");
     });
     clearBtn.addEventListener("click", () => {
       train = [];
+      lastMatchIdx = -1;
       updateCounts();
       document.getElementById("cutOut").textContent = "—";
-      if (mode === "play") setStatus("status", "No samples yet — switch to Train first", "warn");
-      else setStatus("status", "Samples cleared · hold pad at different tilts", "ok");
+      if (mode === "play") setMode("train");
+      else {
+        setStatus("status", "Cleared · hold pad at different tilts", "ok");
+        setGuide();
+      }
     });
 
+    matchWrap.hidden = true;
     updateCounts();
     setMode("train");
+    primeSensors(SENSOR_OPTS);
+    void ensureSensors();
   </script>
 </body>
 </html>

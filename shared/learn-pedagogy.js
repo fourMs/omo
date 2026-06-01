@@ -220,11 +220,6 @@ export const LEARN_PEDAGOGY = {
     "Psychoacoustic paradox — good for discussing pitch circularity and ensemble tuning.",
   ],
 
-  "gravity-bounce": [
-    "Accelerometer “drop” or shake triggers a plucked or impact model — gravity as excitation.",
-    "Impulsive vs sustained: one sharp input, resonant decay.",
-  ],
-
   "pocket-metronome": [
     "Walking or tapping creates peaks in acceleration; those peaks duck or pulse the mix.",
     "Body rhythm drives electronics — sidechain-like breathing in the ensemble.",
@@ -253,11 +248,6 @@ export const LEARN_PEDAGOGY = {
   "pitch-hive": [
     "Multiple pitch peaks from humming build a chord of sines — collective intonation forms harmony.",
     "Group must listen to each other’s pitch; beats and roughness appear when fundamentals disagree.",
-  ],
-
-  "feedback-flute": [
-    "Mic and speaker form a feedback loop around a resonant filter — careful control produces whistle tones.",
-    "Teaches stability margins in live electronics; small changes flip between silence and squeal.",
   ],
 
   "shadow-sequencer": [
@@ -326,8 +316,8 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "gesture-regression": [
-    "Recorded tilt examples train a mapping to synthesis parameters; performance reuses the learned curve.",
-    "Regression links continuous motion to continuous sound — custom interface per player.",
+    "Each phone tilt you save while holding the pad becomes a colored dot and its own timbre.",
+    "In Play, tilting picks the nearest dot — nearest-neighbor mapping from gesture to sound.",
   ],
 
   "swarm-bloom": [

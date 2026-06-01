@@ -13,7 +13,6 @@ Phones expose more than mic + tilt. Each row is a candidate **app** (or major up
 | Idea | Sensor / API | Music role | Synthesis hook |
 |------|----------------|------------|----------------|
 | ~~**Gyro Whirl**~~ | `rotationRate` (αβγ) | Spin phone → vibrato speed & stereo wobble | [Spin Chorus](../apps/gyro-whirl/) |
-| ~~**Gravity Bounce**~~ | `accelerationIncludingGravity` | “Drop” phone feel → impact triggers | [Drop Bell](../apps/gravity-bounce/) |
 | ~~**Shake Filter**~~ | High-pass jerk on accel | Sudden shakes open a filter | [Jerk Wah](../apps/shake-filter/) |
 | ~~**Pocket Metronome**~~ | Step-like peaks in linear accel | Walk / tap pocket → sidechain duck | [Pocket Pulse](../apps/pocket-metronome/) |
 | ~~**Flat / Edge**~~ | `beta` / `gamma` thresholds | Only sound when held flat vs upright | [Table Drone](../apps/flat-edge/) |
@@ -28,7 +27,6 @@ Phones expose more than mic + tilt. Each row is a candidate **app** (or major up
 | ~~**Whisper Gate**~~ | Mic + noise floor tracking | Only soft sounds pass | [Soft Vowel](../apps/whisper-gate/) |
 | ~~**Clap Architect**~~ | Onset times from mic | Clap spacing builds a rhythm grid | [Clap Grid](../apps/clap-architect/) |
 | ~~**Pitch Hive**~~ | Multi-pitch peaks (FFT) | Humming group → chord root | [Hum Hive](../apps/pitch-hive/) |
-| ~~**Feedback Flute**~~ | Mic + speaker (careful) | Controlled feedback whistle | [Whistle Loop](../apps/feedback-flute/) |
 
 ### Camera & light
 
