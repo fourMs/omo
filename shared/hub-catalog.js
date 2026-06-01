@@ -284,7 +284,7 @@ export const HUB_APPS = [
   { href: "apps/phase-distortion/", title: "Phase Distortion", section: "synthesis", synth: "Phase distortion", sensors: "Multi-touch" },
   { href: "apps/supersaw-stack/", title: "Supersaw Stack", section: "synthesis", synth: "Saws or spin timbre", sensors: "Gyro · touch" },
   { href: "apps/bowed-waveguide/", title: "Bowed Waveguide", section: "melody", synth: "Continuous KS", sensors: "Touch drag" },
-  { href: "apps/pluck-bowl/", title: "Pluck Bowl", section: "synthesis", synth: "Resonant burst", sensors: "Touch position" },
+  { href: "apps/pluck-bowl/", title: "Pluck Bowl", section: "synthesis", synth: "KS + LFO layers", sensors: "Touch position" },
   { href: "apps/wind-bottle/", title: "Wind Bottle", section: "texture", synth: "Noise resonator", sensors: "Tilt · touch" },
   { href: "apps/scrub-tape/", title: "Scrub Tape", section: "texture", synth: "Buffer scrub", sensors: "Touch drag" },
   { href: "apps/vocoder-choir/", title: "Vocoder Choir", section: "texture", synth: "Band vocoder", sensors: "Mic · tilt" },

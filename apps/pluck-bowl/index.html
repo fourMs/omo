@@ -6,31 +6,231 @@
   <meta name="theme-color" content="#0d0f14" />
   <title>Pluck Bowl — OMO</title>
   <link rel="stylesheet" href="../../shared/ui.css" />
-  
 </head>
-<body class="app-shell">
+<body class="app-shell pluck-bowl-app">
   <header class="app-header">
     <a class="back-link" href="../../">←</a>
     <h1>Pluck Bowl</h1>
   </header>
-  <div class="learn-panel panel" id="learnPanel"><h2>Pluck bowl</h2><p>Tap position sets strike — bright edge, warm centre.</p></div>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Pluck bowl</h2>
+    <p>Tap position sets strike pitch and brightness — bright at the edge, warm in the centre.</p>
+    <p>Six inharmonic partials and a shared filter keep evolving under several slow LFOs; each tap adds a Karplus splash and a short shimmer burst.</p>
+  </div>
+  <div class="control-row bowl-live" aria-live="polite" aria-label="Strike">
+    <label>Root</label>
+    <span><strong id="hzOut">—</strong> Hz</span>
+    <label>Edge</label>
+    <span><strong id="edgeOut">—</strong></span>
+  </div>
   <div class="main-stage">
     <div id="pad" class="stage-fill play-grid"><div class="touch-dot" id="dot"></div></div>
   </div>
   <script type="module">
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { createKSPool, karplusPluck } from "../../shared/ks.js";
 
-import { bindLearn, startAudio } from "../../shared/app.js";
-import { createMasterBus } from "../../shared/audio.js";
-bindLearn();
-const pad=document.getElementById("pad");
-const dot=document.getElementById("dot");
-const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
-let ctx,master,built=false,holding=false,activeId=null;
+    bindLearn();
 
-import { createKSPool, karplusPluck } from "../../shared/ks.js";
-let pool;
-function build(c){ctx=c;({master}=createMasterBus(c,0.55));pool=createKSPool(6);built=true;}
-pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio(!built?build:undefined);const r=pad.getBoundingClientRect();const nx=clamp((e.clientX-r.left)/r.width,0,1);const ny=clamp((e.clientY-r.top)/r.height,0,1);const dist=Math.hypot(nx-0.5,ny-0.5);karplusPluck(ctx,master,pool,80+dist*400,{strength:0.6,dampHz:800+dist*3000,level:0.35,decaySec:3});});
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const hzOut = document.getElementById("hzOut");
+    const edgeOut = document.getElementById("edgeOut");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    /** Inharmonic bowl spectrum */
+    const RATIOS = [1, 2.41, 3.92, 5.18, 6.84, 8.3];
+    const PARTIAL_LEVELS = [0.42, 0.28, 0.22, 0.16, 0.12, 0.09];
+    const AMP_LFO_HZ = [0.19, 0.27, 0.33, 0.41, 0.53, 0.61];
+
+    let ctx, master, pool, reverb, built = false;
+    let rootHz = 98;
+    let drone = null;
+
+    function bowlReverb(c) {
+      const len = Math.floor(c.sampleRate * 2.8);
+      const buf = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2.15;
+      }
+      const conv = c.createConvolver();
+      conv.buffer = buf;
+      const wet = c.createGain();
+      wet.gain.value = 0.42;
+      conv.connect(wet);
+      wet.connect(master);
+      return conv;
+    }
+
+    function makeLfo(freq, depth, destParam, base) {
+      const lfo = ctx.createOscillator();
+      const depthGain = ctx.createGain();
+      lfo.type = "sine";
+      lfo.frequency.value = freq;
+      depthGain.gain.value = depth;
+      lfo.connect(depthGain);
+      depthGain.connect(destParam);
+      destParam.setValueAtTime(base, ctx.currentTime);
+      lfo.start(ctx.currentTime + Math.random() * 2);
+      return { lfo, depthGain };
+    }
+
+    function buildDrone() {
+      const mix = ctx.createGain();
+      mix.gain.value = 0;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 1400;
+      filter.Q.value = 1.2;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = 0;
+      mix.connect(filter);
+      filter.connect(pan);
+      pan.connect(master);
+
+      const partials = RATIOS.map((ratio, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = i === 0 ? "triangle" : "sine";
+        osc.frequency.value = rootHz * ratio;
+        const g = ctx.createGain();
+        g.gain.value = PARTIAL_LEVELS[i] * 0.32;
+        osc.connect(g);
+        g.connect(mix);
+        osc.start();
+        const ampLfo = makeLfo(AMP_LFO_HZ[i], PARTIAL_LEVELS[i] * 0.55, g.gain, PARTIAL_LEVELS[i] * 0.35);
+        return { osc, g, ratio, ampLfo };
+      });
+
+      const lfos = {
+        filter: makeLfo(0.11, 900, filter.frequency, 1200),
+        q: makeLfo(0.17, 2.5, filter.Q, 1.4),
+        pitch: makeLfo(0.06, 6, partials[0].osc.detune, 0),
+        pan: makeLfo(0.08, 0.35, pan.pan, 0),
+        body: makeLfo(0.24, 0.06, filter.frequency, 1600),
+      };
+
+      return { mix, filter, pan, partials, lfos };
+    }
+
+    function setRootHz(hz, glide = true) {
+      rootHz = hz;
+      if (!drone) return;
+      const t = ctx.currentTime;
+      const tau = glide ? 0.12 : 0.02;
+      drone.partials.forEach((p) => {
+        p.osc.frequency.setTargetAtTime(hz * p.ratio, t, tau);
+      });
+      hzOut.textContent = hz.toFixed(0);
+    }
+
+    function wakeDrone(amount = 0.22) {
+      if (!drone) return;
+      const t = ctx.currentTime;
+      drone.mix.gain.cancelScheduledValues(t);
+      drone.mix.gain.setTargetAtTime(amount, t, 0.35);
+    }
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      reverb = bowlReverb(c);
+      pool = createKSPool(8);
+      drone = buildDrone();
+      built = true;
+    }
+
+    registerAudioBoot(build);
+
+    function strikeFromNorm(nx, ny) {
+      const dist = Math.hypot(nx - 0.5, ny - 0.5);
+      const edge = clamp(dist * 2, 0, 1);
+      const hz = 72 + (1 - dist) * 220 + nx * 40;
+      const dampHz = 600 + edge * 4200;
+      const t = ctx.currentTime;
+
+      setRootHz(hz);
+      wakeDrone(0.14 + edge * 0.14);
+      edgeOut.textContent = `${Math.round(edge * 100)}%`;
+
+      karplusPluck(ctx, master, pool, hz, {
+        strength: 0.45 + edge * 0.35,
+        dampHz,
+        level: 0.28 + edge * 0.12,
+        decaySec: 2.4 + (1 - edge) * 2.2,
+        reverbBus: reverb,
+        reverbSend: 0.35 + edge * 0.25,
+      });
+
+      const burst = ctx.createOscillator();
+      const burstGain = ctx.createGain();
+      const burstFilt = ctx.createBiquadFilter();
+      burst.type = "sine";
+      burst.frequency.setValueAtTime(hz * 2.02, t);
+      burstFilt.type = "bandpass";
+      burstFilt.frequency.setValueAtTime(400 + edge * 3200, t);
+      burstFilt.Q.value = 8 + edge * 6;
+      burstGain.gain.setValueAtTime(0.001, t);
+      burstGain.gain.exponentialRampToValueAtTime(0.12 + edge * 0.1, t + 0.02);
+      burstGain.gain.exponentialRampToValueAtTime(0.001, t + 0.35 + edge * 0.25);
+      const wobble = ctx.createOscillator();
+      const wobbleG = ctx.createGain();
+      wobble.frequency.value = 5.7 + edge * 4;
+      wobbleG.gain.value = hz * 0.012;
+      wobble.connect(wobbleG);
+      wobbleG.connect(burst.frequency);
+      burst.connect(burstGain);
+      burstGain.connect(burstFilt);
+      burstFilt.connect(master);
+      burstFilt.connect(reverb);
+      burst.start(t);
+      burst.stop(t + 1.2);
+      wobble.start(t);
+      wobble.stop(t + 1.2);
+
+      drone.filter.frequency.cancelScheduledValues(t);
+      drone.filter.frequency.setValueAtTime(dampHz * 0.55, t);
+      drone.filter.frequency.setTargetAtTime(900 + (1 - edge) * 1800, t + 0.08, 0.25);
+    }
+
+    function placeDot(x, y) {
+      const r = pad.getBoundingClientRect();
+      const nx = clamp((x - r.left) / r.width, 0, 1);
+      const ny = clamp((y - r.top) / r.height, 0, 1);
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${ny * 100}%`;
+      return { nx, ny };
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await startAudio(!built ? build : undefined);
+      pad.setPointerCapture(e.pointerId);
+      pad.classList.add("active");
+      const { nx, ny } = placeDot(e.clientX, e.clientY);
+      strikeFromNorm(nx, ny);
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!pad.classList.contains("active")) return;
+      const { nx, ny } = placeDot(e.clientX, e.clientY);
+      if (built && ctx) {
+        setRootHz(72 + (1 - Math.hypot(nx - 0.5, ny - 0.5)) * 220 + nx * 40, true);
+        wakeDrone(0.1 + clamp(Math.hypot(nx - 0.5, ny - 0.5) * 2, 0, 1) * 0.12);
+      }
+    });
+
+    function releasePad() {
+      pad.classList.remove("active");
+      if (drone && ctx) {
+        drone.mix.gain.setTargetAtTime(0.035, ctx.currentTime, 0.8);
+      }
+    }
+
+    pad.addEventListener("pointerup", releasePad);
+    pad.addEventListener("pointercancel", releasePad);
+    pad.addEventListener("lostpointercapture", releasePad);
   </script>
 </body>
 </html>

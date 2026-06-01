@@ -281,8 +281,8 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "pluck-bowl": [
-    "A resonant model with splashy partials; strike position colours the burst.",
-    "Percussive resonance — short attack, long decay, bowl-like spectrum.",
+    "Karplus plucks plus six inharmonic partials share a filter; many slow LFOs evolve level, tone, and stereo width between strikes.",
+    "Strike position sets root pitch and edge brightness — centre is warmer, the rim sharper and longer.",
   ],
 
   "wind-bottle": [
