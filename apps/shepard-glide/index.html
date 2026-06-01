@@ -14,7 +14,7 @@
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>Shepard tone</h2>
-    <p>Turn <strong>Audio on</strong>, allow <strong>motion</strong> if asked. <strong>Hold</strong> the pad for an endless rising (or falling) glissando. <strong>Tilt forward/back</strong> for speed; <strong>sideways</strong> flips direction.</p>
+    <p>Turn <strong>Audio on</strong>, allow <strong>motion</strong> if asked. <strong>Hold</strong> the pad — the glissando keeps going until you lift your finger. <strong>Tilt forward/back</strong> for speed; lean the other way to reverse.</p>
   </div>
   <div class="control-row shepard-live" aria-live="polite" aria-label="Glide">
     <label>Rate</label>
@@ -23,11 +23,11 @@
     <span><strong id="dirOut">up</strong></span>
   </div>
   <div class="main-stage">
-    <div id="pad" class="stage-fill play-grid"></div>
+    <div id="pad" class="stage-fill play-grid shepard-pad"></div>
   </div>
   <script type="module">
-    import { bindLearn, startAudio } from "../../shared/app.js";
-    import { createMasterBus } from "../../shared/audio.js";
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { createMasterBus, getAudioContext } from "../../shared/audio.js";
     import { createShepardTone } from "../../shared/shepard.js";
     import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
 
@@ -37,12 +37,11 @@
     const SENSOR_OPTS = { needMotion: false, needOrientation: true };
 
     let ctx, master, shepard, built = false;
-    let holding = false;
+    let holdCount = 0;
     let activeId = null;
-    let endPointer = null;
 
     function applyTilt(beta, gamma) {
-      if (!shepard) return;
+      if (!shepard || holdCount < 1) return;
       const forward = clamp((beta ?? 0) / 55, -1, 1);
       const rate = 0.06 + Math.abs(forward) * 0.35;
       shepard.setRate(rate);
@@ -57,60 +56,60 @@
       shepard = createShepardTone(ctx, master);
       built = true;
       void enableSensors(SENSOR_OPTS).then((ok) => {
-        if (ok) onOrientation((o) => holding && applyTilt(o.beta, o.gamma));
+        if (ok) onOrientation((o) => holdCount > 0 && applyTilt(o.beta, o.gamma));
       });
       applyTilt(20, 0);
     }
 
-    function beginHold() {
-      if (!shepard) return;
-      shepard.start();
-      shepard.setLevel(1);
+    registerAudioBoot(buildAudio);
+
+    async function ensureRunning() {
+      if (!built) await startAudio(buildAudio);
+      const ac = ctx || getAudioContext();
+      if (ac.state === "suspended") await ac.resume();
+      if (!shepard?.isRunning()) {
+        shepard.start();
+        shepard.setLevel(1);
+      }
     }
 
-    function endHold() {
-      holding = false;
+    function releaseHold(pointerId) {
+      if (pointerId != null && activeId != null && pointerId !== activeId) return;
+      holdCount = Math.max(0, holdCount - 1);
       activeId = null;
-      pad.classList.remove("active");
-      shepard?.stop();
-      if (endPointer) {
-        window.removeEventListener("pointerup", endPointer);
-        window.removeEventListener("pointercancel", endPointer);
-        endPointer = null;
+      if (holdCount === 0) {
+        pad.classList.remove("active");
+        shepard?.stop();
       }
     }
 
     primeSensors(SENSOR_OPTS);
 
-    pad.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      if (holding) return;
-      holding = true;
-      activeId = e.pointerId;
-      pad.classList.add("active");
-      try {
-        pad.setPointerCapture(e.pointerId);
-      } catch {
-        /* noop */
-      }
+    pad.addEventListener(
+      "pointerdown",
+      (e) => {
+        e.preventDefault();
+        holdCount += 1;
+        activeId = e.pointerId;
+        pad.classList.add("active");
+        void ensureRunning();
+      },
+      { passive: false }
+    );
 
-      endPointer = (ev) => {
-        if (ev.pointerId !== activeId) return;
-        endHold();
-        try {
-          if (pad.hasPointerCapture(ev.pointerId)) pad.releasePointerCapture(ev.pointerId);
-        } catch {
-          /* noop */
-        }
-      };
-      window.addEventListener("pointerup", endPointer);
-      window.addEventListener("pointercancel", endPointer);
+    pad.addEventListener("pointerup", (e) => {
+      if (e.pointerId !== activeId) return;
+      releaseHold(e.pointerId);
+    });
 
-      void (async () => {
-        await startAudio(!built ? buildAudio : undefined);
-        if (!holding || activeId !== e.pointerId) return;
-        beginHold();
-      })();
+    pad.addEventListener("pointercancel", (e) => {
+      if (e.pointerId !== activeId) return;
+      if (e.buttons !== 0) return;
+      releaseHold(e.pointerId);
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && holdCount > 0) void ensureRunning();
     });
   </script>
 </body>

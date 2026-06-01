@@ -2007,6 +2007,10 @@ html.omo-a11y .hub-header .hub-section-select {
   font-weight: 700;
 }
 
+.shepard-glide-app .shepard-pad {
+  touch-action: none;
+}
+
 .shepard-glide-app .shepard-live {
   justify-content: center;
   flex-wrap: wrap;

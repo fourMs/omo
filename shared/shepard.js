@@ -1,5 +1,5 @@
 /**
- * Continuous Shepard tone — overlapping octave partials.
+ * Continuous Shepard tone — overlapping octave partials with log-frequency wrap.
  */
 
 /**
@@ -7,7 +7,8 @@
  * @param {AudioNode} dest
  */
 export function createShepardTone(ctx, dest) {
-  const PARTIALS = 10;
+  const PARTIALS = 12;
+  const OCTAVE_SPAN = 10;
   const baseHz = 55;
   const bus = ctx.createGain();
   bus.gain.value = 0;
@@ -30,46 +31,64 @@ export function createShepardTone(ctx, dest) {
   let direction = 1;
   let running = false;
   let raf = 0;
+  let lastFrame = 0;
 
   function update() {
     const t = ctx.currentTime;
     for (const v of voices) {
-      const pos = (v.i + phase) % 1;
-      const amp = Math.exp(-((pos - 0.5) ** 2) / 0.02);
-      const freq = baseHz * 2 ** (v.i + phase);
-      v.osc.frequency.setTargetAtTime(freq, t, 0.06);
-      v.g.gain.setTargetAtTime(amp * 0.11, t, 0.05);
+      const logPos = (((v.i + phase) % OCTAVE_SPAN) + OCTAVE_SPAN) % OCTAVE_SPAN;
+      const norm = logPos / OCTAVE_SPAN;
+      const amp = Math.exp(-((norm - 0.5) ** 2) / 0.016);
+      const freq = baseHz * 2 ** logPos;
+      v.osc.frequency.setTargetAtTime(freq, t, 0.1);
+      v.g.gain.setTargetAtTime(amp * 0.1, t, 0.08);
     }
   }
 
-  function loop() {
+  function loop(now) {
     if (!running) return;
-    phase += rate * direction * 0.012;
+    if (!lastFrame) lastFrame = now;
+    const dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+    phase += rate * direction * dt * 2.8;
     update();
     raf = requestAnimationFrame(loop);
   }
 
   return {
     start() {
+      if (running) return;
       running = true;
+      lastFrame = 0;
       cancelAnimationFrame(raf);
-      bus.gain.cancelScheduledValues(ctx.currentTime);
-      bus.gain.setTargetAtTime(1, ctx.currentTime, 0.08);
-      loop();
+      const t = ctx.currentTime;
+      bus.gain.cancelScheduledValues(t);
+      bus.gain.setValueAtTime(Math.max(bus.gain.value, 0.001), t);
+      bus.gain.setTargetAtTime(1, t, 0.06);
+      update();
+      loop(performance.now());
     },
     stop() {
+      if (!running) return;
       running = false;
       cancelAnimationFrame(raf);
-      bus.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+      raf = 0;
+      const t = ctx.currentTime;
+      bus.gain.cancelScheduledValues(t);
+      bus.gain.setTargetAtTime(0, t, 0.12);
     },
     setRate(r) {
-      rate = Math.max(0.02, Math.min(0.5, r));
+      rate = Math.max(0.02, Math.min(0.55, r));
     },
     setDirection(d) {
       direction = d >= 0 ? 1 : -1;
     },
     setLevel(level, when = ctx.currentTime) {
+      if (!running) return;
       bus.gain.setTargetAtTime(level, when, 0.05);
+    },
+    isRunning() {
+      return running;
     },
   };
 }

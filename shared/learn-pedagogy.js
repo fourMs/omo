@@ -211,8 +211,8 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "shepard-glide": [
-    "Overlapping glissandi in octave layers create an endless rising (or falling) pitch illusion.",
-    "Psychoacoustic paradox — good for discussing pitch circularity and ensemble tuning.",
+    "Overlapping sine partials wrap in log-frequency space so the illusion can run without drifting into silence.",
+    "Hold the pad for continuous glide; tilt sets speed and direction — psychoacoustic endless rise or fall.",
   ],
 
   "room-reverb-send": [
