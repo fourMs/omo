@@ -2,18 +2,18 @@
 
 A collection of patches used with [Oslo Mobile Orchestra (OMO)](https://www.uio.no/ritmo/english/research/labs/fourms/research/projects/omo/) at the Department of Musicology, University of Oslo.
 
-OMO used to work with a collection of patches developed in PureData and deployed via MobMuPlat. This collection is using browser-based apps that use the WebAudio API. They should work on both iOS and Android phones, although there may be variations in sensors available and browser capabilities. 
+OMO used to work with a collection of patches developed in PureData and deployed via MobMuPlat. This collection uses browser-based apps that rely on the Web Audio API. They should work on both iOS and Android phones, although there may be variations in sensors available and browser capabilities. 
 
-**Play now:** [alexarje.github.io/Oslo-Mobile-Orchestra](https://alexarje.github.io/Oslo-Mobile-Orchestra/)
+**Play now:** [fourms.github.io/omo/](https://fourms.github.io/omo/)
 
 ## Browsers
 
-The apps should (in theory) work on all modern browsers, but we have seen that they generally work best with Safari on iPhone and Chrome on Android.
+The apps should (in theory) work in all modern browsers, but we have found they generally work best with Safari on iPhone and Chrome on Android.
 
 
 ## Quick start
 
-1. Open the site in a browser (not inside a communication app or email; then you should use "Open in browser" command).
+1. Open the site in a browser (not inside a communication app or email; then you should use the "Open in browser" command).
 2. Choose the app to play — each card lists **synthesis** and **sensors**. Display names match **folder names** (Title Case under `apps/`). Several apps combine former variants behind a **mode** menu (old URLs still redirect).
 3. Apps will ask for different permissions, including the microphone, motion, or camera. Permissions may need to be given both within the browser and in the OS.
 4. Turn up the volume to at least 70%. Turn off silent mode on iPhone.
