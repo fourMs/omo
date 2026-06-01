@@ -31,7 +31,7 @@ Open hub → **Synth Pad**. Everyone finds one note. Conductor counts 1–2–3�
 
 ### Ensemble (15 min)
 1. Conductor sets 96 BPM, **Start countdown**, share link (AirDrop, QR, shout URL shortener).
-2. Drones: **Drone Choir** — assign F / A♭ / C / E♭ counts (5 each).
+2. Drones: **Just Equal** — assign F / A♭ / C / E♭ counts (5 each).
 3. Rhythm: **Drum Sequencer Linear/Circular**, **Drumkit**, or **Firefly** — split roles; Conductor link `start` + `bpm` if needed.
 4. Optional **Harmonizer** — blend into room tonality; **Firefly** for pulse sync.
 5. Texture: **Granular Tilt** or **Video Sonifier** behind the group.

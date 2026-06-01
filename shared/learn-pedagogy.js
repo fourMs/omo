@@ -55,7 +55,7 @@ export const LEARN_PEDAGOGY = {
     "Simple hold-to-play drone — one big button, collective density when many phones swell together.",
   ],
 
-  "drone-choir": [
+  "just-equal": [
     "Several sine oscillators are detuned slightly so beating and roughness appear; holding a note sustains a chord tone.",
     "Teaches just intonation vs equal temperament by ear, and how ensemble drones need stable pitch and balance.",
   ],

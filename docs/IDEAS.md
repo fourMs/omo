@@ -182,7 +182,7 @@ Use when designing a new app: pick **one primary sensor** and **one synthesis fa
 
 ## Enhance existing apps
 
-- ~~**Drone Choir**~~ — hold-to-sustain; cents ruler on pad
+- ~~**Just Equal**~~ (was Drone Choir) — hold-to-sustain; cents ruler on pad
 - ~~**Motion Wah**~~ — continuous mode toggle
 - ~~**Train & Shake**~~ — sway + export/import
 - ~~**Conductor**~~ — QR + visual metronome flash

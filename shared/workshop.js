@@ -6,7 +6,7 @@ export const SECTIONS = {
   drones: {
     name: "Drones",
     color: "#38bdf8",
-    apps: ["drone-choir", "motion-wah", "compass-wah", "sound-saber"],
+    apps: ["just-equal", "motion-wah", "compass-wah", "sound-saber"],
   },
   rhythm: {
     name: "Rhythm",

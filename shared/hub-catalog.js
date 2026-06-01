@@ -66,8 +66,8 @@ export const HUB_APPS = [
     sensors: "Touch · motion",
   },
   {
-    href: "apps/drone-choir/",
-    title: "Drone Choir",
+    href: "apps/just-equal/",
+    title: "Just Equal",
     section: "drones",
     synth: "Detuned sines",
     sensors: "Touch",
