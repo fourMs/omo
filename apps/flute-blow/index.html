@@ -91,7 +91,10 @@
     function applyFingering() {
       const steps = openStepsFromBottom();
       noteIndex = OPEN_TO_INDEX[Math.min(steps, OPEN_TO_INDEX.length - 1)];
-      currentMidi = indexToMidi(noteIndex);
+      const nextMidi = indexToMidi(noteIndex);
+      // Avoid pitch "chirps" on note-off: when the last finger is released we may
+      // briefly still be audible while the envelope decays. Don't retune during that decay.
+      if (anyHoleHeld()) currentMidi = nextMidi;
       document.getElementById("readout").textContent = labelFromIndex(noteIndex);
       holeBtns.forEach((btn, i) => {
         btn.classList.toggle("open", !holesCovered[i]);
@@ -253,7 +256,7 @@
       if (shouldPlay || breathEnv > 0.008) {
         toneGain.gain.setTargetAtTime(breathEnv * 0.95, t, 0.01);
         noiseGain.gain.setTargetAtTime(breathEnv * s * 0.22, t, 0.012);
-        setPitch(t);
+        if (holding) setPitch(t);
         setVibrato(true, s, t);
       } else {
         toneGain.gain.setTargetAtTime(0, t, 0.04);
