@@ -4,17 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#0d0f14" />
-  <title>Lsystem Groove — OMO</title>
+  <title>L-System Groove — OMO</title>
   <link rel="stylesheet" href="../../shared/ui.css" />
 </head>
-<body class="app-shell">
+<body class="app-shell lsystem-groove-app">
   <header class="app-header">
     <a class="back-link" href="../../">←</a>
-    <h1>Lsystem Groove</h1>
+    <h1>L-System Groove</h1>
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>L-system groove</h2>
-    <p>Turn <strong>Audio on</strong>, press ▶. Each bar the pattern <strong>rewrites</strong> (A→AB, B→A) and maps to the four drum tracks. Watch the rule string grow in the readout.</p>
+    <p>Turn <strong>Audio on</strong>, press ▶. Each bar the rule string <strong>rewrites</strong> and the read window <strong>slides</strong> so the 16-step grid keeps shifting. Rule sets rotate (A→AB, B→A and cousins) so it does not freeze after a few bars.</p>
   </div>
   <div class="app-toolbar">
     <div class="control-row">
@@ -24,17 +24,19 @@
       <button type="button" class="btn btn-play" id="playBtn">▶</button>
       <button type="button" class="btn-secondary btn btn-sm" id="resetBtn">Reset rule</button>
     </div>
+    <div class="control-row lsys-live" aria-live="polite">
+      <label>Gen</label>
+      <span><strong id="genOut">0</strong></span>
+      <label>Rules</label>
+      <span><strong id="ruleOut">A→AB, B→A</strong></span>
+    </div>
   </div>
-  <p class="status-bar" id="status">L-system: A → AB, B → A</p>
-  <div class="readout-row">
-    <p class="value-chip">Gen <strong id="genOut">0</strong></p>
-    <p class="value-chip">Rule <strong id="ruleOut">A</strong></p>
-  </div>
+  <p class="status-bar" id="status">Rewrites every bar · rules rotate</p>
   <div class="main-stage lsystem-stage">
     <div id="grid" class="lsystem-grid" aria-label="Drum pattern"></div>
   </div>
   <script type="module">
-    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
     import { createLSystemGroove } from "../../shared/lsystem-groove.js";
     import { DRUM_SEQ_ROWS } from "../../shared/drum-sounds.js";
@@ -48,7 +50,6 @@
     let stepIndex = 0;
     let nextTime = 0;
     let barCount = 0;
-    let generation = 0;
 
     const grid = document.getElementById("grid");
     DRUM_SEQ_ROWS.forEach((row, ri) => {
@@ -71,15 +72,14 @@
     });
 
     function applyLSystemToPattern() {
-      const bits = lsys.toPattern(STEPS);
       for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+        const rowPat = lsys.toPattern(STEPS, ri * 5);
         for (let ci = 0; ci < STEPS; ci++) {
-          const v = bits[(ci + ri * 3) % bits.length];
-          pattern[ri][ci] = !!v;
+          pattern[ri][ci] = rowPat[ci];
         }
       }
-      document.getElementById("ruleOut").textContent = lsys.getState().slice(0, 12);
-      document.getElementById("genOut").textContent = String(generation);
+      document.getElementById("genOut").textContent = String(lsys.getGeneration());
+      document.getElementById("ruleOut").textContent = lsys.getRuleLabel();
       redraw();
     }
 
@@ -111,8 +111,8 @@
 
     function evolveBar() {
       lsys.rewrite();
-      generation++;
       applyLSystemToPattern();
+      document.getElementById("status").textContent = `Gen ${lsys.getGeneration()} · ${lsys.getRuleLabel()}`;
     }
 
     function scheduler() {
@@ -122,6 +122,7 @@
       while (nextTime <= now + 0.05) {
         const col = stepIndex;
         if (col === 0 && barCount > 0) evolveBar();
+        if (col === 8 && barCount > 0) evolveBar();
         for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
           if (pattern[ri][col]) DRUM_SEQ_ROWS[ri].play(ctx, master);
         }
@@ -139,7 +140,6 @@
 
     document.getElementById("resetBtn").onclick = () => {
       lsys.reset("A");
-      generation = 0;
       barCount = 0;
       applyLSystemToPattern();
       setStatus("status", "Reset to A", "");

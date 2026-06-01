@@ -1729,6 +1729,28 @@ html.omo-a11y .hub-header .hub-section-select {
 }
 
 /* L-system groove */
+.lsystem-groove-app .lsys-live {
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.15rem;
+}
+
+.lsystem-groove-app .lsys-live label {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.lsystem-groove-app .lsys-live span {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.lsystem-groove-app .lsys-live strong {
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
 .lsystem-stage {
   padding: 0.35rem;
   overflow: auto;

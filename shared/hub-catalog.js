@@ -256,7 +256,7 @@ export const HUB_APPS = [
   },
   {
     href: "apps/lsystem-groove/",
-    title: "Lsystem Groove",
+    title: "L-System Groove",
     section: "rhythm",
     synth: "L-system rewrite",
     sensors: "Touch",
