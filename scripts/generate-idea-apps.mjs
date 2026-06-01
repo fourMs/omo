@@ -114,24 +114,6 @@ pad.addEventListener("pointerdown",async e=>{e.preventDefault();primeSensors({ne
 pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");voices.forEach(v=>v.g.gain.setTargetAtTime(0,ctx.currentTime,0.1));});`,
   },
   {
-    slug: "tilt-doppler",
-    title: "Doppler Tilt",
-    section: "melody",
-    synth: "Pitch glide",
-    sensors: "Tilt · touch",
-    learn: "<h2>Tilt doppler</h2><p><strong>Hold</strong> — tilting speed bends pitch like a doppler sweep.</p>",
-    script: `${padBase}
-import { enableSensors, onOrientation } from "../../shared/sensors.js";
-let osc,amp,lastB=0;
-function build(c){ctx=c;({master}=createMasterBus(c,0.5));osc=ctx.createOscillator();amp=ctx.createGain();amp.gain.value=0;osc.connect(amp);amp.connect(master);osc.start();built=true;
-enableSensors({needMotion:false,needOrientation:true}).then(ok=>{if(!ok)return;onOrientation(o=>{if(!holding)return;const b=o.beta||0;const db=(b-lastB)*50;lastB=b;osc.detune.setTargetAtTime(clamp(db*10,-1200,1200),ctx.currentTime,0.03);});});}
-function setPad(nx,on){osc.frequency.setTargetAtTime(150*Math.pow(4,nx),ctx.currentTime,0.03);amp.gain.setTargetAtTime(on?0.3:0,ctx.currentTime,on?0.02:0.06);}
-pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio(!built?build:undefined);holding=true;activeId=e.pointerId;pad.setPointerCapture(activeId);pad.classList.add("active");const r=pad.getBoundingClientRect();setPad(clamp((e.clientX-r.left)/r.width,0,1),true);});
-pad.addEventListener("pointermove",e=>{if(!holding||e.pointerId!==activeId)return;const r=pad.getBoundingClientRect();setPad(clamp((e.clientX-r.left)/r.width,0,1),true);});
-const off=e=>{if(e.pointerId!==activeId)return;holding=false;pad.classList.remove("active");setPad(0.5,false);};
-pad.addEventListener("pointerup",off);pad.addEventListener("pointercancel",off);`,
-  },
-  {
     slug: "room-reverb-send",
     title: "Room Wash",
     section: "texture",
@@ -235,24 +217,6 @@ function build(c){ctx=c;({master}=createMasterBus(c,0.45));noise=ctx.createBuffe
 registerAudioBoot(async c=>{build(c);video=document.createElement("video");video.playsInline=true;video.muted=true;const stream=await navigator.mediaDevices.getUserMedia({video:true});video.srcObject=stream;await video.play();canvas=document.createElement("canvas");canvas.width=48;canvas.height=36;ctx2=canvas.getContext("2d");function tick(){ctx2.drawImage(video,0,0,48,36);const img=ctx2.getImageData(0,0,48,36);if(prev&&holding){let diff=0;for(let i=0;i<img.data.length;i+=4)diff+=Math.abs(img.data[i]-prev[i]);const e=diff/(48*36*255);filt.frequency.setTargetAtTime(200+e*4000,ctx.currentTime,0.04);grainAmp.gain.setTargetAtTime(0.05+e*0.3,ctx.currentTime,0.05);}prev=new Uint8ClampedArray(img.data);requestAnimationFrame(tick);}tick();});
 pad.addEventListener("pointerdown",async()=>{await startAudio();holding=true;pad.classList.add("active");});
 pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");grainAmp.gain.setTargetAtTime(0,ctx.currentTime,0.1);});`,
-  },
-  {
-    slug: "torch-pulse",
-    title: "Flash Beat",
-    section: "rhythm",
-    synth: "Click + flash",
-    sensors: "Camera · touch",
-    learn: "<h2>Torch pulse</h2><p>Tap pad for click; screen flashes on beat. Rear camera preview optional.</p>",
-    script: `import { bindLearn, startAudio } from "../../shared/app.js";
-import { createMasterBus } from "../../shared/audio.js";
-bindLearn();
-const pad=document.getElementById("pad");
-let ctx,master,built=false;
-function flash(){document.body.style.background="#fff8e0";setTimeout(()=>document.body.style.background="",80);}
-function click(){const t=ctx.currentTime;const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=1200;g.gain.setValueAtTime(0.25,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.06);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);flash();}
-function build(c){ctx=c;({master}=createMasterBus(c,0.5));built=true;setInterval(()=>{if(built)click();},600);}
-pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio(!built?build:undefined);click();pad.classList.add("active");});
-pad.addEventListener("pointerup",()=>pad.classList.remove("active"));`,
   },
   {
     slug: "pinch-bass",

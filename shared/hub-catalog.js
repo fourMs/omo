@@ -101,13 +101,6 @@ export const HUB_APPS = [
     sensors: "Touch",
   },
   {
-    href: "apps/synth-pad/",
-    title: "Synth Pad",
-    section: "melody",
-    synth: "Subtractive pad",
-    sensors: "Touch",
-  },
-  {
     href: "apps/mic-theremin/",
     title: "Mic Theremin",
     section: "melody",
@@ -268,7 +261,6 @@ export const HUB_APPS = [
     synth: "Shepard tone",
     sensors: "Touch · tilt",
   },
-  { href: "apps/tilt-doppler/", title: "Tilt Doppler", section: "melody", synth: "Pitch glide", sensors: "Tilt · touch" },
   { href: "apps/room-reverb-send/", title: "Room Reverb Send", section: "texture", synth: "Convolver wet", sensors: "Mic · touch" },
   { href: "apps/whisper-gate/", title: "Whisper Gate", section: "texture", synth: "Formant noise", sensors: "Mic · touch" },
   { href: "apps/clap-architect/", title: "Clap Architect", section: "rhythm", synth: "Learned kit", sensors: "Mic · touch" },
@@ -276,7 +268,6 @@ export const HUB_APPS = [
   { href: "apps/flat-edge/", title: "Flat Edge", section: "drones", synth: "Gated drone", sensors: "Tilt · touch" },
   { href: "apps/heading-choir/", title: "Heading Choir", section: "drones", synth: "Detuned pans", sensors: "Compass · touch" },
   { href: "apps/shadow-sequencer/", title: "Shadow Sequencer", section: "rhythm", synth: "8-step mask", sensors: "Camera · touch" },
-  { href: "apps/torch-pulse/", title: "Torch Pulse", section: "rhythm", synth: "Click + flash", sensors: "Camera · touch" },
   { href: "apps/pinch-bass/", title: "Pinch Bass", section: "synthesis", synth: "Subtractive bass", sensors: "Pinch · XY" },
   { href: "apps/edge-strum/", title: "Edge Strum", section: "synthesis", synth: "KS harmonics", sensors: "Touch position" },
   { href: "apps/am-radio/", title: "Am Radio", section: "synthesis", synth: "AM sidebands", sensors: "Mic · touch" },
@@ -286,7 +277,7 @@ export const HUB_APPS = [
   { href: "apps/pluck-bowl/", title: "Pluck Bowl", section: "synthesis", synth: "KS + LFO layers", sensors: "Touch position" },
   { href: "apps/wind-bottle/", title: "Wind Bottle", section: "texture", synth: "Noise resonator", sensors: "Tilt · touch" },
   { href: "apps/scrub-tape/", title: "Scrub Tape", section: "texture", synth: "Buffer scrub", sensors: "Mic · slider" },
-  { href: "apps/vocoder-choir/", title: "Vocoder Choir", section: "texture", synth: "Band vocoder", sensors: "Mic · tilt" },
+  { href: "apps/vocoder-choir/", title: "Vocoder Choir", section: "texture", synth: "Band vocoder", sensors: "Mic · tilt · touch" },
   { href: "apps/gesture-regression/", title: "Gesture Regression", section: "ai", synth: "ML → filter", sensors: "Motion · touch" },
   {
     href: "apps/swarm-bloom/",

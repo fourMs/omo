@@ -16,7 +16,6 @@ Phones expose more than mic + tilt. Each row is a candidate **app** (or major up
 | ~~**Shake Filter**~~ | High-pass jerk on accel | Sudden shakes open a filter | [Jerk Wah](../apps/shake-filter/) |
 | ~~**Flat / Edge**~~ | `beta` / `gamma` thresholds | Only sound when held flat vs upright | [Table Drone](../apps/flat-edge/) |
 | ~~**Compass Choir**~~ | `webkitCompassHeading` / `alpha` | Section pans by where you face in room | [Heading Choir](../apps/heading-choir/) |
-| ~~**Tilt Doppler**~~ | Rapid β change | Tilt speed → pitch sweep (Doppler-ish) | [Doppler Tilt](../apps/tilt-doppler/) |
 
 ### Microphone & audio input
 
@@ -34,7 +33,6 @@ Phones expose more than mic + tilt. Each row is a candidate **app** (or major up
 | ~~**Shadow Sequencer**~~ | Front camera brightness map | Hand shadow → 8-step mask | [Shadow Steps](../apps/shadow-sequencer/) |
 | ~~**Color Band**~~ | Camera dominant hue | Point at coloured objects → scale | [Hue Scale](../apps/color-band/) |
 | ~~**Motion Grid**~~ | Camera frame diff (like Video Sonifier) | Movement amount → rhythm density | [Grain Cam](../apps/motion-grid/) |
-| ~~**Torch Pulse**~~ | `torch` / screen flash + rear cam | Flash on beat for ensemble visual | [Flash Beat](../apps/torch-pulse/) |
 
 ### Touch & device
 
@@ -124,7 +122,6 @@ Different ways to generate sound beyond what the hub already demos. Pair with to
 
 | App | Synthesis |
 |-----|-----------|
-| [Synth Pad](../apps/synth-pad/) | Subtractive |
 | [FM Touch](../apps/fm-touch/), [+ Tilt](../apps/fm-touch-tilt/), [Matrix](../apps/fm-matrix/) | FM |
 | [KS String](../apps/ks-string/), [Pluck](../apps/ks-pluck/) | Karplus–Strong |
 | [Additive Bells](../apps/additive-bells/) | Additive |
@@ -224,7 +221,7 @@ Use when designing a new app: pick **one primary sensor** and **one synthesis fa
 | Geolocation | `geolocation` | Prompt | Prompt | Outdoor workshops |
 | Battery | `getBattery()` | Deprecated | Varies | Subtle only |
 | Vibration | `vibrate()` | No | Yes | Output, not input |
-| Force touch | `force` on pointer | Some iOS | Rare | Synth Pad–style |
+| Force touch | `force` on pointer | Some iOS | Rare | Pressure-style apps |
 
 ---
 

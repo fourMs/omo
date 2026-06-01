@@ -19,7 +19,7 @@
 ## Facilitator script (45 min)
 
 ### Warm-up (5 min)
-Open hub → **Synth Pad**. Everyone finds one note. Conductor counts 1–2–3–4, all release on 4.
+Open hub → **Piano**. Everyone finds one note. Conductor counts 1–2–3–4, all release on 4.
 
 ### Sensors (10 min)
 **Motion Trump** — “Tilt = vowel.” Conductor points up/down; group sweeps together without looking at screens.
@@ -57,6 +57,6 @@ All screens down; one sustained drone from a single phone. Discuss what felt “
 
 ## Assessment prompts (school / university)
 
-1. Map **Synth Pad** controls to oscillator → filter signal chain.
+1. Map **FM Touch** or **Filter Ladder** controls to oscillator → filter signal chain.
 2. Why is k-NN a form of **supervised learning**?
 3. Compare **granular** clouds to **subtractive** pad — which fits ambient vs rhythmic roles?

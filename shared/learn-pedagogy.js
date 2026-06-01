@@ -95,11 +95,6 @@ export const LEARN_PEDAGOGY = {
     "Supports melody, voice-leading, and ensemble pitch reference; works well when other parts are drone or rhythm.",
   ],
 
-  "synth-pad": [
-    "Subtractive synthesis: rich oscillator (saw/square) through a filter; touch position changes cutoff and level.",
-    "Classic “analog” lead/pad language — brightness and warmth from filter motion.",
-  ],
-
   "mic-theremin": [
     "Pitch is estimated from your humming or whistling; the phone tracks fundamental frequency and drives a sine tone.",
     "Links vocal intonation to electronic pitch — useful for ear training and for one melodic line without a keyboard.",
@@ -215,11 +210,6 @@ export const LEARN_PEDAGOGY = {
     "Psychoacoustic paradox — good for discussing pitch circularity and ensemble tuning.",
   ],
 
-  "tilt-doppler": [
-    "Fast tilt change shifts pitch briefly, mimicking Doppler shift when source or listener moves.",
-    "Links physical motion to pitch metaphor — expressive sweeps without a pitch wheel.",
-  ],
-
   "room-reverb-send": [
     "Mic level in the room increases send to a reverb (convolution or algorithmic); louder room = wetter sound.",
     "Acoustic feedback loop: the space you are in changes the processed signal.",
@@ -238,11 +228,6 @@ export const LEARN_PEDAGOGY = {
   "shadow-sequencer": [
     "Camera brightness in zones becomes an 8-step pattern; hand shadows toggle steps.",
     "Optical sequencing — visible gesture is the score.",
-  ],
-
-  "torch-pulse": [
-    "Flash or screen light pulses on beats while camera or mic may also drive clicks.",
-    "Multisensory rhythm — sound and light sync for ensemble cues.",
   ],
 
   "pinch-bass": [
@@ -291,6 +276,7 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "vocoder-choir": [
+    "Hold the centre button and sing — mic energy opens bandpass carriers for a choir-like vocoder.",
     "A carrier tone is filtered by bands shaped from mic input — speech formants on a synth.",
     "Robot voice effect; choir when carrier is rich and modulation is smooth.",
   ],
