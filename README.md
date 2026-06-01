@@ -2,6 +2,8 @@
 
 A collection of patches used with [Oslo Mobile Orchestra (OMO)](https://www.uio.no/ritmo/english/research/labs/fourms/research/projects/omo/) at the Department of Musicology, University of Oslo.
 
+![OMO performance](docs/2012-omo_performance.jpg)
+
 OMO used to work with a collection of patches developed in PureData and deployed via MobMuPlat. This collection uses browser-based apps that rely on the Web Audio API. They should work on both iOS and Android phones, although there may be variations in sensors available and browser capabilities. 
 
 **Play now:** [fourms.github.io/omo/](https://fourms.github.io/omo/)
