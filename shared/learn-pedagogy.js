@@ -16,8 +16,8 @@ export const LEARN_PEDAGOGY = {
   ],
 
   clix: [
-    "After Ge Wang’s CliX (SMELT / PLOrk): each key is a pitch from its ASCII code; a shared 8×4 grid scan sets how loud the next note is when the clock arrives.",
-    "Teaches quantized ensemble typing — listen for the grid phase, don’t rush ahead of the pulse — and how the same letter can whisper or shout depending on when it lands.",
+    "After Ge Wang’s CliX (SMELT / PLOrk): each key is a pitch from its ASCII code; a shared 8×4 grid scan sets how loud each strike is when the clock arrives.",
+    "Hold a key to loop on every grid pulse — the same letter can whisper or shout as the orange cell moves; release to stop.",
   ],
 
   drumkit: [

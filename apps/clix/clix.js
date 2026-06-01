@@ -6,7 +6,6 @@ import {
   GRID_W,
   createClixReverb,
   gainAt,
-  gridAt,
   gridAtTime,
   playClixNote,
 } from "../../shared/clix-engine.js";
@@ -28,7 +27,8 @@ if (!Number.isFinite(syncStartMs)) syncStartMs = Date.now();
 let ctx = null;
 let master = null;
 let channelWhich = 0;
-const queue = [];
+/** Keys currently held — retrigger on each grid pulse. */
+const held = new Set();
 let lastCellIndex = -1;
 let loopRunning = false;
 let cleared = false;
@@ -63,9 +63,18 @@ function buildKeys() {
       btn.type = "button";
       btn.className = "clix-key";
       btn.textContent = ch;
+      btn.dataset.ch = ch;
+      const code = ch.charCodeAt(0);
       btn.addEventListener("pointerdown", (e) => {
         e.preventDefault();
-        void onKeyPress(ch.charCodeAt(0));
+        void onKeyDown(code);
+      });
+      btn.addEventListener("pointerup", (e) => {
+        e.preventDefault();
+        onKeyUp(code);
+      });
+      btn.addEventListener("pointercancel", (e) => {
+        onKeyUp(code);
       });
       keysEl.appendChild(btn);
     }
@@ -85,11 +94,29 @@ async function ensureAudio() {
   return startAudio(buildAudio);
 }
 
-async function onKeyPress(code) {
+function setKeyVisual(code, down) {
+  const ch = String.fromCharCode(code);
+  keysEl.querySelector(`[data-ch="${ch}"]`)?.classList.toggle("down", down);
+}
+
+async function onKeyDown(code) {
   if (code < 32 || code > 126) return;
+  if (held.has(code)) return;
   if (cleared) cleared = false;
   await ensureAudio();
-  queue.push(code);
+  held.add(code);
+  setKeyVisual(code, true);
+  if (ctx && master) {
+    const { x, y } = gridAtTime(syncStartMs, ctx.sampleRate);
+    playClixNote(ctx, master, code, gainAt(x, y), channelWhich);
+    channelWhich = (channelWhich + 1) % 2;
+  }
+  updateReadout();
+}
+
+function onKeyUp(code) {
+  if (!held.delete(code)) return;
+  setKeyVisual(code, false);
   updateReadout();
 }
 
@@ -98,7 +125,7 @@ function updateReadout(x, y) {
   const gy = y ?? "—";
   const g = x != null && y != null ? gainAt(x, y).toFixed(2) : "—";
   const audioHint = isAudioActive() ? "" : " · tap Audio on";
-  readout.textContent = `grid ${gx},${gy} · vel ${g} · queue ${queue.length}${audioHint}`;
+  readout.textContent = `grid ${gx},${gy} · vel ${g} · held ${held.size}${audioHint}`;
 }
 
 function highlightGrid(x, y) {
@@ -107,12 +134,13 @@ function highlightGrid(x, y) {
   if (on) on.classList.add("on");
 }
 
-function drainOne(x, y) {
-  if (!queue.length || !ctx || !master) return;
-  const code = queue.shift();
+function playHeldAtGrid(x, y) {
+  if (!held.size || !ctx || !master) return;
   const vel = gainAt(x, y);
-  playClixNote(ctx, master, code, vel, channelWhich);
-  channelWhich = (channelWhich + 1) % 2;
+  for (const code of held) {
+    playClixNote(ctx, master, code, vel, channelWhich);
+    channelWhich = (channelWhich + 1) % 2;
+  }
   updateReadout(x, y);
 }
 
@@ -123,7 +151,7 @@ function loop() {
   if (index !== lastCellIndex) {
     lastCellIndex = index;
     highlightGrid(x, y);
-    if (!cleared) drainOne(x, y);
+    if (!cleared) playHeldAtGrid(x, y);
     else updateReadout(x, y);
   }
   requestAnimationFrame(loop);
@@ -136,7 +164,8 @@ function startLoop() {
 }
 
 document.getElementById("clearBtn").onclick = () => {
-  queue.length = 0;
+  for (const code of held) setKeyVisual(code, false);
+  held.clear();
   cleared = true;
   updateReadout();
 };
@@ -148,7 +177,18 @@ window.addEventListener(
     if (e.target.closest("input, textarea, select")) return;
     if (e.key.length === 1) {
       e.preventDefault();
-      void onKeyPress(e.key.charCodeAt(0));
+      void onKeyDown(e.key.charCodeAt(0));
+    }
+  },
+  { capture: true }
+);
+window.addEventListener(
+  "keyup",
+  (e) => {
+    if (e.target.closest("input, textarea, select")) return;
+    if (e.key.length === 1) {
+      e.preventDefault();
+      onKeyUp(e.key.charCodeAt(0));
     }
   },
   { capture: true }
@@ -163,8 +203,8 @@ if (syncParam) {
   const left = syncStartMs - Date.now();
   readout.textContent =
     left > 0
-      ? `Sync in ${Math.ceil(left / 1000)}s · queue ${queue.length}`
-      : `Synced · queue ${queue.length}`;
+      ? `Sync in ${Math.ceil(left / 1000)}s · held ${held.size}`
+      : `Synced · held ${held.size}`;
 }
 
 tabPlay.onclick = () => {

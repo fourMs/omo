@@ -58,7 +58,8 @@
       background: #252b38;
       color: var(--text, #f1f5f9);
     }
-    .clix-key:active { background: #3d4658; }
+    .clix-key:active,
+    .clix-key.down { background: #fb923c; color: #0d0f14; }
     .clix-live {
       flex-shrink: 0;
       display: flex !important;
@@ -82,8 +83,8 @@
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>CliX</h2>
-    <p>Turn <strong>Audio on</strong>. Type on the keys or a Bluetooth keyboard — each note waits for the <strong>orange grid</strong> pulse, then rings at a pitch from the character and loudness from the grid cell (like the original laptop ensemble patch).</p>
-    <p><strong>Host</strong> — share the sync link so every phone scans the same grid phase. <strong>Clear</strong> drops queued keys.</p>
+    <p>Turn <strong>Audio on</strong>. <strong>Hold</strong> a key (or type on a Bluetooth keyboard) — the note retriggers on every <strong>orange grid</strong> pulse; pitch comes from the character, loudness from the grid cell.</p>
+    <p><strong>Host</strong> — share the sync link so every phone scans the same grid phase. <strong>Clear</strong> releases all held keys.</p>
   </div>
 
   <div class="role-tabs">
@@ -93,10 +94,10 @@
 
   <div id="playView" class="main-stage">
     <div class="clix-grid" id="grid" aria-label="Sync grid 8 by 4"></div>
-    <p class="control-row clix-live" id="readout" aria-live="polite">grid — · queue 0</p>
+    <p class="control-row clix-live" id="readout" aria-live="polite">grid — · held 0</p>
     <div class="clix-keys" id="keys"></div>
     <div class="app-toolbar">
-      <button type="button" class="btn-secondary btn" id="clearBtn">Clear queue</button>
+      <button type="button" class="btn-secondary btn" id="clearBtn">Clear held</button>
     </div>
   </div>
 
