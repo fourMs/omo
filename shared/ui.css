@@ -1712,6 +1712,23 @@ html.omo-a11y .hub-header .hub-section-select {
   align-items: center;
 }
 
+.markov-melody-app .markov-live {
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+}
+
+.markov-melody-app .markov-live span {
+  color: #cbd5e1;
+  text-align: left;
+  min-width: 2ch;
+}
+
+.markov-melody-app .markov-live strong {
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
 .markov-melody-app .piano-key.markov-out-scale {
   opacity: 0.38;
 }

@@ -31,9 +31,13 @@
     <span id="bpmVal">96</span>
   </div>
   <p class="status-bar" id="status">Turn Audio on · tap keys to train</p>
-  <div class="readout-row">
-    <p class="value-chip">Learned <strong id="learnOut">0</strong></p>
-    <p class="value-chip">Last <strong id="noteOut">—</strong></p>
+  <div class="control-row markov-live" aria-label="Training">
+    <label>Steps</label>
+    <span><strong id="stepsOut">0</strong></span>
+    <label>Notes</label>
+    <span><strong id="notesOut">0</strong></span>
+    <label>Last</label>
+    <span><strong id="noteOut">—</strong></span>
   </div>
   <div class="main-stage markov-stage">
     <div class="keyboard-scroll markov-keyboard-scroll">
@@ -62,6 +66,7 @@
 
     let markov = createMarkovMelody({ intervals: MARKOV_SCALES.major.intervals, octaves: KEYBOARD_OCTAVES });
     let intervals = markov.getIntervals();
+    let degreesSeen = new Set();
     let ctx, master, built = false;
     let autoOn = false;
     let nextTick = 0;
@@ -104,6 +109,11 @@
     }
 
     registerAudioBoot(buildAudio);
+
+    function updateTrainingReadout() {
+      document.getElementById("stepsOut").textContent = String(markov.trainingSize());
+      document.getElementById("notesOut").textContent = String(degreesSeen.size);
+    }
 
     function semiInScale(semi) {
       return intervals.includes(((semi % 12) + 12) % 12);
@@ -165,7 +175,8 @@
         return;
       }
       markov.observeDegree(deg);
-      document.getElementById("learnOut").textContent = String(markov.trainingSize());
+      degreesSeen.add(deg);
+      updateTrainingReadout();
       playDegree(deg, ctx.currentTime);
       btn.classList.add("active");
       setTimeout(() => btn.classList.remove("active"), 120);
@@ -194,7 +205,8 @@
       intervals = preset.intervals;
       markov.setIntervals(intervals);
       refreshKeyHighlights();
-      document.getElementById("learnOut").textContent = "0";
+      degreesSeen = new Set();
+      updateTrainingReadout();
       setStatus("status", `${preset.label} — tap keys to train`, "");
     });
 
@@ -204,7 +216,8 @@
 
     document.getElementById("clearBtn").addEventListener("click", () => {
       markov.reset();
-      document.getElementById("learnOut").textContent = "0";
+      degreesSeen = new Set();
+      updateTrainingReadout();
       setStatus("status", "Cleared — tap to train again", "");
     });
 
@@ -231,6 +244,7 @@
     });
 
     buildKeyboard();
+    updateTrainingReadout();
   </script>
 </body>
 </html>
