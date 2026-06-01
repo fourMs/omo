@@ -36,10 +36,13 @@
       </label>
     </div>
     <p class="status-bar" id="status">Stopped · Audio on</p>
-    <div class="readout-row">
-      <p class="value-chip">Playing <strong id="playBpm">—</strong> BPM</p>
-      <p class="value-chip">Lock <strong id="lockPct">0</strong>%</p>
-      <p class="value-chip">Phase <strong id="phaseMs">—</strong> ms</p>
+    <div class="control-row firefly-live" aria-label="Sync status">
+      <label>Tempo</label>
+      <span><strong id="playBpm">—</strong> BPM</span>
+      <label>Lock</label>
+      <span><strong id="lockPct">0</strong>%</span>
+      <label>Offset</label>
+      <span><strong id="phaseMs">—</strong> ms</span>
     </div>
   </div>
   <div class="countdown-flash firefly-beat-flash" id="beatFlash" aria-hidden="true"></div>
