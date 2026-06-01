@@ -13,6 +13,20 @@
   <header class="hub-header">
     <h1>Oslo Mobile Orchestra</h1>
     <p>Each card shows synthesis and sensors. Tap to play.</p>
+    <div class="header-controls" id="headerControls">
+      <div class="control-row hub-filter">
+        <label for="sectionFilter">Section</label>
+        <select id="sectionFilter">
+          <option value="">All</option>
+          <option value="drones">Drones</option>
+          <option value="rhythm">Rhythm</option>
+          <option value="melody">Melody</option>
+          <option value="texture">Texture</option>
+          <option value="synthesis">Synthesis</option>
+          <option value="ai">AI</option>
+        </select>
+      </div>
+    </div>
   </header>
 
   <div class="learn-panel panel" id="learnPanel">
@@ -26,19 +40,6 @@
   </div>
 
   <div id="partBanner" class="hub-banner hidden"></div>
-
-  <div class="control-row" style="margin:0 0.35rem">
-    <label for="sectionFilter">Section</label>
-    <select id="sectionFilter">
-      <option value="">All</option>
-      <option value="drones">Drones</option>
-      <option value="rhythm">Rhythm</option>
-      <option value="melody">Melody</option>
-      <option value="texture">Texture</option>
-      <option value="synthesis">Synthesis</option>
-      <option value="ai">AI</option>
-    </select>
-  </div>
 
   <ul class="app-list" id="appList"></ul>
 

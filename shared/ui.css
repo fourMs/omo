@@ -460,14 +460,35 @@ body.hub {
 
 .hub-header {
   position: relative;
-  padding: 0.65rem 7.5rem 0.4rem 0.75rem;
-  text-align: center;
+  padding: 0.65rem 0.75rem 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .hub-header h1 {
+  flex: 1 1 100%;
   font-size: 1.15rem;
   margin: 0;
   font-weight: 700;
+  text-align: center;
+}
+
+.hub-header .header-controls {
+  flex: 1 1 100%;
+  justify-content: flex-end;
+}
+
+.hub-header .hub-filter {
+  margin-right: auto;
+  padding: 0;
+  background: transparent;
+}
+
+.hub-header .hub-filter select {
+  flex: 0 1 auto;
+  max-width: 9rem;
 }
 
 .app-list {
