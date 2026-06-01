@@ -1,13 +1,13 @@
-import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
+import { bindLearn, isAudioActive, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+import { createMasterBus } from "../../shared/audio.js";
 import { renderQrCanvas } from "../../shared/qr.js";
 import {
-  CLIX_GAINS,
   GRID_H,
   GRID_W,
-  cellDurationSec,
   createClixReverb,
   gainAt,
   gridAt,
+  gridAtTime,
   playClixNote,
 } from "../../shared/clix-engine.js";
 
@@ -21,15 +21,16 @@ const KEY_ROWS = [
 ];
 
 const params = new URLSearchParams(location.search);
-const syncStartParam = params.get("sync");
-let syncStartMs = syncStartParam ? parseInt(syncStartParam, 10) : 0;
+const syncParam = params.get("sync");
+let syncStartMs = syncParam ? parseInt(syncParam, 10) : Date.now();
+if (!Number.isFinite(syncStartMs)) syncStartMs = Date.now();
 
 let ctx = null;
 let master = null;
 let channelWhich = 0;
 const queue = [];
 let lastCellIndex = -1;
-let raf = 0;
+let loopRunning = false;
 let cleared = false;
 
 const gridEl = document.getElementById("grid");
@@ -62,32 +63,32 @@ function buildKeys() {
       btn.type = "button";
       btn.className = "clix-key";
       btn.textContent = ch;
-      btn.dataset.code = String(ch.charCodeAt(0));
       btn.addEventListener("pointerdown", (e) => {
         e.preventDefault();
-        enqueueKey(ch.charCodeAt(0));
+        void onKeyPress(ch.charCodeAt(0));
       });
       keysEl.appendChild(btn);
     }
   }
 }
 
-function ensureAudio(cb) {
-  void startAudio((c) => {
-    if (!ctx) {
-      ctx = c;
-      master = createClixReverb(ctx, ctx.destination);
-      if (!syncStartMs) syncStartMs = Date.now() + 400;
-      loop();
-    }
-    cb?.();
-  });
+function buildAudio(c) {
+  ctx = c;
+  const bus = createMasterBus(c, 0.75);
+  master = createClixReverb(c, bus.master);
 }
 
-function enqueueKey(code) {
+registerAudioBoot(buildAudio);
+
+async function ensureAudio() {
+  if (ctx && master) return ctx;
+  return startAudio(buildAudio);
+}
+
+async function onKeyPress(code) {
   if (code < 32 || code > 126) return;
   if (cleared) cleared = false;
-  ensureAudio();
+  await ensureAudio();
   queue.push(code);
   updateReadout();
 }
@@ -96,7 +97,8 @@ function updateReadout(x, y) {
   const gx = x ?? "—";
   const gy = y ?? "—";
   const g = x != null && y != null ? gainAt(x, y).toFixed(2) : "—";
-  readout.textContent = `grid ${gx},${gy} · vel ${g} · queue ${queue.length}`;
+  const audioHint = isAudioActive() ? "" : " · tap Audio on";
+  readout.textContent = `grid ${gx},${gy} · vel ${g} · queue ${queue.length}${audioHint}`;
 }
 
 function highlightGrid(x, y) {
@@ -115,15 +117,22 @@ function drainOne(x, y) {
 }
 
 function loop() {
-  if (!ctx) return;
-  const { x, y, index } = gridAt(syncStartMs, ctx);
+  if (!loopRunning) return;
+  const sr = ctx?.sampleRate ?? 48000;
+  const { x, y, index } = gridAtTime(syncStartMs, sr);
   if (index !== lastCellIndex) {
     lastCellIndex = index;
     highlightGrid(x, y);
     if (!cleared) drainOne(x, y);
     else updateReadout(x, y);
   }
-  raf = requestAnimationFrame(loop);
+  requestAnimationFrame(loop);
+}
+
+function startLoop() {
+  if (loopRunning) return;
+  loopRunning = true;
+  requestAnimationFrame(loop);
 }
 
 document.getElementById("clearBtn").onclick = () => {
@@ -139,7 +148,7 @@ window.addEventListener(
     if (e.target.closest("input, textarea, select")) return;
     if (e.key.length === 1) {
       e.preventDefault();
-      enqueueKey(e.key.charCodeAt(0));
+      void onKeyPress(e.key.charCodeAt(0));
     }
   },
   { capture: true }
@@ -147,12 +156,15 @@ window.addEventListener(
 
 buildGrid();
 buildKeys();
+startLoop();
 updateReadout();
 
-if (syncStartParam) {
+if (syncParam) {
   const left = syncStartMs - Date.now();
   readout.textContent =
-    left > 0 ? `Sync in ${Math.ceil(left / 1000)}s · queue ${queue.length}` : `Synced · queue ${queue.length}`;
+    left > 0
+      ? `Sync in ${Math.ceil(left / 1000)}s · queue ${queue.length}`
+      : `Synced · queue ${queue.length}`;
 }
 
 tabPlay.onclick = () => {
@@ -185,7 +197,7 @@ document.getElementById("hostStart").onclick = () => {
   renderQrCanvas(document.getElementById("shareQr"), url, { scale: 4, border: 2 });
   document.getElementById("copyBtn").classList.remove("hidden");
   setStatus("hostStatus", "Share link — grid starts in 5s", "ok");
-  ensureAudio();
+  void ensureAudio();
 };
 
 document.getElementById("copyBtn").onclick = async () => {
@@ -197,11 +209,5 @@ document.getElementById("copyBtn").onclick = async () => {
     setStatus("hostStatus", "Copy the link manually", "warn");
   }
 };
-
-document.body.addEventListener(
-  "pointerdown",
-  () => ensureAudio(),
-  { once: true, capture: true }
-);
 
 if (params.has("host")) tabHost.click();

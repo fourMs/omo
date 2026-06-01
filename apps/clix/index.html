@@ -7,18 +7,30 @@
   <title>CliX — OMO</title>
   <link rel="stylesheet" href="../../shared/ui.css" />
   <style>
+    body.clix-app #playView.main-stage,
+    body.clix-app #hostView.main-stage {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    body.clix-app #hostView.main-stage.hidden {
+      display: none !important;
+    }
     .clix-grid {
       display: grid;
       grid-template-columns: repeat(8, 1fr);
       gap: 3px;
+      flex-shrink: 0;
       max-width: 100%;
-      margin: 0 auto 0.5rem;
+      margin: 0 auto 0.35rem;
       padding: 0 0.35rem;
     }
     .clix-cell {
       aspect-ratio: 1.2;
       border-radius: 4px;
-      background: var(--panel, #1a1f2a);
+      background: var(--surface, #1a1f2e);
       border: 1px solid rgba(255, 255, 255, 0.08);
       transition: background 0.05s, box-shadow 0.05s;
     }
@@ -32,6 +44,8 @@
       gap: 5px;
       justify-content: center;
       padding: 0.35rem;
+      flex: 1;
+      align-content: flex-start;
       touch-action: manipulation;
     }
     .clix-key {
@@ -42,22 +56,26 @@
       border-radius: 6px;
       border: 1px solid rgba(255, 255, 255, 0.12);
       background: #252b38;
-      color: var(--text, #e8eaef);
+      color: var(--text, #f1f5f9);
     }
     .clix-key:active { background: #3d4658; }
-    .clix-readout {
+    .clix-live {
+      flex-shrink: 0;
+      display: flex !important;
+      justify-content: center;
+      gap: 0.75rem;
+      margin: 0.2rem 0.5rem;
       font-size: 0.72rem;
-      color: var(--muted, #8b93a7);
-      text-align: center;
-      margin: 0.25rem 0.5rem;
+      color: var(--muted);
       font-variant-numeric: tabular-nums;
     }
+    .clix-live strong { color: var(--text); }
     .clix-host-panel { padding: 0 0.5rem 0.5rem; font-size: 0.75rem; }
     .clix-host-panel .btn { width: 100%; margin-top: 0.35rem; }
-    .role-tabs { margin-bottom: 0.25rem; }
+    .role-tabs { flex-shrink: 0; margin-bottom: 0.15rem; }
   </style>
 </head>
-<body class="app-shell">
+<body class="app-shell clix-app">
   <header class="app-header">
     <a class="back-link" href="../../">←</a>
     <h1>CliX</h1>
@@ -73,16 +91,16 @@
     <button type="button" id="tabHost">Host</button>
   </div>
 
-  <div id="playView">
+  <div id="playView" class="main-stage">
     <div class="clix-grid" id="grid" aria-label="Sync grid 8 by 4"></div>
-    <p class="clix-readout" id="readout">grid — · queue 0</p>
+    <p class="control-row clix-live" id="readout" aria-live="polite">grid — · queue 0</p>
     <div class="clix-keys" id="keys"></div>
     <div class="app-toolbar">
       <button type="button" class="btn-secondary btn" id="clearBtn">Clear queue</button>
     </div>
   </div>
 
-  <div id="hostView" class="hidden">
+  <div id="hostView" class="main-stage hidden">
     <div class="clix-host-panel">
       <p>One host shares timing (replaces the ChucK <code>server-multi.ck</code> clock). Everyone opens the musician link before playing.</p>
       <div class="scroll-panel hidden" id="sharePanel">

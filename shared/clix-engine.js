@@ -33,13 +33,18 @@ export function gainAt(x, y) {
   return CLIX_GAINS[index] ?? 0.1;
 }
 
-/** Grid cell from shared start time (ms). */
-export function gridAt(startMs, ctx, nowMs = Date.now()) {
-  const cellMs = cellDurationSec(ctx) * 1000;
+/** Grid cell from shared start time (ms); works before AudioContext exists. */
+export function gridAtTime(startMs, sampleRate = 48000, nowMs = Date.now()) {
+  const cellMs = (SAMPLES_PER_CELL / sampleRate) * 1000;
   const idx = Math.floor((nowMs - startMs) / cellMs) % CLIX_GAINS.length;
   const x = idx % GRID_W;
   const y = (idx / GRID_W) | 0;
   return { x, y, index: idx };
+}
+
+/** Grid cell from shared start time (ms). */
+export function gridAt(startMs, ctx, nowMs = Date.now()) {
+  return gridAtTime(startMs, ctx.sampleRate, nowMs);
 }
 
 /**
@@ -68,8 +73,9 @@ export function playClixNote(ctx, dest, ascii, gain, channelIndex = 0) {
   f.Q.value = 18;
 
   const e = ctx.createGain();
-  e.gain.setValueAtTime(0, t0);
-  e.gain.linearRampToValueAtTime(gain * 0.85, t0 + 0.001);
+  const peak = Math.max(0.001, gain * 0.85);
+  e.gain.setValueAtTime(0.0001, t0);
+  e.gain.linearRampToValueAtTime(peak, t0 + 0.001);
   e.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
 
   const pan = ctx.createStereoPanner();
