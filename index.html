@@ -14,9 +14,7 @@
     <h1>Oslo Mobile Orchestra</h1>
     <p>Each card shows synthesis and sensors. Tap to play.</p>
     <div class="header-controls" id="headerControls">
-      <div class="control-row hub-filter">
-        <label for="sectionFilter">Section</label>
-        <select id="sectionFilter">
+      <select id="sectionFilter" class="hub-section-select" aria-label="Filter by section">
           <option value="">All</option>
           <option value="drones">Drones</option>
           <option value="rhythm">Rhythm</option>
@@ -24,8 +22,7 @@
           <option value="texture">Texture</option>
           <option value="synthesis">Synthesis</option>
           <option value="ai">AI</option>
-        </select>
-      </div>
+      </select>
     </div>
   </header>
 
