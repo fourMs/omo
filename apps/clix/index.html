@@ -18,59 +18,76 @@
     body.clix-app #hostView.main-stage.hidden {
       display: none !important;
     }
+    .clix-grid-wrap {
+      flex: 1;
+      min-height: 10rem;
+      display: flex;
+      align-items: center;
+      padding: 0.35rem 0.5rem;
+    }
     .clix-grid {
       display: grid;
       grid-template-columns: repeat(8, 1fr);
-      gap: 3px;
-      flex-shrink: 0;
-      max-width: 100%;
-      margin: 0 auto 0.35rem;
-      padding: 0 0.35rem;
+      gap: 4px;
+      width: 100%;
+      margin: 0 auto;
     }
     .clix-cell {
-      aspect-ratio: 1.2;
-      border-radius: 4px;
+      aspect-ratio: 1.15;
+      min-height: 1.85rem;
+      border-radius: 5px;
       background: var(--surface, #1a1f2e);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       transition: background 0.05s, box-shadow 0.05s;
     }
     .clix-cell.on {
       background: #fb923c;
-      box-shadow: 0 0 12px rgba(251, 146, 60, 0.55);
+      box-shadow: 0 0 14px rgba(251, 146, 60, 0.6);
     }
-    .clix-keys {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-      justify-content: center;
-      padding: 0.35rem;
-      flex: 1;
-      align-content: flex-start;
-      touch-action: manipulation;
-    }
-    .clix-key {
-      min-width: 2rem;
-      min-height: 2.6rem;
-      padding: 0.35rem 0.45rem;
-      font: 600 0.85rem/1 system-ui, sans-serif;
-      border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: #252b38;
-      color: var(--text, #f1f5f9);
-    }
-    .clix-key:active,
-    .clix-key.down { background: #fb923c; color: #0d0f14; }
     .clix-live {
       flex-shrink: 0;
       display: flex !important;
       justify-content: center;
       gap: 0.75rem;
-      margin: 0.2rem 0.5rem;
+      margin: 0.15rem 0.5rem;
       font-size: 0.72rem;
       color: var(--muted);
       font-variant-numeric: tabular-nums;
     }
     .clix-live strong { color: var(--text); }
+    .clix-keyboard {
+      flex-shrink: 0;
+      padding: 0.25rem 0.35rem 0.4rem;
+      touch-action: manipulation;
+    }
+    .clix-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      justify-content: center;
+      margin-bottom: 5px;
+    }
+    .clix-row-numpad .clix-key {
+      min-width: 2.15rem;
+      min-height: 2.75rem;
+      font-size: 0.95rem;
+    }
+    .clix-key {
+      min-width: 2rem;
+      min-height: 2.55rem;
+      padding: 0.35rem 0.45rem;
+      font: 600 0.85rem/1 system-ui, sans-serif;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: #252b38;
+      color: var(--text, #f1f5f9);
+    }
+    .clix-key.down {
+      background: #fb923c;
+      color: #0d0f14;
+      border-color: #fdba74;
+      box-shadow: 0 0 10px rgba(251, 146, 60, 0.45);
+    }
     .clix-host-panel { padding: 0 0.5rem 0.5rem; font-size: 0.75rem; }
     .clix-host-panel .btn { width: 100%; margin-top: 0.35rem; }
     .role-tabs { flex-shrink: 0; margin-bottom: 0.15rem; }
@@ -83,8 +100,8 @@
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>CliX</h2>
-    <p>Turn <strong>Audio on</strong>. <strong>Hold</strong> a key (or type on a Bluetooth keyboard) — the note retriggers on every <strong>orange grid</strong> pulse; pitch comes from the character, loudness from the grid cell.</p>
-    <p><strong>Host</strong> — share the sync link so every phone scans the same grid phase. <strong>Clear</strong> releases all held keys.</p>
+    <p>Turn <strong>Audio on</strong>. <strong>Hold</strong> any key (numbers or letters) — each <strong>orange grid</strong> pulse retriggers; pitch = character, loudness = grid cell.</p>
+    <p><strong>Host</strong> shares sync. <strong>Clear held</strong> releases all keys.</p>
   </div>
 
   <div class="role-tabs">
@@ -93,9 +110,11 @@
   </div>
 
   <div id="playView" class="main-stage">
-    <div class="clix-grid" id="grid" aria-label="Sync grid 8 by 4"></div>
+    <div class="clix-grid-wrap">
+      <div class="clix-grid" id="grid" aria-label="Sync grid 8 by 4"></div>
+    </div>
     <p class="control-row clix-live" id="readout" aria-live="polite">grid — · held 0</p>
-    <div class="clix-keys" id="keys"></div>
+    <div class="clix-keyboard" id="keys"></div>
     <div class="app-toolbar">
       <button type="button" class="btn-secondary btn" id="clearBtn">Clear held</button>
     </div>

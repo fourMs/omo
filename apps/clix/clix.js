@@ -13,10 +13,10 @@ import {
 bindLearn();
 
 const KEY_ROWS = [
-  "1234567890",
-  "qwertyuiop",
-  "asdfghjkl",
-  "zxcvbnm",
+  { chars: "1234567890", rowClass: "clix-row-numpad" },
+  { chars: "qwertyuiop", rowClass: "" },
+  { chars: "asdfghjkl", rowClass: "" },
+  { chars: "zxcvbnm", rowClass: "" },
 ];
 
 const params = new URLSearchParams(location.search);
@@ -27,8 +27,9 @@ if (!Number.isFinite(syncStartMs)) syncStartMs = Date.now();
 let ctx = null;
 let master = null;
 let channelWhich = 0;
-/** Keys currently held — retrigger on each grid pulse. */
 const held = new Set();
+/** @type {Map<number, HTMLElement>} */
+const keyBtns = new Map();
 let lastCellIndex = -1;
 let loopRunning = false;
 let cleared = false;
@@ -40,6 +41,19 @@ const playView = document.getElementById("playView");
 const hostView = document.getElementById("hostView");
 const tabPlay = document.getElementById("tabPlay");
 const tabHost = document.getElementById("tabHost");
+
+function isPlayableCode(code) {
+  return code >= 32 && code <= 126;
+}
+
+function codeFromKeyEvent(e) {
+  if (e.key?.length === 1) return e.key.charCodeAt(0);
+  const m = /^Numpad([0-9])$/.exec(e.code || "");
+  if (m) return m[1].charCodeAt(0);
+  const d = /^Digit([0-9])$/.exec(e.code || "");
+  if (d) return d[1].charCodeAt(0);
+  return -1;
+}
 
 function buildGrid() {
   gridEl.innerHTML = "";
@@ -55,29 +69,51 @@ function buildGrid() {
   }
 }
 
+function bindKeyButton(btn, code) {
+  keyBtns.set(code, btn);
+  btn.dataset.ch = String.fromCharCode(code);
+  btn.setAttribute("aria-pressed", "false");
+
+  btn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    try {
+      btn.setPointerCapture(e.pointerId);
+    } catch {
+      /* noop */
+    }
+    void onKeyDown(code);
+  });
+
+  const release = (e) => {
+    if (e.pointerId != null && btn.hasPointerCapture?.(e.pointerId)) {
+      try {
+        btn.releasePointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+    }
+    onKeyUp(code);
+  };
+  btn.addEventListener("pointerup", release);
+  btn.addEventListener("pointercancel", release);
+  btn.addEventListener("lostpointercapture", () => onKeyUp(code));
+}
+
 function buildKeys() {
   keysEl.innerHTML = "";
-  for (const row of KEY_ROWS) {
-    for (const ch of row) {
+  keyBtns.clear();
+  for (const { chars, rowClass } of KEY_ROWS) {
+    const row = document.createElement("div");
+    row.className = `clix-row${rowClass ? ` ${rowClass}` : ""}`;
+    for (const ch of chars) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "clix-key";
       btn.textContent = ch;
-      btn.dataset.ch = ch;
-      const code = ch.charCodeAt(0);
-      btn.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        void onKeyDown(code);
-      });
-      btn.addEventListener("pointerup", (e) => {
-        e.preventDefault();
-        onKeyUp(code);
-      });
-      btn.addEventListener("pointercancel", (e) => {
-        onKeyUp(code);
-      });
-      keysEl.appendChild(btn);
+      bindKeyButton(btn, ch.charCodeAt(0));
+      row.appendChild(btn);
     }
+    keysEl.appendChild(row);
   }
 }
 
@@ -85,6 +121,7 @@ function buildAudio(c) {
   ctx = c;
   const bus = createMasterBus(c, 0.75);
   master = createClixReverb(c, bus.master);
+  catchUpHeldNotes();
 }
 
 registerAudioBoot(buildAudio);
@@ -94,30 +131,58 @@ async function ensureAudio() {
   return startAudio(buildAudio);
 }
 
-function setKeyVisual(code, down) {
-  const ch = String.fromCharCode(code);
-  keysEl.querySelector(`[data-ch="${ch}"]`)?.classList.toggle("down", down);
+function setKeyHeld(code, down) {
+  const btn = keyBtns.get(code);
+  if (!btn) return;
+  btn.classList.toggle("down", down);
+  btn.setAttribute("aria-pressed", down ? "true" : "false");
+}
+
+function playNoteNow(code) {
+  if (!ctx || !master) return;
+  const { x, y } = gridAtTime(syncStartMs, ctx.sampleRate);
+  playClixNote(ctx, master, code, gainAt(x, y), channelWhich);
+  channelWhich = (channelWhich + 1) % 2;
+}
+
+function playHeldAtGrid(x, y) {
+  if (!held.size || !ctx || !master || cleared) return;
+  const vel = gainAt(x, y);
+  for (const code of held) {
+    playClixNote(ctx, master, code, vel, channelWhich);
+    channelWhich = (channelWhich + 1) % 2;
+  }
+  updateReadout(x, y);
+}
+
+function catchUpHeldNotes() {
+  if (!held.size || !ctx || !master) return;
+  const { x, y, index } = gridAtTime(syncStartMs, ctx.sampleRate);
+  lastCellIndex = index;
+  highlightGrid(x, y);
+  playHeldAtGrid(x, y);
 }
 
 async function onKeyDown(code) {
-  if (code < 32 || code > 126) return;
-  if (held.has(code)) return;
+  if (!isPlayableCode(code)) return;
+  const wasHeld = held.has(code);
   if (cleared) cleared = false;
   await ensureAudio();
   held.add(code);
-  setKeyVisual(code, true);
-  if (ctx && master) {
-    const { x, y } = gridAtTime(syncStartMs, ctx.sampleRate);
-    playClixNote(ctx, master, code, gainAt(x, y), channelWhich);
-    channelWhich = (channelWhich + 1) % 2;
-  }
+  setKeyHeld(code, true);
+  if (!wasHeld) playNoteNow(code);
   updateReadout();
 }
 
 function onKeyUp(code) {
+  if (!isPlayableCode(code)) return;
   if (!held.delete(code)) return;
-  setKeyVisual(code, false);
+  setKeyHeld(code, false);
   updateReadout();
+}
+
+function releaseAllKeys() {
+  for (const code of [...held]) onKeyUp(code);
 }
 
 function updateReadout(x, y) {
@@ -130,18 +195,18 @@ function updateReadout(x, y) {
 
 function highlightGrid(x, y) {
   gridEl.querySelectorAll(".clix-cell").forEach((c) => c.classList.remove("on"));
-  const on = gridEl.querySelector(`[data-x="${x}"][data-y="${y}"]`);
-  if (on) on.classList.add("on");
+  gridEl.querySelector(`[data-x="${x}"][data-y="${y}"]`)?.classList.add("on");
 }
 
-function playHeldAtGrid(x, y) {
-  if (!held.size || !ctx || !master) return;
-  const vel = gainAt(x, y);
-  for (const code of held) {
-    playClixNote(ctx, master, code, vel, channelWhich);
-    channelWhich = (channelWhich + 1) % 2;
+function onGridStep(x, y, index) {
+  highlightGrid(x, y);
+  if (cleared || !held.size) {
+    updateReadout(x, y);
+    return;
   }
-  updateReadout(x, y);
+  void ensureAudio().then(() => {
+    if (ctx && master) playHeldAtGrid(x, y);
+  });
 }
 
 function loop() {
@@ -150,9 +215,7 @@ function loop() {
   const { x, y, index } = gridAtTime(syncStartMs, sr);
   if (index !== lastCellIndex) {
     lastCellIndex = index;
-    highlightGrid(x, y);
-    if (!cleared) playHeldAtGrid(x, y);
-    else updateReadout(x, y);
+    onGridStep(x, y, index);
   }
   requestAnimationFrame(loop);
 }
@@ -164,8 +227,7 @@ function startLoop() {
 }
 
 document.getElementById("clearBtn").onclick = () => {
-  for (const code of held) setKeyVisual(code, false);
-  held.clear();
+  releaseAllKeys();
   cleared = true;
   updateReadout();
 };
@@ -173,12 +235,13 @@ document.getElementById("clearBtn").onclick = () => {
 window.addEventListener(
   "keydown",
   (e) => {
-    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.target.closest("input, textarea, select")) return;
-    if (e.key.length === 1) {
-      e.preventDefault();
-      void onKeyDown(e.key.charCodeAt(0));
-    }
+    const code = codeFromKeyEvent(e);
+    if (code < 0 || !isPlayableCode(code)) return;
+    if (e.repeat && held.has(code)) return;
+    e.preventDefault();
+    void onKeyDown(code);
   },
   { capture: true }
 );
@@ -186,13 +249,18 @@ window.addEventListener(
   "keyup",
   (e) => {
     if (e.target.closest("input, textarea, select")) return;
-    if (e.key.length === 1) {
-      e.preventDefault();
-      onKeyUp(e.key.charCodeAt(0));
-    }
+    const code = codeFromKeyEvent(e);
+    if (code < 0 || !isPlayableCode(code)) return;
+    e.preventDefault();
+    onKeyUp(code);
   },
   { capture: true }
 );
+
+window.addEventListener("blur", releaseAllKeys);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") releaseAllKeys();
+});
 
 buildGrid();
 buildKeys();

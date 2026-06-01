@@ -17,7 +17,7 @@ export const LEARN_PEDAGOGY = {
 
   clix: [
     "After Ge Wang’s CliX (SMELT / PLOrk): each key is a pitch from its ASCII code; a shared 8×4 grid scan sets how loud each strike is when the clock arrives.",
-    "Hold a key to loop on every grid pulse — the same letter can whisper or shout as the orange cell moves; release to stop.",
+    "Hold any key (numbers or letters) to retrigger on every grid pulse — the same character can whisper or shout as the orange cell moves; release to stop.",
   ],
 
   drumkit: [
