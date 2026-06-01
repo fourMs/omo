@@ -52,6 +52,8 @@ export function createShepardTone(ctx, dest) {
   return {
     start() {
       running = true;
+      cancelAnimationFrame(raf);
+      bus.gain.cancelScheduledValues(ctx.currentTime);
       bus.gain.setTargetAtTime(1, ctx.currentTime, 0.08);
       loop();
     },

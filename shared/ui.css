@@ -1910,6 +1910,23 @@ html.omo-a11y .hub-header .hub-section-select {
   font-weight: 700;
 }
 
+.shepard-glide-app .shepard-live {
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+}
+
+.shepard-glide-app .shepard-live span {
+  color: #cbd5e1;
+  text-align: left;
+  min-width: 2ch;
+}
+
+.shepard-glide-app .shepard-live strong {
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
 .pluck-bowl-app .bowl-live {
   justify-content: center;
   flex-wrap: wrap;
