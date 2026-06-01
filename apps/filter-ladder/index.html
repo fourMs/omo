@@ -15,8 +15,9 @@
   <div class="learn-panel panel" id="learnPanel">
     <h2>Subtractive filter</h2>
     <p>Turn <strong>Audio on</strong>, then Four lowpass stages ≈ <strong>24 dB/oct</strong>. Hold pad for a saw tone through the ladder.</p>
-    <p><strong>Tilt</strong> while holding the pad (allow motion if asked on iPhone). The <strong>Tilt</strong> readout should move; cutoff follows tilt.</p>
+    <p><strong>X</strong> = pitch · <strong>Y</strong> = cutoff on the pad. <strong>Tilt</strong> also moves cutoff (allow motion on iPhone).</p>
   </div>
+  <p class="ladder-filter-name" id="filterName">4× lowpass · 24 dB/oct</p>
   <div class="control-row">
     <label for="res">Resonance</label>
     <input type="range" id="res" min="0" max="18" value="8" step="0.5" />
@@ -32,7 +33,7 @@
   <script type="module">
     import { bindLearn, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
-    import { enableSensors, onOrientation } from "../../shared/sensors.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
 
     bindLearn();
     const pad = document.getElementById("pad");
@@ -41,7 +42,7 @@
     let osc, ampGain, ladder, activePointer = null;
     let holding = false;
     let tiltReady = false;
-    let baseCutoff = 1200;
+    let padCutoffNorm = 0.5;
     let tiltAmount = 0.35;
 
     function createLadder(ctx, stages = 4) {
@@ -50,7 +51,7 @@
       for (let i = 0; i < stages; i++) {
         const f = ctx.createBiquadFilter();
         f.type = "lowpass";
-        f.frequency.value = baseCutoff;
+        f.frequency.value = 1200;
         f.Q.value = 0.707;
         if (node) node.connect(f);
         node = f;
@@ -63,7 +64,7 @@
 
     async function enableTilt() {
       if (tiltReady) return;
-      if (await enableSensors()) {
+      if (await enableSensors({ needMotion: false, needOrientation: true })) {
         tiltReady = true;
         onOrientation((o) => {
           if (!built) return;
@@ -95,13 +96,25 @@
 
     function applyFilter(when) {
       const res = +document.getElementById("res").value;
-      const cutoff = 120 + tiltAmount * 7800;
-      baseCutoff = cutoff;
+      const mix = holding ? clamp(padCutoffNorm * 0.6 + tiltAmount * 0.4, 0, 1) : tiltAmount;
+      const cutoff = 120 + mix * 7800;
       document.getElementById("cutOut").textContent = cutoff.toFixed(0);
+      document.getElementById("tiltOut").textContent = `${(tiltAmount * 100).toFixed(0)}%`;
       ladder.filters.forEach((f, i) => {
         f.frequency.setTargetAtTime(cutoff, when, 0.04);
         f.Q.setTargetAtTime(i === 3 ? res : 0.707, when, 0.05);
       });
+    }
+
+    function updatePad(clientX, clientY) {
+      const rect = pad.getBoundingClientRect();
+      const nx = clamp((clientX - rect.left) / rect.width, 0, 1);
+      const ny = clamp((clientY - rect.top) / rect.height, 0, 1);
+      padCutoffNorm = 1 - ny;
+      osc.frequency.setTargetAtTime(55 * Math.pow(2, nx * 3), ctx.currentTime, 0.02);
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${ny * 100}%`;
+      if (holding) applyFilter(ctx.currentTime);
     }
 
     document.getElementById("res").oninput = (e) => {
@@ -111,28 +124,22 @@
 
     pad.addEventListener("pointerdown", async (e) => {
       e.preventDefault();
+      primeSensors({ needMotion: false, needOrientation: true });
       void enableTilt();
       await startAudio(!built ? buildAudio : undefined);
+      if (!built) return;
       activePointer = e.pointerId;
       pad.setPointerCapture(e.pointerId);
       pad.classList.add("active");
       holding = true;
-      const rect = pad.getBoundingClientRect();
-      const nx = (e.clientX - rect.left) / rect.width;
-      osc.frequency.setTargetAtTime(55 * Math.pow(2, nx * 3), ctx.currentTime, 0.02);
       ampGain.gain.cancelScheduledValues(ctx.currentTime);
       ampGain.gain.setTargetAtTime(0.32, ctx.currentTime, 0.02);
-      applyFilter(ctx.currentTime);
-      dot.style.left = `${nx * 100}%`;
-      dot.style.top = "50%";
+      updatePad(e.clientX, e.clientY);
     });
 
     pad.addEventListener("pointermove", (e) => {
       if (!built || e.pointerId !== activePointer) return;
-      const rect = pad.getBoundingClientRect();
-      const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      osc.frequency.setTargetAtTime(55 * Math.pow(2, nx * 3), ctx.currentTime, 0.02);
-      dot.style.left = `${nx * 100}%`;
+      updatePad(e.clientX, e.clientY);
     });
 
     const stop = (e) => {
