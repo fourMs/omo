@@ -55,12 +55,15 @@
   <div class="learn-panel panel" id="learnPanel">
     <h2>Pinch bass</h2>
     <p>Use <strong>two fingers</strong>. Move the pair around the pad: <strong>X</strong> = pitch, <strong>Y</strong> = filter cutoff.</p>
-    <p><strong>Spread</strong> or pinch fingers for level and resonance. One finger sets pitch and cutoff from its position.</p>
+    <p><strong>Spread</strong> or pinch fingers for level and resonance. One finger uses 25% spread and sets pitch and cutoff from its position.</p>
   </div>
-  <div class="readout-row">
-    <p class="value-chip">Pitch <strong id="hzOut">—</strong> Hz</p>
-    <p class="value-chip">Cutoff <strong id="cutOut">—</strong> Hz</p>
-    <p class="value-chip">Spread <strong id="spreadOut">—</strong></p>
+  <div class="control-row pinch-live" aria-live="polite" aria-label="Frequencies">
+    <label>Pitch</label>
+    <span><strong id="hzOut">—</strong> Hz</span>
+    <label>Cutoff</label>
+    <span><strong id="cutOut">—</strong> Hz</span>
+    <label>Spread</label>
+    <span><strong id="spreadOut">—</strong></span>
   </div>
   <div class="main-stage">
     <div id="pad" class="stage-fill play-grid">
@@ -150,7 +153,7 @@
         return {
           nx: clamp((d1.x - r.left) / r.width, 0, 1),
           ny: clamp((d1.y - r.top) / r.height, 0, 1),
-          spread: 0.45,
+          spread: 0.25,
           two: false,
         };
       }

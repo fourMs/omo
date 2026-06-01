@@ -240,11 +240,6 @@ export const LEARN_PEDAGOGY = {
     "Rhythm from the body — the architecture of claps becomes a score.",
   ],
 
-  "pitch-hive": [
-    "Multiple pitch peaks from humming build a chord of sines — collective intonation forms harmony.",
-    "Group must listen to each other’s pitch; beats and roughness appear when fundamentals disagree.",
-  ],
-
   "shadow-sequencer": [
     "Camera brightness in zones becomes an 8-step pattern; hand shadows toggle steps.",
     "Optical sequencing — visible gesture is the score.",
@@ -256,7 +251,7 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "pinch-bass": [
-    "Two-finger pinch: the centre of the pair sets pitch (X) and filter cutoff (Y); spread controls level and resonance.",
+    "Two-finger pinch: the centre of the pair sets pitch (X) and filter cutoff (Y); spread controls level and resonance. One finger defaults to 25% spread.",
     "Continuous bass control — move the gesture around the pad without lifting to sweep timbre and sub weight.",
   ],
 

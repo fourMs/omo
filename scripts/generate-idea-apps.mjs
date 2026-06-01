@@ -204,22 +204,6 @@ pad.addEventListener("pointerdown",async()=>{await startAudio();pad.classList.ad
 pad.addEventListener("pointerup",()=>pad.classList.remove("active"));`,
   },
   {
-    slug: "pitch-hive",
-    title: "Hum Hive",
-    section: "drones",
-    synth: "Additive chord",
-    sensors: "Mic · touch",
-    learn: "<h2>Pitch hive</h2><p>Hum near the mic — partials build a chord. <strong>Hold</strong> to sustain the hive.</p>",
-    script: `${padBase}
-import { registerAudioBoot, primeMicStream } from "../../shared/app.js";
-import { detectPitchHz } from "../../shared/pitch.js";
-let partials=[],analyser,micSrc;
-function build(c){ctx=c;({master}=createMasterBus(c,0.42));for(let i=0;i<5;i++){const o=ctx.createOscillator(),g=ctx.createGain();g.gain.value=0;o.connect(g);g.connect(master);o.start();partials.push({o,g});}built=true;}
-registerAudioBoot(async c=>{build(c);const stream=await primeMicStream();micSrc=ctx.createMediaStreamSource(stream);analyser=ctx.createAnalyser();analyser.fftSize=2048;micSrc.connect(analyser);const buf=new Float32Array(analyser.fftSize);function tick(){analyser.getFloatTimeDomainData(buf);const hz=detectPitchHz(buf,ctx.sampleRate);if(hz&&holding){partials.forEach((p,i)=>{p.o.frequency.setTargetAtTime(hz*(i+1)*0.98,ctx.currentTime,0.08);p.g.gain.setTargetAtTime(0.05/(i+1),ctx.currentTime,0.06);});}requestAnimationFrame(tick);}tick();},{mic:true});
-pad.addEventListener("pointerdown",async()=>{await startAudio();holding=true;pad.classList.add("active");});
-pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");partials.forEach(p=>p.g.gain.setTargetAtTime(0,ctx.currentTime,0.1));});`,
-  },
-  {
     slug: "shadow-sequencer",
     title: "Shadow Steps",
     section: "rhythm",

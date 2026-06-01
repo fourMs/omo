@@ -273,7 +273,6 @@ export const HUB_APPS = [
   { href: "apps/room-reverb-send/", title: "Room Reverb Send", section: "texture", synth: "Convolver wet", sensors: "Mic · touch" },
   { href: "apps/whisper-gate/", title: "Whisper Gate", section: "texture", synth: "Formant noise", sensors: "Mic · touch" },
   { href: "apps/clap-architect/", title: "Clap Architect", section: "rhythm", synth: "Learned kit", sensors: "Mic · touch" },
-  { href: "apps/pitch-hive/", title: "Pitch Hive", section: "drones", synth: "Additive chord", sensors: "Mic · touch" },
   { href: "apps/shake-filter/", title: "Shake Filter", section: "drones", synth: "Subtractive", sensors: "Motion · touch" },
   { href: "apps/flat-edge/", title: "Flat Edge", section: "drones", synth: "Gated drone", sensors: "Tilt · touch" },
   { href: "apps/heading-choir/", title: "Heading Choir", section: "drones", synth: "Detuned pans", sensors: "Compass · touch" },
