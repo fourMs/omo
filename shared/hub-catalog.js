@@ -10,13 +10,6 @@ export const HUB_APPS = [
     sensors: "Touch · shared URL",
   },
   {
-    href: "apps/part/",
-    title: "Part",
-    section: "rhythm",
-    synth: "Routing only",
-    sensors: "QR · touch",
-  },
-  {
     href: "apps/drumkit/",
     title: "Drumkit",
     section: "rhythm",
@@ -296,7 +289,6 @@ export const HUB_APPS = [
   { href: "apps/wind-bottle/", title: "Wind Bottle", section: "texture", synth: "Noise resonator", sensors: "Tilt · touch" },
   { href: "apps/scrub-tape/", title: "Scrub Tape", section: "texture", synth: "Buffer scrub", sensors: "Touch drag" },
   { href: "apps/vocoder-choir/", title: "Vocoder Choir", section: "texture", synth: "Band vocoder", sensors: "Mic · tilt" },
-  { href: "apps/one-shot-orchestra/", title: "One Shot Orchestra", section: "rhythm", synth: "Multi-zone", sensors: "Touch zones" },
   { href: "apps/gesture-regression/", title: "Gesture Regression", section: "ai", synth: "ML → filter", sensors: "Motion · touch" },
   {
     href: "apps/swarm-bloom/",

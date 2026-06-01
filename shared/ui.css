@@ -787,47 +787,6 @@ html.omo-a11y .hub-header .hub-section-select {
 .drum-pad[data-pad="6"] { background: linear-gradient(135deg, #0f766e, #042f2e); }
 .drum-pad[data-pad="7"] { background: linear-gradient(135deg, #475569, #1e293b); }
 
-/* One Shot Orchestra — 2×2 hit pads */
-.one-shot-orchestra-app .one-shot-grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 8px;
-  padding: 0.35rem 0.5rem;
-}
-
-.one-shot-orchestra-app .one-shot-pad {
-  border-radius: 10px;
-  border: 1px solid #334155;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  min-height: 0;
-  touch-action: manipulation;
-  color: var(--text);
-  font-weight: 600;
-}
-
-.one-shot-orchestra-app .one-shot-pad.active {
-  transform: scale(0.97);
-  border-color: var(--accent-dim);
-  box-shadow: 0 0 0 2px rgba(110, 231, 183, 0.25);
-}
-
-.one-shot-orchestra-app .one-shot-icon {
-  font-size: 1.6rem;
-  pointer-events: none;
-}
-
-.one-shot-orchestra-app .one-shot-label {
-  font-size: 0.75rem;
-  pointer-events: none;
-}
-
 .tap-bloom-app .tap-bloom-stage {
   flex: 1;
   min-height: 0;

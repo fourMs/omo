@@ -15,11 +15,6 @@ export const LEARN_PEDAGOGY = {
     "Pedagogically this trains ensemble listening: lock to the group pulse instead of your internal clock.",
   ],
 
-  part: [
-    "This page routes players to a seat or part number via QR — it is logistics, not synthesis.",
-    "Use it so large groups land on the right instrument without typing URLs.",
-  ],
-
   drumkit: [
     "Each pad triggers a synthesized drum: oscillators and noise bursts shaped by envelopes to mimic kick, snare, and hats.",
     "Teaches discrete rhythm — short attacks, clear onsets — and how timbre identifies drum type even at low volume.",
@@ -308,11 +303,6 @@ export const LEARN_PEDAGOGY = {
   "vocoder-choir": [
     "A carrier tone is filtered by bands shaped from mic input — speech formants on a synth.",
     "Robot voice effect; choir when carrier is rich and modulation is smooth.",
-  ],
-
-  "one-shot-orchestra": [
-    "Screen zones trigger different pre-shaped hits — orchestral gesture as spatial game.",
-    "Orchestration by region: each player chooses when and where to attack.",
   ],
 
   "gesture-regression": [

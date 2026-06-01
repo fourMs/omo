@@ -1,5 +1,5 @@
 /**
- * Workshop URL helpers — parts, sections, accessibility.
+ * Workshop URL helpers — sections, accessibility.
  */
 
 export const SECTIONS = {
@@ -34,23 +34,6 @@ export const SECTIONS = {
     apps: ["train-shake", "hum-clap"],
   },
 };
-
-/** Part cards for ?part=N (1–20). */
-export const PARTS = Array.from({ length: 20 }, (_, i) => {
-  const n = i + 1;
-  const keys = Object.keys(SECTIONS);
-  const section = keys[i % keys.length];
-  const apps = SECTIONS[section].apps;
-  const app = apps[i % apps.length];
-  return { part: n, section, app, label: `Part ${n} · ${SECTIONS[section].name}` };
-});
-
-export function getPartFromUrl(search = location.search) {
-  const p = new URLSearchParams(search).get("part");
-  if (!p) return null;
-  const n = parseInt(p, 10);
-  return PARTS.find((x) => x.part === n) || null;
-}
 
 export function getSectionFromUrl(search = location.search) {
   return new URLSearchParams(search).get("section") || null;

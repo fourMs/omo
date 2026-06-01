@@ -105,7 +105,6 @@ Different ways to generate sound beyond what the hub already demos. Pair with to
 | Idea | Approach | Music role | Control idea |
 |------|----------|------------|--------------|
 | ~~**IR Cathedral**~~ | Convolve tone with uploaded IR | Space without reverb unit | [Space Convolve](../apps/ir-cathedral/) |
-| ~~**One-Shot Orchestra**~~ | Multi-sample map on pad zones | Instant ensemble hits | [Zone Hits](../apps/one-shot-orchestra/) |
 | ~~**Live Loop Slicer**~~ | Record bar; jump slices | Breakbeat | [Slice Bar](../apps/live-loop-slicer/) |
 
 ### Algorithmic & generative
@@ -165,7 +164,6 @@ Use when designing a new app: pick **one primary sensor** and **one synthesis fa
 | ~~**Tilt Harp**~~ | Plucked glissandi | [tilt-harp](../apps/tilt-harp/) |
 | ~~**Delay Throw**~~ | Rhythmic layers | [delay-throw](../apps/delay-throw/) |
 | ~~**Bow Phone**~~ | Bowed strings | [bow-phone](../apps/bow-phone/) |
-| ~~**Your Part (QR)**~~ | Seating | [part](../apps/part/) |
 | ~~**Video Sonifier**~~ | Environment texture | [video-sonifier](../apps/video-sonifier/) |
 | ~~**Audience swell**~~ | Crowd layer | [audience](../apps/audience/) |
 | ~~**Compass Wah**~~ | Orientation filter | [compass-wah](../apps/compass-wah/) |

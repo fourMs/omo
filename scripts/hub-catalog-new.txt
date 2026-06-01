@@ -30,6 +30,5 @@
   { href: "apps/scrub-tape/", title: "Tape Scrub", section: "texture", synth: "Buffer scrub", sensors: "Touch drag" },
   { href: "apps/vocoder-choir/", title: "Robot Hall", section: "texture", synth: "Band vocoder", sensors: "Mic · tilt" },
   { href: "apps/ir-cathedral/", title: "Space Convolve", section: "texture", synth: "IR convolution", sensors: "Tilt · touch" },
-  { href: "apps/one-shot-orchestra/", title: "Zone Hits", section: "rhythm", synth: "Multi-zone", sensors: "Touch zones" },
   { href: "apps/live-loop-slicer/", title: "Slice Bar", section: "rhythm", synth: "Loop slices", sensors: "Tilt · touch" },
   { href: "apps/gesture-regression/", title: "Tilt Learn", section: "ai", synth: "ML → filter", sensors: "Motion · touch" },

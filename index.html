@@ -36,15 +36,13 @@
     <p><a href="support.html">Device support</a> — check mic, motion, and other APIs before a workshop.</p>
   </div>
 
-  <div id="partBanner" class="hub-banner hidden"></div>
-
   <ul class="app-list" id="appList"></ul>
 
   <script type="module">
     import { bindLearn } from "./shared/app.js";
     import { injectLearnPedagogy } from "./shared/learn-pedagogy.js";
-    import { HUB_APPS, catalogEntryForHref } from "./shared/hub-catalog.js";
-    import { SECTIONS, getPartFromUrl, getSectionFromUrl } from "./shared/workshop.js";
+    import { HUB_APPS } from "./shared/hub-catalog.js";
+    import { SECTIONS, getSectionFromUrl } from "./shared/workshop.js";
 
     bindLearn();
     injectLearnPedagogy("learnPanel", "hub");
@@ -78,15 +76,6 @@
       history.replaceState({}, "", u);
       render();
     };
-
-    const part = getPartFromUrl();
-    if (part) {
-      const b = document.getElementById("partBanner");
-      b.classList.remove("hidden");
-      const partHref = `apps/${part.app}/`;
-      const partTitle = catalogEntryForHref(partHref)?.title || part.app;
-      b.innerHTML = `${part.label} → <a href="${partHref}">${partTitle}</a>`;
-    }
 
     const urlSec = getSectionFromUrl();
     if (urlSec) filter.value = urlSec;

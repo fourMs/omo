@@ -576,19 +576,6 @@ pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio
 pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");dry.gain.setTargetAtTime(0,ctx.currentTime,0.08);wetGain.gain.setTargetAtTime(0,ctx.currentTime,0.1);});`,
   },
   {
-    slug: "one-shot-orchestra",
-    title: "Zone Hits",
-    section: "rhythm",
-    synth: "Multi-zone",
-    sensors: "Touch zones",
-    learn: "<h2>One-shot orchestra</h2><p>Pad quadrants = different ensemble hits.</p>",
-    script: `${padBase}
-function hit(zone){const t=ctx.currentTime;const freqs=[220,330,440,550];const o=ctx.createOscillator(),g=ctx.createGain();o.type=zone%2?"triangle":"square";o.frequency.value=freqs[zone%4];g.gain.setValueAtTime(0.3,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.25);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.26);}
-function build(c){ctx=c;({master}=createMasterBus(c,0.55));built=true;}
-pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio(!built?build:undefined);const r=pad.getBoundingClientRect();const nx=clamp((e.clientX-r.left)/r.width,0,1);const ny=clamp((e.clientY-r.top)/r.height,0,1);hit((nx>0.5?1:0)+(ny>0.5?2:0));pad.classList.add("active");});
-pad.addEventListener("pointerup",()=>pad.classList.remove("active"));`,
-  },
-  {
     slug: "live-loop-slicer",
     title: "Slice Bar",
     section: "rhythm",
