@@ -17,6 +17,7 @@
     <p>Turn <strong>Audio on</strong> and allow the <strong>mic</strong>. Tap <strong>Start</strong> — the mic gathers many partials from nearby phones and voices into one <strong>chroma</strong> picture.</p>
     <p>Over time this phone <strong>slides</strong> its pitch toward the group’s strongest notes (a shared root chord). <strong>Hold</strong> the circle to sing the aligned tone; release to listen only.</p>
     <p><strong>Scale</strong> can stay on Auto (major vs minor from the room), or you can lock Major/Minor. <strong>Lock root</strong> freezes the detected key while you keep listening.</p>
+    <p>While listening: <strong>Tuning</strong> is the group key; <strong>Offset</strong> (¢) is how far this phone’s pitch still sits from that root — it slides toward 0 as consensus locks.</p>
     <p>Works best in a circle at moderate volume; avoid covering the mic with your hand.</p>
   </div>
   <div class="harm-toolbar">
@@ -38,11 +39,15 @@
       </label>
     </div>
     <p class="status-bar" id="status">Stopped · Audio on</p>
-    <div class="readout-row">
-      <p class="value-chip">Root <strong id="rootOut">—</strong></p>
-      <p class="value-chip">Playing <strong id="hzOut">—</strong> Hz</p>
-      <p class="value-chip">Lock <strong id="lockOut">0</strong>%</p>
-      <p class="value-chip">Peaks <strong id="peaksOut">0</strong></p>
+    <div class="control-row harm-live" aria-label="Tuning and offset">
+      <label>Tuning</label>
+      <span><strong id="tuningOut">—</strong></span>
+      <label>Playing</label>
+      <span><strong id="hzOut">—</strong> Hz</span>
+      <label>Offset</label>
+      <span><strong id="offsetOut">—</strong> ¢</span>
+      <label>Lock</label>
+      <span><strong id="lockOut">0</strong>%</span>
     </div>
   </div>
   <div class="main-stage harm-main">
@@ -59,6 +64,7 @@
     import { connectMicAnalyser, createMasterBus, getMicStream } from "../../shared/audio.js";
     import { chromaFromSpectrum } from "../../shared/chroma-detect.js";
     import { createHarmonyConsensus } from "../../shared/harmony-sync.js";
+    import { midiToHz } from "../../shared/pitch.js";
 
     bindLearn();
 
@@ -81,6 +87,33 @@
     function midiLabel(m) {
       const n = Math.round(m);
       return `${NOTE[((n % 12) + 12) % 12]}${Math.floor(n / 12) - 1}`;
+    }
+
+    function offsetCents(playHz, rootMidi) {
+      const target = midiToHz(rootMidi);
+      if (!playHz || !target || playHz <= 0) return null;
+      return 1200 * Math.log2(playHz / target);
+    }
+
+    function formatOffsetCents(cents) {
+      if (cents == null || !Number.isFinite(cents)) return "—";
+      const rounded = Math.round(cents);
+      if (Math.abs(rounded) < 1) return "0";
+      return rounded > 0 ? `+${rounded}` : String(rounded);
+    }
+
+    function updateLiveReadout({ hz, rootMidi, lock, keyLabel }) {
+      document.getElementById("tuningOut").textContent = `${keyLabel} · ${midiLabel(rootMidi)}`;
+      document.getElementById("hzOut").textContent = hz.toFixed(1);
+      document.getElementById("offsetOut").textContent = formatOffsetCents(offsetCents(hz, rootMidi));
+      document.getElementById("lockOut").textContent = String(Math.round(lock * 100));
+    }
+
+    function clearLiveReadout() {
+      document.getElementById("tuningOut").textContent = "—";
+      document.getElementById("hzOut").textContent = "—";
+      document.getElementById("offsetOut").textContent = "—";
+      document.getElementById("lockOut").textContent = "0";
     }
 
     function sizeChromaCanvas() {
@@ -187,10 +220,12 @@
       const hz = consensus.getPlayHz();
       const rootPc = ((consensus.getRootMidi() % 12) + 12) % 12;
 
-      document.getElementById("rootOut").textContent = `${consensus.keyLabel()} · ${midiLabel(consensus.getRootMidi())}`;
-      document.getElementById("hzOut").textContent = hz.toFixed(1);
-      document.getElementById("lockOut").textContent = String(Math.round(lock * 100));
-      document.getElementById("peaksOut").textContent = consensus.getPeakEma().toFixed(0);
+      updateLiveReadout({
+        hz,
+        rootMidi: consensus.getRootMidi(),
+        lock,
+        keyLabel: consensus.keyLabel(),
+      });
       drawChroma(consensus.getChromaView(), rootPc);
 
       if (holding) {
@@ -222,6 +257,7 @@
       document.getElementById("startBtn").textContent = "Start";
       document.getElementById("startBtn").classList.remove("active");
       setStatus("status", "Stopped", "");
+      clearLiveReadout();
       drawIdleChroma();
     }
 

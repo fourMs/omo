@@ -1783,6 +1783,28 @@ html.omo-a11y .hub-header .hub-section-select {
   margin: 0.25rem 0;
 }
 
+.harmonizer-app .harm-live {
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.15rem;
+}
+
+.harmonizer-app .harm-live label {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.harmonizer-app .harm-live span {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.harmonizer-app .harm-live strong {
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
 .harmonizer-app .harm-main {
   flex: 1;
   min-height: 0;
