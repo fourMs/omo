@@ -45,7 +45,6 @@
     <p>Turn <strong>Audio on</strong> and allow the <strong>mic</strong>. <strong>Clap</strong> to toggle the highlighted step (orange ring). <strong>Hold</strong> the pad to run the loop.</p>
     <p>You can also <strong>tap</strong> step numbers to toggle them by hand.</p>
   </div>
-  <p class="status-bar" id="status">Turn Audio on · hold pad to play</p>
   <div class="clap-grid-steps" id="stepRow" aria-label="8 steps"></div>
   <div class="main-stage">
     <div id="pad" class="stage-fill play-grid">
@@ -53,7 +52,7 @@
     </div>
   </div>
   <script type="module">
-    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
     import { createMasterBus, getMicStream, primeMicStream } from "../../shared/audio.js";
     import { createOnsetDetector } from "../../shared/onset-detect.js";
     import { playKick, playSnare, playHat } from "../../shared/drum-sounds.js";
@@ -120,10 +119,8 @@
           },
         });
         detector.start();
-        setStatus("status", "Clap toggles highlighted step · hold pad to play", "ok");
         return true;
       } catch {
-        setStatus("status", "Mic blocked — tap step numbers to build pattern", "warn");
         return false;
       }
     }

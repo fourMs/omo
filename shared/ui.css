@@ -116,6 +116,28 @@ a {
   color: #fbbf24;
 }
 
+/* How-to and readouts live in Learn panels only */
+body.app-shell .status-bar,
+body.app-shell p.value-chip,
+body.app-shell .breath-row > label,
+body.app-shell [class*="-hint"],
+body.app-shell .level-chip,
+body.app-shell .pick-label,
+body.app-shell .sampler-hint,
+body.app-shell .pad-readout,
+body.app-shell .theremin-play-label,
+body.app-shell #sharePanel > p,
+body.app-shell .readout-row {
+  display: none !important;
+}
+
+body.app-shell .readout-row:has(.slide-toggle),
+body.app-shell .readout-row:has(input:not([type="hidden"])),
+body.app-shell .readout-row:has(select),
+body.app-shell .readout-row:has(button) {
+  display: flex !important;
+}
+
 .header-controls {
   margin-left: auto;
   flex-shrink: 0;

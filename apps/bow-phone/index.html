@@ -73,7 +73,7 @@
     sample.width = CAM_W;
     sample.height = CAM_H;
 
-    let ctx, master, bowed, built = false;
+    let ctx, master, voice, bowed, built = false;
     let stream = null;
     let camReady = false;
     let useCameraBow = false;
@@ -99,8 +99,11 @@
 
     function buildAudio(c) {
       ctx = c;
-      ({ master } = createMasterBus(c, 0.5));
-      bowed = createBowedString(ctx, master, pitchHz);
+      ({ master } = createMasterBus(c, 0.55));
+      voice = ctx.createGain();
+      voice.gain.value = 1.85;
+      voice.connect(master);
+      bowed = createBowedString(ctx, voice, pitchHz);
       built = true;
       tick();
     }
@@ -317,7 +320,7 @@
       if (!built || !bowed) return;
       const amp = bowLevel();
       bowed.setPitch(pitchHz);
-      bowed.setBow(amp * 0.45);
+      bowed.setBow(amp * 0.72);
       document.getElementById("bOut").textContent = amp.toFixed(2);
       document.getElementById("bowMeter").style.width = `${amp * 100}%`;
       document.getElementById("bowMeter").classList.toggle("blowing", amp > 0.05);
