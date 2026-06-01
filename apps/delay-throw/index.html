@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Delay Throw — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Delay Throw</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Tap + delay</h2>
+    <p>Turn <strong>Audio on</strong>, then <strong>tap</strong> to capture a short sample into the delay.</p>
+    <p><strong>Drag</strong> on the pad: <strong>X</strong> = delay time, <strong>Y</strong> = feedback. <strong>Tilt</strong> also works when you are not touching.</p>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Delay <strong id="dlyOut">0.3</strong>s</p>
+    <p class="value-chip">FB <strong id="fbOut">40</strong>%</p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <div class="touch-dot" id="dot" style="opacity: 0"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const SENSOR_OPTS = { needMotion: false, needOrientation: true };
+
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const delayFromNx = (nx) => 0.08 + nx * 0.55;
+    const fbFromNy = (ny) => 0.15 + (1 - ny) * 0.7;
+
+    let ctx, master, delay, fb, wet, built = false;
+    let sensorsReady = false;
+    let pointerActive = false;
+    let activePointer = null;
+
+    function applyDelayFb(delaySec, feedback) {
+      if (!built || !ctx) return;
+      const t = ctx.currentTime;
+      delay.delayTime.setTargetAtTime(delaySec, t, 0.04);
+      fb.gain.setTargetAtTime(feedback, t, 0.04);
+      document.getElementById("dlyOut").textContent = delaySec.toFixed(2);
+      document.getElementById("fbOut").textContent = (feedback * 100).toFixed(0);
+    }
+
+    function applyFromPointer(clientX, clientY) {
+      const rect = pad.getBoundingClientRect();
+      const nx = clamp((clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+      const ny = clamp((clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+      applyDelayFb(delayFromNx(nx), fbFromNy(ny));
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${ny * 100}%`;
+      dot.style.opacity = "1";
+    }
+
+    function applyFromTilt(beta, gamma) {
+      if (pointerActive) return;
+      const b = clamp(typeof beta === "number" && Number.isFinite(beta) ? beta : 45, 0, 90);
+      const g = clamp(typeof gamma === "number" && Number.isFinite(gamma) ? gamma : 0, -90, 90);
+      const t = clamp(Math.sqrt(b * b + g * g) / 90, 0, 1);
+      applyDelayFb(delayFromNx(t), fbFromNy(1 - t * 0.5));
+    }
+
+    async function initSensors() {
+      if (sensorsReady) return;
+      primeSensors(SENSOR_OPTS);
+      const ok = await enableSensors(SENSOR_OPTS);
+      if (!ok) return;
+      onOrientation((o) => applyFromTilt(o.beta, o.gamma));
+      sensorsReady = true;
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.55));
+      delay = ctx.createDelay(1.5);
+      delay.delayTime.value = 0.28;
+      fb = ctx.createGain();
+      fb.gain.value = 0.4;
+      wet = ctx.createGain();
+      wet.gain.value = 0.5;
+      delay.connect(fb);
+      fb.connect(delay);
+      delay.connect(wet);
+      wet.connect(master);
+      built = true;
+      void initSensors();
+    }
+
+    function throwSample() {
+      const len = Math.floor(ctx.sampleRate * 0.15);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.2));
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g = ctx.createGain();
+      g.gain.value = 0.7;
+      src.connect(g);
+      g.connect(delay);
+      g.connect(master);
+      const t = ctx.currentTime;
+      src.start(t);
+      src.stop(t + 0.2);
+    }
+
+    pad.style.touchAction = "none";
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      primeSensors(SENSOR_OPTS);
+      await startAudio(!built ? buildAudio : undefined);
+      throwSample();
+      pointerActive = true;
+      activePointer = e.pointerId;
+      pad.classList.add("active");
+      pad.setPointerCapture(e.pointerId);
+      applyFromPointer(e.clientX, e.clientY);
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!pointerActive || e.pointerId !== activePointer) return;
+      e.preventDefault();
+      applyFromPointer(e.clientX, e.clientY);
+    });
+
+    const endPointer = (e) => {
+      if (activePointer != null && e.pointerId !== activePointer) return;
+      pointerActive = false;
+      activePointer = null;
+      pad.classList.remove("active");
+      dot.style.opacity = "0";
+      if (pad.hasPointerCapture?.(e.pointerId)) {
+        try {
+          pad.releasePointerCapture(e.pointerId);
+        } catch {
+          /* noop */
+        }
+      }
+    };
+
+    pad.addEventListener("pointerup", endPointer);
+    pad.addEventListener("pointercancel", endPointer);
+    pad.addEventListener("lostpointercapture", endPointer);
+  </script>
+</body>
+</html>

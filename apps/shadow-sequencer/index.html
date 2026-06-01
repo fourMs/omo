@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Shadow Sequencer — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .shadow-steps-app .shadow-stage {
+      position: relative;
+      flex: 1;
+      min-height: 12rem;
+      background: #0f172a;
+      overflow: hidden;
+    }
+    .shadow-steps-app #cam {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      background: #0f172a;
+    }
+    .shadow-steps-app #camOff {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 1rem;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.92);
+      z-index: 2;
+    }
+    .shadow-steps-app #camOff.hidden { display: none; }
+    .shadow-steps-app #camOff p {
+      margin: 0;
+      font-size: 0.75rem;
+      color: var(--muted);
+      max-width: 16rem;
+      line-height: 1.45;
+    }
+    .shadow-steps-app .shadow-step-row {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 3px;
+      padding: 0.35rem;
+      background: linear-gradient(transparent, rgba(2, 6, 23, 0.85));
+      z-index: 3;
+    }
+    .shadow-steps-app .shadow-step {
+      height: 1.6rem;
+      border-radius: 4px;
+      border: 1px solid #334155;
+      background: rgba(30, 41, 59, 0.75);
+      transition: background 0.08s, border-color 0.08s;
+    }
+    .shadow-steps-app .shadow-step.on {
+      background: rgba(110, 231, 183, 0.45);
+      border-color: var(--accent);
+    }
+    .shadow-steps-app .shadow-step.play {
+      box-shadow: 0 0 0 2px #fbbf24;
+    }
+  </style>
+</head>
+<body class="app-shell shadow-steps-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Shadow Sequencer</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Shadow sequencer</h2>
+    <p>Turn <strong>Audio on</strong>, tap <strong>Start camera</strong>, then <strong>Play</strong>. Wave a hand in front of the camera — a shadow dip toggles the current step.</p>
+    <p>Eight steps loop as kick/snare; lit steps are on.</p>
+  </div>
+  <div class="app-toolbar">
+    <button type="button" class="btn btn-sm" id="camBtn">Start camera</button>
+    <button type="button" class="btn btn-play btn-sm" id="playBtn">▶ Play</button>
+  </div>
+  <p class="status-bar" id="status">Start camera, then play</p>
+  <div class="readout-row">
+    <p class="value-chip">Step <strong id="stepOut">1</strong></p>
+    <p class="value-chip">Light <strong id="brightOut">—</strong></p>
+  </div>
+  <div class="main-stage shadow-stage">
+    <video id="cam" playsinline webkit-playsinline muted></video>
+    <div id="camOff">
+      <p>Front camera preview appears here. Tap <strong>Start camera</strong> and allow access.</p>
+      <button type="button" class="btn btn-sm" id="camBtn2">Start camera</button>
+    </div>
+    <div class="shadow-step-row" id="stepRow"></div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { playKick, playSnare } from "../../shared/drum-sounds.js";
+
+    bindLearn();
+
+    const video = document.getElementById("cam");
+    const camOff = document.getElementById("camOff");
+    const stepRow = document.getElementById("stepRow");
+    const camBtn = document.getElementById("camBtn");
+    const camBtn2 = document.getElementById("camBtn2");
+    const playBtn = document.getElementById("playBtn");
+
+    const STEPS = 8;
+    const SAMPLE_W = 48;
+    const SAMPLE_H = 36;
+
+    let ctx, master, built = false;
+    let camStream = null;
+    let camReady = false;
+    let sampleCanvas, sampleCtx;
+    let steps = Array(STEPS).fill(false);
+    let playing = false;
+    let stepIndex = 0;
+    let tickTimer = null;
+    let analyzeRaf = 0;
+    let lastBright = 255;
+    let shadowArmed = true;
+    let emaBright = 200;
+
+    for (let i = 0; i < STEPS; i++) {
+      const el = document.createElement("div");
+      el.className = "shadow-step";
+      el.dataset.i = String(i);
+      stepRow.appendChild(el);
+    }
+
+    function redrawSteps() {
+      stepRow.querySelectorAll(".shadow-step").forEach((el, i) => {
+        el.classList.toggle("on", steps[i]);
+        el.classList.toggle("play", playing && i === stepIndex);
+      });
+      document.getElementById("stepOut").textContent = String(stepIndex + 1);
+    }
+
+    function buildAudio(c) {
+      if (built) return;
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.55));
+      built = true;
+    }
+
+    registerAudioBoot(buildAudio);
+
+    async function startCamera() {
+      if (camReady) return true;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("status", "Camera not supported in this browser", "warn");
+        return false;
+      }
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "user" },
+            width: { ideal: 320 },
+            height: { ideal: 240 },
+          },
+          audio: false,
+        });
+      } catch {
+        setStatus("status", "Camera blocked — allow in browser settings", "warn");
+        return false;
+      }
+      video.srcObject = camStream;
+      video.muted = true;
+      try {
+        await video.play();
+      } catch {
+        setStatus("status", "Could not start camera preview", "warn");
+        return false;
+      }
+      await new Promise((resolve) => {
+        if (video.videoWidth > 0) {
+          resolve();
+          return;
+        }
+        video.onloadedmetadata = () => resolve();
+      });
+      camReady = video.videoWidth > 0;
+      if (!camReady) {
+        setStatus("status", "Camera failed to start", "warn");
+        return false;
+      }
+      sampleCanvas = document.createElement("canvas");
+      sampleCanvas.width = SAMPLE_W;
+      sampleCanvas.height = SAMPLE_H;
+      sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+      camOff.classList.add("hidden");
+      camBtn.textContent = "Camera on";
+      camBtn.disabled = true;
+      setStatus("status", "Camera live · tap Play", "ok");
+      cancelAnimationFrame(analyzeRaf);
+      analyzeLoop();
+      return true;
+    }
+
+    function sampleBrightness() {
+      if (!camReady || !sampleCtx || video.readyState < 2) return null;
+      sampleCtx.drawImage(video, 0, 0, SAMPLE_W, SAMPLE_H);
+      const d = sampleCtx.getImageData(0, 0, SAMPLE_W, SAMPLE_H).data;
+      let sum = 0;
+      for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
+      return sum / (SAMPLE_W * SAMPLE_H * 3);
+    }
+
+    function analyzeLoop() {
+      if (!camReady) return;
+      const bright = sampleBrightness();
+      if (bright != null) {
+        emaBright = emaBright * 0.92 + bright * 0.08;
+        document.getElementById("brightOut").textContent = String(Math.round(bright));
+        if (playing && bright < emaBright * 0.82 && bright < lastBright - 4 && shadowArmed) {
+          steps[stepIndex] = !steps[stepIndex];
+          shadowArmed = false;
+          redrawSteps();
+        }
+        if (bright > emaBright * 0.9) shadowArmed = true;
+        lastBright = bright;
+      }
+      analyzeRaf = requestAnimationFrame(analyzeLoop);
+    }
+
+    function playStep(i) {
+      if (!ctx || !steps[i]) return;
+      const t = ctx.currentTime;
+      if (i % 2) playSnare(ctx, master, t, 0.8);
+      else playKick(ctx, master, t, 0.9);
+    }
+
+    function startSeq() {
+      if (playing) return;
+      playing = true;
+      stepIndex = 0;
+      playBtn.textContent = "■ Stop";
+      playBtn.classList.add("active");
+      setStatus("status", "Playing — shadow toggles current step", "ok");
+      playStep(stepIndex);
+      redrawSteps();
+      tickTimer = setInterval(() => {
+        stepIndex = (stepIndex + 1) % STEPS;
+        shadowArmed = true;
+        playStep(stepIndex);
+        redrawSteps();
+      }, 420);
+    }
+
+    function stopSeq() {
+      playing = false;
+      if (tickTimer) clearInterval(tickTimer);
+      tickTimer = null;
+      playBtn.textContent = "▶ Play";
+      playBtn.classList.remove("active");
+      redrawSteps();
+      setStatus("status", camReady ? "Camera live · tap Play" : "Start camera, then play", "");
+    }
+
+    async function onCamStart() {
+      await startCamera();
+    }
+
+    camBtn.addEventListener("click", () => void onCamStart());
+    camBtn2.addEventListener("click", () => void onCamStart());
+
+    playBtn.addEventListener("click", async () => {
+      if (playing) {
+        stopSeq();
+        return;
+      }
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built) return;
+      if (!camReady && !(await startCamera())) return;
+      startSeq();
+    });
+
+    stepRow.addEventListener("click", (e) => {
+      const el = e.target.closest(".shadow-step");
+      if (!el) return;
+      const i = +el.dataset.i;
+      steps[i] = !steps[i];
+      redrawSteps();
+    });
+
+    redrawSteps();
+  </script>
+</body>
+</html>

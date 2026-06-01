@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Wavetable Scan — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Wavetable Scan</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Wavetable</h2>
+    <p>Turn <strong>Audio on</strong>, then <strong>Swipe</strong> horizontally to morph between single-cycle waves. <strong>Y</strong> = volume while holding.</p>
+  </div>
+  <p class="status-bar" id="waveName">Sine</p>
+  <div class="readout-row">
+    <p class="value-chip">Morph <strong id="morphOut">0%</strong></p>
+    <p class="value-chip">Pitch <strong id="pitchOut">220</strong> Hz</p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid"><div class="touch-dot" id="dot"></div></div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+
+    bindLearn();
+    const WAVE_NAMES = ["Sine", "Triangle", "Saw", "Square", "Buzz", "Formant", "Shimmer", "Odd"];
+
+    function buildTables(ctx) {
+      const len = 1024;
+      const sr = ctx.sampleRate;
+      const makers = [
+        (i, n) => Math.sin((2 * Math.PI * i) / n),
+        (i, n) => 2 * Math.abs((2 * i) / n - 1) - 1,
+        (i, n) => (2 * i) / n - 1,
+        (i, n) => i < n / 2 ? 0.65 : -0.65,
+        (i, n) => Math.sin((2 * Math.PI * i) / n) + 0.35 * Math.sin((6 * Math.PI * i) / n),
+        (i, n) => Math.sin((2 * Math.PI * i) / n) * (0.5 + 0.5 * Math.sin((10 * Math.PI * i) / n)),
+        (i, n) => Math.sin((2 * Math.PI * i) / n) + 0.25 * Math.sin((17 * Math.PI * i) / n),
+        (i, n) => (i % 2 === 0 ? 0 : 1) / (i || 1),
+      ];
+      return makers.map((fn) => {
+        const b = ctx.createBuffer(1, len, sr);
+        const d = b.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = fn(i, len);
+        return d;
+      });
+    }
+
+    function tableToPeriodicWave(ctx, data) {
+      const n = 24;
+      const real = new Float32Array(n + 1);
+      const imag = new Float32Array(n + 1);
+      for (let k = 1; k <= n; k++) {
+        let c = 0;
+        let s = 0;
+        for (let i = 0; i < data.length; i++) {
+          const ph = (2 * Math.PI * k * i) / data.length;
+          c += data[i] * Math.cos(ph);
+          s += data[i] * Math.sin(ph);
+        }
+        real[k] = (2 * c) / data.length;
+        imag[k] = (-2 * s) / data.length;
+      }
+      return ctx.createPeriodicWave(real, imag);
+    }
+
+    function mixTables(tables, pos) {
+      const n = tables.length - 1;
+      const idx = Math.min(n - 1, Math.floor(pos * n));
+      const frac = pos * n - idx;
+      const len = tables[0].length;
+      const out = new Float32Array(len);
+      const a = tables[idx];
+      const b = tables[idx + 1];
+      for (let i = 0; i < len; i++) out[i] = a[i] * (1 - frac) + b[i] * frac;
+      return out;
+    }
+
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    let ctx, master, tables, built = false;
+    let osc, ampGain, activePointer = null;
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.45));
+      tables = buildTables(ctx);
+      osc = ctx.createOscillator();
+      ampGain = ctx.createGain();
+      ampGain.gain.value = 0;
+      osc.connect(ampGain);
+      ampGain.connect(master);
+      osc.setPeriodicWave(tableToPeriodicWave(ctx, tables[0]));
+      osc.frequency.value = 220;
+      osc.start();
+      built = true;
+    }
+
+    function setMorph(pos) {
+      const m = Math.max(0, Math.min(1, pos));
+      const data = mixTables(tables, m);
+      osc.setPeriodicWave(tableToPeriodicWave(ctx, data));
+      const idx = Math.min(WAVE_NAMES.length - 1, Math.floor(m * (WAVE_NAMES.length - 0.01)));
+      document.getElementById("waveName").textContent = WAVE_NAMES[idx];
+      document.getElementById("morphOut").textContent = `${(m * 100).toFixed(0)}%`;
+    }
+
+    function setFromEvent(ev) {
+      const rect = pad.getBoundingClientRect();
+      const nx = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+      const ny = Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height));
+      setMorph(nx);
+      const pitch = 110 * Math.pow(2, nx * 2);
+      osc.frequency.setTargetAtTime(pitch, ctx.currentTime, 0.03);
+      ampGain.gain.setTargetAtTime((1 - ny) * 0.28, ctx.currentTime, 0.02);
+      document.getElementById("pitchOut").textContent = pitch.toFixed(0);
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${ny * 100}%`;
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await startAudio(!built ? buildAudio : undefined);
+      activePointer = e.pointerId;
+      pad.setPointerCapture(e.pointerId);
+      pad.classList.add("active");
+      setFromEvent(e);
+    });
+    pad.addEventListener("pointermove", (e) => {
+      if (!built || e.pointerId !== activePointer) return;
+      setFromEvent(e);
+    });
+    const stop = (e) => {
+      if (e.pointerId !== activePointer) return;
+      pad.classList.remove("active");
+      ampGain.gain.setTargetAtTime(0, ctx.currentTime, 0.04);
+      activePointer = null;
+    };
+    pad.addEventListener("pointerup", stop);
+    pad.addEventListener("pointercancel", stop);
+    pad.addEventListener("lostpointercapture", stop);
+  </script>
+</body>
+</html>

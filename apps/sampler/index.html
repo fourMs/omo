@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Sampler — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    #pad.recording {
+      background: linear-gradient(160deg, #7f1d1d 0%, #1a1f2e 45%);
+      box-shadow: inset 0 0 0 2px #f87171;
+    }
+    #pad.looping {
+      box-shadow: inset 0 0 0 2px var(--accent-dim);
+    }
+    .sampler-hint {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      pointer-events: none;
+      color: var(--muted);
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 1rem;
+    }
+    .rec-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+      opacity: 0;
+    }
+    #pad.recording .rec-dot {
+      opacity: 1;
+      animation: rec-pulse 0.8s ease-in-out infinite;
+    }
+    @keyframes rec-pulse {
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+  </style>
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Sampler</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Loop sampler</h2>
+    <p>Turn <strong>Audio on</strong>, then <strong>Hold</strong> the pad to record from the mic. <strong>Release</strong> to loop the sample. <strong>Tilt</strong> = filter + delay FX.</p>
+  </div>
+  <p class="status-bar" id="status"></p>
+  <div class="readout-row">
+    <p class="value-chip">Filter <strong id="filterOut">—</strong> Hz</p>
+    <p class="value-chip">Delay <strong id="delayOut">—</strong></p>
+    <p class="value-chip">Pitch <strong id="pitchOut">—</strong>×</p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <div class="sampler-hint">
+        <span class="rec-dot" id="recDot"></span>
+        <span id="padHint"></span>
+      </div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, onOrientation } from "../../shared/sensors.js";
+
+    bindLearn();
+    const pad = document.getElementById("pad");
+    const padHint = document.getElementById("padHint");
+    const MAX_RECORD_MS = 8000;
+
+    let ctx, master, stream, recordTimer;
+    let filter, delay, delayFb, delayWet, dryGain;
+    let mediaRecorder = null;
+    let recordChunks = [];
+    let recordSource, recordProcessor, recordSilent, spChunks, spLength;
+    let loopBuffer = null;
+    let loopSource = null;
+    let built = false;
+    let micReady = false;
+    let tiltReady = false;
+    let useMediaRecorder = typeof MediaRecorder !== "undefined";
+    let recording = false;
+    let activePointer = null;
+    let playbackRate = 1;
+
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    function reverbBuf(c, sec) {
+      const len = Math.floor(c.sampleRate * sec);
+      const b = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = b.getChannelData(ch);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2.5;
+      }
+      return b;
+    }
+
+    function buildFxChain() {
+      dryGain = ctx.createGain();
+      dryGain.gain.value = 0.85;
+      filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 3200;
+      filter.Q.value = 1.2;
+      delay = ctx.createDelay(1);
+      delay.delayTime.value = 0.28;
+      delayFb = ctx.createGain();
+      delayFb.gain.value = 0.25;
+      delayWet = ctx.createGain();
+      delayWet.gain.value = 0.35;
+      const rev = ctx.createConvolver();
+      rev.buffer = reverbBuf(ctx, 1.4);
+      const revWet = ctx.createGain();
+      revWet.gain.value = 0.22;
+
+      dryGain.connect(master);
+      filter.connect(dryGain);
+      filter.connect(delay);
+      delay.connect(delayFb);
+      delayFb.connect(delay);
+      delay.connect(delayWet);
+      delayWet.connect(rev);
+      rev.connect(revWet);
+      revWet.connect(master);
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(ctx, 0.75));
+      buildFxChain();
+      built = true;
+    }
+
+    async function ensureMic() {
+      if (micReady) return true;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("status", "Mic not supported", "warn");
+        return false;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+          video: false,
+        });
+        micReady = true;
+        return true;
+      } catch {
+        setStatus("status", "Mic denied — allow mic in browser", "warn");
+        return false;
+      }
+    }
+
+    async function enableTilt() {
+      if (tiltReady) return;
+      if (await enableSensors()) {
+        tiltReady = true;
+        onOrientation(({ beta, gamma }) => {
+          const tilt = clamp(Math.sqrt((beta || 0) ** 2 + (gamma || 0) ** 2) / 90, 0, 1);
+          const t = ctx.currentTime;
+          const cutoff = 350 + tilt * 7800;
+          const fb = 0.05 + tilt * 0.62;
+          playbackRate = 0.88 + tilt * 0.28;
+          filter.frequency.setTargetAtTime(cutoff, t, 0.05);
+          delayFb.gain.setTargetAtTime(fb, t, 0.05);
+          delayWet.gain.setTargetAtTime(0.15 + tilt * 0.55, t, 0.05);
+          if (loopSource) {
+            loopSource.playbackRate.setTargetAtTime(playbackRate, t, 0.08);
+          }
+          document.getElementById("filterOut").textContent = cutoff.toFixed(0);
+          document.getElementById("delayOut").textContent = `${(fb * 100).toFixed(0)}%`;
+          document.getElementById("pitchOut").textContent = playbackRate.toFixed(2);
+        });
+      }
+    }
+
+    function stopLoop() {
+      if (!loopSource) return;
+      try {
+        loopSource.stop();
+      } catch {
+        /* already stopped */
+      }
+      try {
+        loopSource.disconnect();
+      } catch {
+        /* noop */
+      }
+      loopSource = null;
+      pad.classList.remove("looping");
+    }
+
+    function startLoop() {
+      if (!loopBuffer || !built) return;
+      stopLoop();
+      loopSource = ctx.createBufferSource();
+      loopSource.buffer = loopBuffer;
+      loopSource.loop = true;
+      loopSource.playbackRate.value = playbackRate;
+      loopSource.connect(filter);
+      loopSource.start();
+      pad.classList.add("looping");
+      padHint.textContent = "Looping · hold again to re-record";
+    }
+
+    function teardownScriptCapture() {
+      if (recordProcessor) recordProcessor.onaudioprocess = null;
+      try {
+        recordProcessor?.disconnect();
+      } catch {
+        /* noop */
+      }
+      try {
+        recordSource?.disconnect();
+      } catch {
+        /* noop */
+      }
+      try {
+        recordSilent?.disconnect();
+      } catch {
+        /* noop */
+      }
+      recordProcessor = null;
+      recordSource = null;
+      recordSilent = null;
+    }
+
+    function bufferFromScriptCapture() {
+      const minSamples = Math.floor(ctx.sampleRate * 0.08);
+      if (spLength < minSamples) return null;
+      const buf = ctx.createBuffer(1, spLength, ctx.sampleRate);
+      const out = buf.getChannelData(0);
+      let off = 0;
+      for (const chunk of spChunks) {
+        out.set(chunk, off);
+        off += chunk.length;
+      }
+      return buf;
+    }
+
+    async function commitLoopFromBlob(blob) {
+      padHint.textContent = "Processing…";
+      await startAudio();
+      try {
+        const ab = await blob.arrayBuffer();
+        loopBuffer = await ctx.decodeAudioData(ab);
+        startLoop();
+      } catch {
+        padHint.textContent = "";
+        setStatus("status", "Too short — try again", "warn");
+      }
+    }
+
+    async function commitLoopFromScript() {
+      await startAudio();
+      loopBuffer = bufferFromScriptCapture();
+      if (!loopBuffer) {
+        padHint.textContent = "";
+        setStatus("status", "Too short — try again", "warn");
+        return;
+      }
+      startLoop();
+    }
+
+    function recorderMime() {
+      if (typeof MediaRecorder === "undefined") return "";
+      if (MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) return "audio/webm;codecs=opus";
+      if (MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+      return "";
+    }
+
+    function startRecording() {
+      if (!stream || recording) return;
+      stopLoop();
+      recording = true;
+      pad.classList.add("recording");
+      padHint.textContent = "Recording…";
+      setStatus("status", "Recording…", "ok");
+
+      if (useMediaRecorder) {
+        recordChunks = [];
+        const mime = recorderMime();
+        try {
+          mediaRecorder = mime
+            ? new MediaRecorder(stream, { mimeType: mime })
+            : new MediaRecorder(stream);
+        } catch {
+          useMediaRecorder = false;
+          startRecording();
+          return;
+        }
+        mediaRecorder.ondataavailable = (ev) => {
+          if (ev.data.size > 0) recordChunks.push(ev.data);
+        };
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordChunks, { type: mediaRecorder.mimeType || "audio/mp4" });
+          void commitLoopFromBlob(blob);
+        };
+        mediaRecorder.start(250);
+      } else {
+        spChunks = [];
+        spLength = 0;
+        recordSource = ctx.createMediaStreamSource(stream);
+        recordProcessor = ctx.createScriptProcessor(4096, 1, 1);
+        recordSilent = ctx.createGain();
+        recordSilent.gain.value = 0;
+        recordProcessor.onaudioprocess = (e) => {
+          if (!recording) return;
+          const ch = e.inputBuffer.getChannelData(0);
+          spChunks.push(Float32Array.from(ch));
+          spLength += ch.length;
+        };
+        recordSource.connect(recordProcessor);
+        recordProcessor.connect(recordSilent);
+        recordSilent.connect(ctx.destination);
+      }
+
+      recordTimer = setTimeout(() => {
+        if (recording && activePointer != null) void endRecording();
+      }, MAX_RECORD_MS);
+    }
+
+    async function endRecording() {
+      if (!recording) return;
+      clearTimeout(recordTimer);
+      recording = false;
+      pad.classList.remove("recording");
+
+      if (useMediaRecorder && mediaRecorder?.state === "recording") {
+        mediaRecorder.stop();
+        return;
+      }
+
+      teardownScriptCapture();
+      await commitLoopFromScript();
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await startAudio(!built ? (c) => { buildAudio(c); void enableTilt(); } : undefined);
+      if (!(await ensureMic())) return;
+      activePointer = e.pointerId;
+      pad.setPointerCapture(e.pointerId);
+      startRecording();
+    });
+
+    const release = async (e) => {
+      if (e.pointerId !== activePointer) return;
+      activePointer = null;
+      if (pad.hasPointerCapture(e.pointerId)) pad.releasePointerCapture(e.pointerId);
+      await startAudio();
+      await endRecording();
+    };
+
+    pad.addEventListener("pointerup", release);
+    pad.addEventListener("pointercancel", release);
+    pad.addEventListener("lostpointercapture", () => {
+      if (recording) void startAudio().then(() => endRecording());
+      activePointer = null;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Drum Sequencer — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell drum-seq-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Drum Sequencer</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>4-track × 8-step</h2>
+    <p>Turn <strong>Audio on</strong>, pick a <strong>pattern</strong> or draw your own, then press ▶. <strong>Swing</strong> shuffles every other step.</p>
+  </div>
+  <div class="seq-toolbar">
+    <div class="control-row">
+      <label for="bpm">BPM</label>
+      <input type="range" id="bpm" min="60" max="160" value="100" />
+      <span id="bpmVal">100</span>
+      <button type="button" class="btn btn-play" id="playBtn">▶</button>
+    </div>
+    <div class="control-row">
+      <label for="swing">Swing</label>
+      <input type="range" id="swing" min="0" max="75" value="0" />
+      <span id="swingVal">0%</span>
+    </div>
+    <div class="control-row">
+      <label for="template">Pattern</label>
+      <select id="template">
+        <option value="custom">Custom</option>
+        <option value="rock">Rock</option>
+        <option value="house">House</option>
+        <option value="disco">Disco</option>
+        <option value="hiphop">Hip-hop</option>
+        <option value="funk">Funk</option>
+        <option value="techno">Techno</option>
+        <option value="reggae">Reggae (one drop)</option>
+        <option value="shuffle">Shuffle</option>
+      </select>
+    </div>
+  </div>
+  <div class="main-stage">
+    <div class="drum-seq" id="seq"></div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio, registerAudioBoot } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { DRUM_SEQ_ROWS } from "../../shared/drum-sounds.js";
+
+    bindLearn();
+
+    const STEPS = 8;
+    const seqEl = document.getElementById("seq");
+    const pattern = DRUM_SEQ_ROWS.map(() => Array(STEPS).fill(false));
+    const cells = [];
+    let ctx, master, playing = false, stepIndex = 0, nextTime = 0;
+    let audioReady = false;
+    let applyingTemplate = false;
+
+    /** [kick, snare, closed hat, open hat] × 8 steps */
+    const TEMPLATES = {
+      rock: {
+        bpm: 110,
+        swing: 0,
+        rows: [
+          [1, 0, 0, 0, 1, 0, 0, 0],
+          [0, 0, 1, 0, 0, 0, 1, 0],
+          [1, 0, 1, 0, 1, 0, 1, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0],
+        ],
+      },
+      house: {
+        bpm: 124,
+        swing: 0,
+        rows: [
+          [1, 1, 1, 1, 1, 1, 1, 1],
+          [0, 0, 1, 0, 0, 0, 1, 0],
+          [0, 1, 0, 1, 0, 1, 0, 1],
+          [0, 0, 0, 0, 0, 0, 0, 0],
+        ],
+      },
+      disco: {
+        bpm: 118,
+        swing: 12,
+        rows: [
+          [1, 0, 0, 0, 1, 0, 0, 0],
+          [0, 0, 1, 0, 0, 0, 1, 0],
+          [1, 1, 1, 1, 1, 1, 1, 1],
+          [0, 0, 0, 1, 0, 0, 0, 1],
+        ],
+      },
+      hiphop: {
+        bpm: 92,
+        swing: 8,
+        rows: [
+          [1, 0, 0, 1, 0, 0, 1, 0],
+          [0, 0, 1, 0, 0, 0, 1, 0],
+          [1, 0, 1, 0, 1, 0, 1, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0],
+        ],
+      },
+      funk: {
+        bpm: 104,
+        swing: 18,
+        rows: [
+          [1, 0, 0, 1, 0, 0, 1, 0],
+          [0, 0, 1, 0, 0, 1, 0, 0],
+          [1, 1, 0, 1, 1, 1, 0, 1],
+          [0, 0, 0, 0, 0, 0, 0, 1],
+        ],
+      },
+      techno: {
+        bpm: 130,
+        swing: 0,
+        rows: [
+          [1, 1, 1, 1, 1, 1, 1, 1],
+          [0, 0, 0, 0, 1, 0, 0, 0],
+          [1, 0, 1, 0, 1, 0, 1, 0],
+          [0, 0, 0, 1, 0, 0, 0, 1],
+        ],
+      },
+      reggae: {
+        bpm: 78,
+        swing: 10,
+        rows: [
+          [1, 0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 1, 0, 0, 0, 0],
+          [0, 1, 0, 1, 0, 1, 0, 1],
+          [0, 0, 0, 0, 0, 0, 0, 0],
+        ],
+      },
+      shuffle: {
+        bpm: 96,
+        swing: 58,
+        rows: [
+          [1, 0, 0, 0, 1, 0, 0, 0],
+          [0, 0, 1, 0, 0, 0, 1, 0],
+          [1, 1, 1, 1, 1, 1, 1, 1],
+          [0, 0, 0, 0, 0, 0, 0, 0],
+        ],
+      },
+    };
+
+    function syncPatternUI() {
+      for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+        for (let ci = 0; ci < STEPS; ci++) {
+          cells[ri][ci].classList.toggle("on", pattern[ri][ci]);
+        }
+      }
+    }
+
+    function applyTemplate(id) {
+      const t = TEMPLATES[id];
+      if (!t) return;
+      applyingTemplate = true;
+      for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+        for (let ci = 0; ci < STEPS; ci++) {
+          pattern[ri][ci] = !!t.rows[ri][ci];
+        }
+      }
+      syncPatternUI();
+      const bpmEl = document.getElementById("bpm");
+      bpmEl.value = String(t.bpm);
+      document.getElementById("bpmVal").textContent = String(t.bpm);
+      const swingEl = document.getElementById("swing");
+      swingEl.value = String(t.swing);
+      document.getElementById("swingVal").textContent = `${t.swing}%`;
+      applyingTemplate = false;
+    }
+
+    async function boot(c) {
+      ctx = c;
+      ({ master } = createMasterBus(ctx, 0.65));
+      audioReady = true;
+    }
+
+    registerAudioBoot(boot);
+
+    function ensureAudio() {
+      if (audioReady) return Promise.resolve(ctx);
+      return startAudio(boot);
+    }
+
+    DRUM_SEQ_ROWS.forEach((row, ri) => {
+      const rowEl = document.createElement("div");
+      rowEl.className = "drum-seq-row";
+
+      const label = document.createElement("div");
+      label.className = "drum-row-label";
+      label.innerHTML = `<span class="pad-icon">${row.icon}</span>`;
+      label.setAttribute("aria-label", row.name);
+      rowEl.appendChild(label);
+
+      cells[ri] = [];
+      for (let ci = 0; ci < STEPS; ci++) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "drum-seq-cell";
+        btn.setAttribute("aria-label", `${row.name} step ${ci + 1}`);
+        btn.addEventListener("click", () => {
+          void ensureAudio();
+          pattern[ri][ci] = !pattern[ri][ci];
+          btn.classList.toggle("on", pattern[ri][ci]);
+          if (!applyingTemplate) document.getElementById("template").value = "custom";
+          if (pattern[ri][ci] && audioReady) row.play(ctx, master);
+        });
+        rowEl.appendChild(btn);
+        cells[ri][ci] = btn;
+      }
+      seqEl.appendChild(rowEl);
+    });
+
+    document.getElementById("bpm").oninput = (e) => {
+      document.getElementById("bpmVal").textContent = e.target.value;
+    };
+
+    document.getElementById("swing").oninput = (e) => {
+      document.getElementById("swingVal").textContent = `${e.target.value}%`;
+    };
+
+    document.getElementById("template").addEventListener("change", (e) => {
+      const id = e.target.value;
+      if (id === "custom") return;
+      void ensureAudio().then(() => applyTemplate(id));
+    });
+
+    /** 8th-note step length; odd steps delayed, even shortened (bar length unchanged). */
+    function stepDuration(step) {
+      const bpm = +document.getElementById("bpm").value;
+      const base = 60 / bpm / 2;
+      const swing = +document.getElementById("swing").value / 100;
+      if (swing === 0) return base;
+      const skew = swing * 0.5;
+      return step % 2 === 1 ? base * (1 + skew) : base * (1 - skew);
+    }
+
+    function scheduler() {
+      if (!playing || !ctx) return;
+      const now = ctx.currentTime;
+      while (nextTime <= now + 0.05) {
+        const col = stepIndex;
+        cells.forEach((row) => row.forEach((c) => c.classList.remove("playing")));
+        for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+          if (pattern[ri][col]) DRUM_SEQ_ROWS[ri].play(ctx, master);
+          cells[ri][col]?.classList.add("playing");
+        }
+        nextTime += stepDuration(col);
+        stepIndex = (col + 1) % STEPS;
+      }
+      requestAnimationFrame(scheduler);
+    }
+
+    const playBtn = document.getElementById("playBtn");
+    playBtn.addEventListener("click", async () => {
+      await ensureAudio();
+      if (!ctx) return;
+      if (playing) {
+        playing = false;
+        playBtn.classList.remove("active");
+        playBtn.textContent = "▶";
+        cells.forEach((row) => row.forEach((c) => c.classList.remove("playing")));
+        return;
+      }
+      playing = true;
+      stepIndex = 0;
+      nextTime = ctx.currentTime + 0.05;
+      playBtn.classList.add("active");
+      playBtn.textContent = "■";
+      scheduler();
+    });
+  </script>
+</body>
+</html>

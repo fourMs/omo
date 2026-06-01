@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Train Shake — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .train-controls {
+      flex-shrink: 0;
+      padding: 0 0.5rem 0.35rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .train-controls label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .train-controls input[type="range"] { flex: 1; }
+    .train-controls select {
+      font-size: 0.72rem;
+      background: #1e293b;
+      color: var(--text);
+      border: 1px solid #475569;
+      border-radius: 6px;
+      padding: 0.2rem 0.35rem;
+    }
+    .train-scroll { flex: 1; min-height: 0; }
+    .teach-details {
+      margin: 0.35rem 0.5rem;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #111827;
+      font-size: 0.72rem;
+    }
+    .teach-details summary {
+      padding: 0.4rem 0.5rem;
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .teach-details[open] summary { border-bottom: 1px solid #334155; }
+    .teach-body { padding: 0.45rem 0.5rem 0.55rem; color: var(--muted); line-height: 1.4; }
+    #featurePlot {
+      width: 100%;
+      height: 140px;
+      display: block;
+      border-radius: 6px;
+      margin-top: 0.35rem;
+    }
+    .confusion-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.35rem;
+      font-size: 0.68rem;
+      text-align: center;
+    }
+    .confusion-table th,
+    .confusion-table td {
+      border: 1px solid #334155;
+      padding: 0.25rem 0.35rem;
+    }
+    .confusion-table th { color: var(--muted); font-weight: 500; }
+    .confusion-table td.mis { background: rgba(248, 113, 113, 0.2); color: #fca5a5; }
+    .confusion-table caption {
+      caption-side: top;
+      text-align: left;
+      padding-bottom: 0.25rem;
+      color: var(--muted);
+    }
+    .ethics-card p { margin: 0.35rem 0; }
+    .ethics-card strong { color: var(--text); }
+    .legend-dots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.35rem;
+      font-size: 0.65rem;
+    }
+    .legend-dots span::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 0.2rem;
+      vertical-align: middle;
+    }
+    .legend-still::before { background: #38bdf8; }
+    .legend-sway::before { background: #a78bfa; }
+    .legend-shake::before { background: #fb923c; }
+    .rec-hold.recording {
+      border-color: var(--accent) !important;
+      background: rgba(110, 231, 183, 0.15) !important;
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Train Shake</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Machine learning</h2>
+    <p>Turn <strong>Audio on</strong>. <strong>Hold</strong> each teach button while you perform the gesture (3+ seconds). Record <strong>still</strong>, <strong>sway</strong>, and <strong>shake</strong> (3+ each), then <strong>Listen</strong>.</p>
+    <p>Compare <strong>k-NN</strong> vs a <strong>tiny 2-layer net</strong> — all on your phone, no server.</p>
+    <p><strong>Feature map</strong> — each dot is one example (mag vs jitter). White ring = live reading while listening.</p>
+    <p><strong>Confusion matrix</strong> — rows = true label, columns = predicted; off-diagonal = mislabels on your training set.</p>
+    <p><strong>Ethics</strong> — data stays on device until you export JSON. Different grips and phone models change readings; discuss bias before trusting the sound. Export only when the class agrees.</p>
+  </div>
+
+  <div class="pred-display still" id="pred">—</div>
+  <p class="status-bar" id="status"></p>
+  <p class="status-bar" id="counts">Still: 0 · Sway: 0 · Shake: 0</p>
+
+  <div class="btn-grid-3">
+    <button type="button" class="btn-secondary btn btn-sm rec-hold" id="recStill">Hold · Still</button>
+    <button type="button" class="btn-secondary btn btn-sm rec-hold" id="recSway">Hold · Sway</button>
+    <button type="button" class="btn-secondary btn btn-sm rec-hold" id="recShake">Hold · Shake</button>
+  </div>
+  <div class="btn-grid-2">
+    <button type="button" class="btn btn-sm" id="playBtn" disabled>Listen</button>
+    <button type="button" class="btn-danger btn btn-sm" id="clearBtn">Clear</button>
+    <button type="button" class="btn-secondary btn btn-sm" id="exportBtn" disabled>Export set</button>
+    <button type="button" class="btn-secondary btn btn-sm" id="importBtn">Import set</button>
+  </div>
+
+  <div class="train-controls">
+    <label>
+      Model
+      <select id="modelMode">
+        <option value="knn">k-NN</option>
+        <option value="net">Tiny net</option>
+        <option value="both">Compare both</option>
+      </select>
+    </label>
+    <label>
+      k (neighbours)
+      <input type="range" id="kSlider" min="1" max="15" value="5" />
+      <strong id="kVal">5</strong>
+    </label>
+  </div>
+
+  <input type="file" id="importFile" accept="application/json,.json" hidden />
+
+  <div class="scroll-panel train-scroll">
+    <details class="teach-details" open>
+      <summary>Teach · feature map</summary>
+      <div class="teach-body">
+        <div class="legend-dots">
+          <span class="legend-still">still</span>
+          <span class="legend-sway">sway</span>
+          <span class="legend-shake">shake</span>
+        </div>
+        <canvas id="featurePlot" aria-label="Feature scatter plot"></canvas>
+      </div>
+    </details>
+
+    <details class="teach-details">
+      <summary>Confusion matrix (leave-one-out)</summary>
+      <div class="teach-body" id="confusionWrap">
+        <div id="confusion"></div>
+      </div>
+    </details>
+
+    <details class="teach-details">
+      <summary>Ethics · on-device</summary>
+      <div class="teach-body ethics-card"></div>
+    </details>
+  </div>
+
+  <script type="module">
+    import { bindLearn, createAudioBoot, setStatus, registerAudioBoot } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, onMotion, primeSensors, stopSensors } from "../../shared/sensors.js";
+    import {
+      KNNClassifier,
+      FeatureNormalizer,
+      TinyGestureNet,
+      extractMotionFeatures,
+      exportTrainingSet,
+      importTrainingSet,
+      confusionMatrix,
+      drawFeatureScatter,
+    } from "../../shared/ml.js";
+
+    const MIN_PER_CLASS = 3;
+    const LABELS = ["still", "sway", "shake"];
+
+    const classifier = new KNNClassifier(5);
+    const normalizer = new FeatureNormalizer(5);
+    const net = new TinyGestureNet(5, 14, LABELS);
+    const magHistory = [];
+    let ctx, master, listening = false;
+    let padGain, noiseGain, swayGain;
+    let padOsc = null;
+    let liveFeature = null;
+
+    bindLearn();
+
+    async function bootAudio(c) {
+      if (ctx) return;
+      ctx = c;
+      ({ master } = createMasterBus(ctx, 0.45));
+      padGain = ctx.createGain();
+      padGain.gain.value = 0;
+      padOsc = ctx.createOscillator();
+      padOsc.type = "sine";
+      padOsc.frequency.value = 220;
+      padOsc.connect(padGain);
+      padGain.connect(master);
+      padOsc.start();
+
+      swayGain = ctx.createGain();
+      swayGain.gain.value = 0;
+      const swayOsc = ctx.createOscillator();
+      swayOsc.type = "triangle";
+      swayOsc.frequency.value = 330;
+      swayOsc.connect(swayGain);
+      swayGain.connect(master);
+      swayOsc.start();
+
+      noiseGain = ctx.createGain();
+      noiseGain.gain.value = 0;
+      const bufferSize = 2 * ctx.sampleRate;
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuffer;
+      noise.loop = true;
+      noise.connect(noiseGain);
+      noiseGain.connect(master);
+      noise.start();
+    }
+
+    registerAudioBoot(bootAudio);
+    const ensureReady = createAudioBoot(bootAudio);
+
+    async function ensureAudio() {
+      await ensureReady();
+    }
+
+    function modelMode() {
+      return document.getElementById("modelMode").value;
+    }
+
+    function countLabel(label) {
+      return classifier.samples.filter((s) => s.label === label).length;
+    }
+
+    function canListen() {
+      const enough = LABELS.every((l) => countLabel(l) >= MIN_PER_CLASS);
+      const mode = modelMode();
+      if (mode === "net" || mode === "both") return enough && net.trained;
+      return enough;
+    }
+
+    function canExport() {
+      return classifier.samples.length > 0;
+    }
+
+    function retrainNet() {
+      net.resetWeights();
+      if (classifier.samples.length < 6) {
+        net.trained = false;
+        return;
+      }
+      net.train(classifier.samples.map((s) => ({ features: s.features, label: s.label })));
+    }
+
+    function renderConfusion() {
+      const el = document.getElementById("confusion");
+      if (classifier.samples.length < MIN_PER_CLASS * LABELS.length) {
+        el.innerHTML = "<p>Need more examples (3+ per class).</p>";
+        return;
+      }
+      const matrix = confusionMatrix(classifier, LABELS);
+      let html = '<table class="confusion-table"><caption>True ↓ · Predicted →</caption><tr><th></th>';
+      for (const p of LABELS) html += `<th>${p}</th>`;
+      html += "</tr>";
+      for (const t of LABELS) {
+        html += `<tr><th>${t}</th>`;
+        for (const p of LABELS) {
+          const n = matrix[t][p] || 0;
+          html += `<td class="${t !== p && n > 0 ? "mis" : ""}">${n}</td>`;
+        }
+        html += "</tr>";
+      }
+      el.innerHTML = html + "</table>";
+    }
+
+    function refreshTeach() {
+      drawFeatureScatter(
+        document.getElementById("featurePlot"),
+        classifier.samples,
+        liveFeature
+      );
+      renderConfusion();
+    }
+
+    function updateCounts() {
+      document.getElementById("counts").textContent =
+        `Still: ${countLabel("still")} · Sway: ${countLabel("sway")} · Shake: ${countLabel("shake")}`;
+      retrainNet();
+      document.getElementById("playBtn").disabled = !canListen();
+      document.getElementById("exportBtn").disabled = !canExport();
+      refreshTeach();
+    }
+
+    function classify(norm) {
+      const knn = classifier.predict(norm);
+      const mode = modelMode();
+      if (mode === "knn" || !net.trained) {
+        return { knn, net: null, sound: knn.label };
+      }
+      const nn = net.predict(norm);
+      if (mode === "net") return { knn, net: nn, sound: nn.label };
+      return { knn, net: nn, sound: knn.label };
+    }
+
+    function formatPred({ knn, net: nn }) {
+      const mode = modelMode();
+      if (mode === "knn" || !nn) {
+        return knn.label
+          ? `${knn.label.toUpperCase()} ${(knn.confidence * 100).toFixed(0)}%`
+          : "—";
+      }
+      if (mode === "net") {
+        return nn.label
+          ? `NET ${nn.label.toUpperCase()} ${(nn.confidence * 100).toFixed(0)}%`
+          : "—";
+      }
+      const a = knn.label
+        ? `KNN ${knn.label.toUpperCase()} ${(knn.confidence * 100).toFixed(0)}%`
+        : "KNN —";
+      const b = nn.label
+        ? `NET ${nn.label.toUpperCase()} ${(nn.confidence * 100).toFixed(0)}%`
+        : "NET —";
+      return `${a} · ${b}`;
+    }
+
+    function bindHoldRecord(btn, label, hint, minMs = 1200) {
+      let recording = false;
+      let t0 = 0;
+      let handler = null;
+
+      btn.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        void withSensors(() => {
+          recording = true;
+          t0 = performance.now();
+          btn.classList.add("recording");
+          btn.setPointerCapture(e.pointerId);
+          setStatus("status", hint, "ok");
+          const samples = [];
+          handler = (ev) => {
+            if (!recording) return;
+            const a = ev.accelerationIncludingGravity || ev.acceleration;
+            if (!a) return;
+            const f = extractMotionFeatures({ x: a.x, y: a.y, z: a.z }, magHistory);
+            magHistory.push(Math.sqrt(a.x ** 2 + a.y ** 2 + a.z ** 2));
+            if (magHistory.length > 12) magHistory.shift();
+            samples.push(f);
+            normalizer.push(f);
+          };
+          window.addEventListener("devicemotion", handler);
+          btn._samples = samples;
+        });
+      });
+
+      const end = () => {
+        if (!recording) return;
+        recording = false;
+        btn.classList.remove("recording");
+        if (handler) window.removeEventListener("devicemotion", handler);
+        handler = null;
+        const samples = btn._samples || [];
+        btn._samples = [];
+        if (performance.now() - t0 < minMs || samples.length < 8) {
+          setStatus("status", "Too short — hold & perform longer", "warn");
+          return;
+        }
+        samples.forEach((f) => classifier.addSample(normalizer.normalize(f), label));
+        updateCounts();
+        setStatus("status", `Saved ${samples.length} × ${label}`, "ok");
+      };
+
+      btn.addEventListener("pointerup", end);
+      btn.addEventListener("pointercancel", end);
+      btn.addEventListener("lostpointercapture", end);
+    }
+
+    function applyLabelSound(label) {
+      const t = ctx.currentTime;
+      if (label === "still") {
+        padGain.gain.setTargetAtTime(0.35, t, 0.08);
+        swayGain.gain.setTargetAtTime(0, t, 0.06);
+        noiseGain.gain.setTargetAtTime(0, t, 0.05);
+        if (padOsc) padOsc.frequency.setTargetAtTime(220, t, 0.08);
+      } else if (label === "sway") {
+        padGain.gain.setTargetAtTime(0.12, t, 0.08);
+        swayGain.gain.setTargetAtTime(0.2, t, 0.1);
+        noiseGain.gain.setTargetAtTime(0.04, t, 0.05);
+        if (padOsc) padOsc.frequency.setTargetAtTime(180, t, 0.15);
+      } else if (label === "shake") {
+        padGain.gain.setTargetAtTime(0, t, 0.05);
+        swayGain.gain.setTargetAtTime(0, t, 0.05);
+        noiseGain.gain.setTargetAtTime(0.25, t, 0.02);
+      } else {
+        padGain.gain.setTargetAtTime(0, t, 0.08);
+        swayGain.gain.setTargetAtTime(0, t, 0.08);
+        noiseGain.gain.setTargetAtTime(0, t, 0.05);
+      }
+    }
+
+    async function withSensors(recordFn) {
+      primeSensors({ needMotion: true, needOrientation: false });
+      await ensureAudio();
+      if (!(await enableSensors({ needMotion: true, needOrientation: false }))) {
+        setStatus("status", "Allow motion access — then try again", "warn");
+        return;
+      }
+      recordFn();
+    }
+
+    bindHoldRecord(
+      document.getElementById("recStill"),
+      "still",
+      "Hold… keep phone still on a table or lap"
+    );
+    bindHoldRecord(
+      document.getElementById("recSway"),
+      "sway",
+      "Hold… sway side to side slowly"
+    );
+    bindHoldRecord(
+      document.getElementById("recShake"),
+      "shake",
+      "Hold… shake the phone firmly"
+    );
+
+    document.getElementById("clearBtn").onclick = () => {
+      classifier.clear();
+      normalizer.count = 0;
+      normalizer.mean.fill(0);
+      normalizer.m2.fill(0);
+      net.resetWeights();
+      listening = false;
+      liveFeature = null;
+      updateCounts();
+      setStatus("status", "Cleared", "");
+      document.getElementById("pred").textContent = "—";
+      document.getElementById("pred").className = "pred-display still";
+    };
+
+    document.getElementById("kSlider").oninput = (e) => {
+      const k = +e.target.value;
+      classifier.k = k;
+      document.getElementById("kVal").textContent = String(k);
+      renderConfusion();
+      if (listening && liveFeature) {
+        const result = classify(liveFeature.features);
+        const el = document.getElementById("pred");
+        el.textContent = formatPred(result);
+        el.className = `pred-display ${result.sound || "still"}`;
+        applyLabelSound(result.sound);
+      }
+    };
+
+    document.getElementById("modelMode").onchange = () => {
+      document.getElementById("playBtn").disabled = !canListen();
+      if (listening && liveFeature) {
+        const result = classify(liveFeature.features);
+        document.getElementById("pred").textContent = formatPred(result);
+      }
+    };
+
+    document.getElementById("exportBtn").onclick = () => {
+      const payload = exportTrainingSet(classifier, normalizer, {
+        labels: LABELS,
+        minPerClass: MIN_PER_CLASS,
+      });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `omo-train-shake-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus("status", `Exported ${payload.samples.length} samples`, "ok");
+    };
+
+    document.getElementById("importBtn").onclick = () => {
+      document.getElementById("importFile").click();
+    };
+
+    document.getElementById("importFile").onchange = async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const err = importTrainingSet(data, classifier, normalizer);
+        if (err) {
+          setStatus("status", err, "warn");
+          return;
+        }
+        document.getElementById("kSlider").value = String(classifier.k);
+        document.getElementById("kVal").textContent = String(classifier.k);
+        listening = false;
+        liveFeature = null;
+        updateCounts();
+        setStatus("status", `Imported ${classifier.samples.length} samples`, "ok");
+      } catch {
+        setStatus("status", "Could not read file", "warn");
+      }
+    };
+
+    document.getElementById("playBtn").onclick = async () => {
+      primeSensors({ needMotion: true, needOrientation: false });
+      await ensureAudio();
+      if (!(await enableSensors({ needMotion: true, needOrientation: false }))) {
+        setStatus("status", "Allow motion access — then Listen again", "warn");
+        return;
+      }
+      listening = true;
+      setStatus("status", "Listen on — still, sway, or shake the phone", "ok");
+      stopSensors();
+      onMotion((e) => {
+        if (!listening) return;
+        const f = extractMotionFeatures(e, magHistory);
+        magHistory.push(Math.sqrt(e.x ** 2 + e.y ** 2 + e.z ** 2));
+        if (magHistory.length > 12) magHistory.shift();
+        const norm = normalizer.normalize(f);
+        liveFeature = { features: norm };
+        const result = classify(norm);
+        const el = document.getElementById("pred");
+        el.textContent = formatPred(result);
+        el.className = `pred-display ${result.sound || "still"}`;
+        if (result.sound) applyLabelSound(result.sound);
+        drawFeatureScatter(
+          document.getElementById("featurePlot"),
+          classifier.samples,
+          liveFeature
+        );
+      });
+    };
+
+    window.addEventListener("resize", () => refreshTeach());
+
+    updateCounts();
+  </script>
+</body>
+</html>

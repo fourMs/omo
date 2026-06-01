@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Pluck Bowl — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Pluck Bowl</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel"><h2>Pluck bowl</h2><p>Tap position sets strike — bright edge, warm centre.</p></div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid"><div class="touch-dot" id="dot"></div></div>
+  </div>
+  <script type="module">
+
+import { bindLearn, startAudio } from "../../shared/app.js";
+import { createMasterBus } from "../../shared/audio.js";
+bindLearn();
+const pad=document.getElementById("pad");
+const dot=document.getElementById("dot");
+const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+let ctx,master,built=false,holding=false,activeId=null;
+
+import { createKSPool, karplusPluck } from "../../shared/ks.js";
+let pool;
+function build(c){ctx=c;({master}=createMasterBus(c,0.55));pool=createKSPool(6);built=true;}
+pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio(!built?build:undefined);const r=pad.getBoundingClientRect();const nx=clamp((e.clientX-r.left)/r.width,0,1);const ny=clamp((e.clientY-r.top)/r.height,0,1);const dist=Math.hypot(nx-0.5,ny-0.5);karplusPluck(ctx,master,pool,80+dist*400,{strength:0.6,dampHz:800+dist*3000,level:0.35,decaySec:3});});
+  </script>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Filter Ladder — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell filter-ladder-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Filter Ladder</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Subtractive filter</h2>
+    <p>Turn <strong>Audio on</strong>, then Four lowpass stages ≈ <strong>24 dB/oct</strong>. Hold pad for a saw tone through the ladder.</p>
+    <p><strong>Tilt</strong> while holding the pad (allow motion if asked on iPhone). The <strong>Tilt</strong> readout should move; cutoff follows tilt.</p>
+  </div>
+  <div class="control-row">
+    <label for="res">Resonance</label>
+    <input type="range" id="res" min="0" max="18" value="8" step="0.5" />
+    <span id="resLbl">8</span>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Cutoff <strong id="cutOut">1200</strong> Hz</p>
+    <p class="value-chip">Tilt <strong id="tiltOut">—</strong></p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid"><div class="touch-dot" id="dot"></div></div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, onOrientation } from "../../shared/sensors.js";
+
+    bindLearn();
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    let ctx, master, built = false;
+    let osc, ampGain, ladder, activePointer = null;
+    let holding = false;
+    let tiltReady = false;
+    let baseCutoff = 1200;
+    let tiltAmount = 0.35;
+
+    function createLadder(ctx, stages = 4) {
+      const filters = [];
+      let node = null;
+      for (let i = 0; i < stages; i++) {
+        const f = ctx.createBiquadFilter();
+        f.type = "lowpass";
+        f.frequency.value = baseCutoff;
+        f.Q.value = 0.707;
+        if (node) node.connect(f);
+        node = f;
+        filters.push(f);
+      }
+      return { filters, input: filters[0], output: filters[stages - 1] };
+    }
+
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+    async function enableTilt() {
+      if (tiltReady) return;
+      if (await enableSensors()) {
+        tiltReady = true;
+        onOrientation((o) => {
+          if (!built) return;
+          const t = clamp(Math.sqrt((o.beta || 0) ** 2 + (o.gamma || 0) ** 2) / 90, 0, 1);
+          tiltAmount = t;
+          document.getElementById("tiltOut").textContent = `${(t * 100).toFixed(0)}%`;
+          if (holding) applyFilter(ctx.currentTime);
+        });
+      } else {
+        document.getElementById("tiltOut").textContent = "blocked";
+      }
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      ladder = createLadder(ctx);
+      osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.value = 110;
+      ampGain = ctx.createGain();
+      ampGain.gain.value = 0;
+      osc.connect(ladder.input);
+      ladder.output.connect(ampGain);
+      ampGain.connect(master);
+      osc.start();
+      built = true;
+    }
+
+    function applyFilter(when) {
+      const res = +document.getElementById("res").value;
+      const cutoff = 120 + tiltAmount * 7800;
+      baseCutoff = cutoff;
+      document.getElementById("cutOut").textContent = cutoff.toFixed(0);
+      ladder.filters.forEach((f, i) => {
+        f.frequency.setTargetAtTime(cutoff, when, 0.04);
+        f.Q.setTargetAtTime(i === 3 ? res : 0.707, when, 0.05);
+      });
+    }
+
+    document.getElementById("res").oninput = (e) => {
+      document.getElementById("resLbl").textContent = e.target.value;
+      if (built && holding) applyFilter(ctx.currentTime);
+    };
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      void enableTilt();
+      await startAudio(!built ? buildAudio : undefined);
+      activePointer = e.pointerId;
+      pad.setPointerCapture(e.pointerId);
+      pad.classList.add("active");
+      holding = true;
+      const rect = pad.getBoundingClientRect();
+      const nx = (e.clientX - rect.left) / rect.width;
+      osc.frequency.setTargetAtTime(55 * Math.pow(2, nx * 3), ctx.currentTime, 0.02);
+      ampGain.gain.cancelScheduledValues(ctx.currentTime);
+      ampGain.gain.setTargetAtTime(0.32, ctx.currentTime, 0.02);
+      applyFilter(ctx.currentTime);
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = "50%";
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!built || e.pointerId !== activePointer) return;
+      const rect = pad.getBoundingClientRect();
+      const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      osc.frequency.setTargetAtTime(55 * Math.pow(2, nx * 3), ctx.currentTime, 0.02);
+      dot.style.left = `${nx * 100}%`;
+    });
+
+    const stop = (e) => {
+      if (e.pointerId !== activePointer) return;
+      holding = false;
+      pad.classList.remove("active");
+      ampGain.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
+      activePointer = null;
+    };
+
+    pad.addEventListener("pointerup", stop);
+    pad.addEventListener("pointercancel", stop);
+    pad.addEventListener("lostpointercapture", stop);
+  </script>
+</body>
+</html>

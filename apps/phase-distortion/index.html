@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Phase Distortion — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .pd-dots {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .pd-dot {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      margin: -7px 0 0 -7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(110, 231, 183, 0.45);
+      opacity: 0;
+      transition: opacity 0.12s;
+    }
+    .pd-dot.on { opacity: 1; }
+    .pd-dot.secondary {
+      width: 12px;
+      height: 12px;
+      margin: -6px 0 0 -6px;
+      background: #93c5fd;
+      box-shadow: 0 0 10px rgba(147, 197, 253, 0.4);
+    }
+  </style>
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Phase Distortion</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Phase distortion</h2>
+    <p>Casio-style waveshape. Turn <strong>Audio on</strong>, then use <strong>two fingers</strong>: <strong>left</strong> = pitch (horizontal), <strong>right</strong> = distortion (vertical).</p>
+    <p>One finger still works — X = pitch, Y = distortion. Softer ramps reduce clicks when you lift.</p>
+  </div>
+  <p class="status-bar" id="status">Turn Audio on, then hold the pad</p>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <div class="pd-dots">
+        <div class="pd-dot" id="dot1"></div>
+        <div class="pd-dot secondary" id="dot2"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+
+    bindLearn();
+
+    const pad = document.getElementById("pad");
+    const dot1 = document.getElementById("dot1");
+    const dot2 = document.getElementById("dot2");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let ctx, master, osc, shaper, tone, out, built = false;
+    let d1 = null;
+    let d2 = null;
+    let smoothDistort = 0.5;
+    let targetDistort = 0.5;
+    let curveBuf = null;
+    let raf = 0;
+
+    function build(c) {
+      if (built) return;
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.48));
+      curveBuf = new Float32Array(256);
+      osc = ctx.createOscillator();
+      shaper = ctx.createWaveShaper();
+      shaper.oversample = "none";
+      tone = ctx.createBiquadFilter();
+      tone.type = "lowpass";
+      tone.frequency.value = 7200;
+      tone.Q.value = 0.6;
+      out = ctx.createGain();
+      out.gain.value = 0;
+      osc.type = "sine";
+      osc.connect(shaper);
+      shaper.connect(tone);
+      tone.connect(out);
+      out.connect(master);
+      syncCurve(0.5);
+      osc.start();
+      built = true;
+      tickSmooth();
+    }
+
+    registerAudioBoot(build);
+
+    function pdCurve(amount) {
+      for (let i = 0; i < curveBuf.length; i++) {
+        const x = (i / (curveBuf.length - 1)) * 2 - 1;
+        curveBuf[i] = Math.sin(x * Math.PI * (1 + amount * 3));
+      }
+    }
+
+    function syncCurve(amount) {
+      if (!curveBuf || !shaper) return;
+      pdCurve(amount);
+      shaper.curve = curveBuf;
+    }
+
+    let lastCurveAmount = -1;
+
+    function tickSmooth() {
+      if (!built) return;
+      smoothDistort += (targetDistort - smoothDistort) * 0.18;
+      const amount = 1 - smoothDistort;
+      if (Math.abs(amount - lastCurveAmount) > 0.004) {
+        syncCurve(amount);
+        lastCurveAmount = amount;
+      }
+      raf = requestAnimationFrame(tickSmooth);
+    }
+
+    function padNorm(e) {
+      const r = pad.getBoundingClientRect();
+      return {
+        nx: clamp((e.clientX - r.left) / r.width, 0, 1),
+        ny: clamp((e.clientY - r.top) / r.height, 0, 1),
+      };
+    }
+
+    function placeDot(el, e, on) {
+      const r = pad.getBoundingClientRect();
+      el.style.left = `${clamp((e.clientX - r.left) / r.width, 0, 1) * 100}%`;
+      el.style.top = `${clamp((e.clientY - r.top) / r.height, 0, 1) * 100}%`;
+      el.classList.toggle("on", on);
+    }
+
+    function touchPair() {
+      const pts = [d1, d2].filter(Boolean);
+      if (!pts.length) return { pitch: null, distort: null, left: null, right: null };
+      if (pts.length === 1) return { pitch: pts[0], distort: pts[0], left: pts[0], right: null };
+      pts.sort((a, b) => a.clientX - b.clientX);
+      return { pitch: pts[0], distort: pts[1], left: pts[0], right: pts[1] };
+    }
+
+    function pitchNorm() {
+      return touchPair().pitch?.nx ?? 0.5;
+    }
+
+    function distortNorm() {
+      return touchPair().distort?.ny ?? 0.5;
+    }
+
+    function applyVoice(on) {
+      if (!built || !ctx) return;
+      const t = ctx.currentTime;
+      const hz = 100 * Math.pow(6, pitchNorm());
+      targetDistort = distortNorm();
+      osc.frequency.setTargetAtTime(hz, t, 0.045);
+      out.gain.setTargetAtTime(on ? 0.32 : 0, t, on ? 0.055 : 0.1);
+    }
+
+    function refreshDots() {
+      const { left, right } = touchPair();
+      if (left) placeDot(dot1, left, true);
+      else dot1.classList.remove("on");
+      if (right) placeDot(dot2, right, true);
+      else dot2.classList.remove("on");
+    }
+
+    function pointerDown(e) {
+      e.preventDefault();
+      const n = padNorm(e);
+      const pt = { id: e.pointerId, nx: n.nx, ny: n.ny, clientX: e.clientX, clientY: e.clientY };
+      if (!d1 || e.pointerId === d1.id) d1 = pt;
+      else if (!d2 || e.pointerId === d2.id) d2 = pt;
+      else {
+        d1 = pt;
+        d2 = null;
+      }
+      try {
+        pad.setPointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+      pad.classList.add("active");
+      refreshDots();
+      applyVoice(true);
+      setStatus("status", "Hold and move — left pitch, right distortion", "ok");
+    }
+
+    function pointerMove(e) {
+      if (d1?.id !== e.pointerId && d2?.id !== e.pointerId) return;
+      e.preventDefault();
+      const n = padNorm(e);
+      if (d1?.id === e.pointerId) {
+        d1 = { ...d1, nx: n.nx, ny: n.ny, clientX: e.clientX, clientY: e.clientY };
+      }
+      if (d2?.id === e.pointerId) {
+        d2 = { ...d2, nx: n.nx, ny: n.ny, clientX: e.clientX, clientY: e.clientY };
+      }
+      if (d1?.id !== e.pointerId && d2?.id !== e.pointerId) return;
+      refreshDots();
+      applyVoice(true);
+    }
+
+    function pointerUp(e) {
+      if (d1?.id === e.pointerId) d1 = null;
+      if (d2?.id === e.pointerId) d2 = null;
+      refreshDots();
+      if (!d1 && !d2) {
+        pad.classList.remove("active");
+        applyVoice(false);
+      } else {
+        applyVoice(true);
+      }
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await startAudio(!built ? build : undefined);
+      if (!built || !ctx) return;
+      pointerDown(e);
+    });
+    pad.addEventListener("pointermove", pointerMove, { passive: false });
+    pad.addEventListener("pointerup", pointerUp);
+    pad.addEventListener("pointercancel", pointerUp);
+    pad.addEventListener("lostpointercapture", pointerUp);
+  </script>
+</body>
+</html>

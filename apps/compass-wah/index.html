@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Compass Wah — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <script type="module">
+    const mode = new URLSearchParams(location.search).get("mode");
+    const legacy = {
+      tilt: "../motion-wah/",
+      shake: "../shake-filter/",
+      flat: "../flat-edge/",
+      choir: "../heading-choir/",
+    };
+    if (mode && legacy[mode]) location.replace(legacy[mode]);
+  </script>
+</head>
+<body class="app-shell compass-wah-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Compass Wah</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Compass filter</h2>
+    <p>Turn <strong>Audio on</strong>, tap the compass, allow <strong>orientation</strong> and <strong>motion</strong> on iPhone.</p>
+    <p><strong>Hold anywhere</strong> on the screen to play. <strong>Rotate</strong> flat for wah · <strong>tilt</strong> forward/back for volume · <strong>shake</strong> for vibrato.</p>
+  </div>
+  <p class="status-bar" id="status">Hold screen to play · Audio on</p>
+  <div class="readout-row">
+    <p class="value-chip">Heading <strong id="headOut">—</strong>°</p>
+    <p class="value-chip">Cutoff <strong id="cutOut">—</strong> Hz</p>
+    <p class="value-chip">Amp <strong id="ampOut">—</strong></p>
+    <p class="value-chip">Vib <strong id="vibOut">—</strong></p>
+  </div>
+  <div class="main-stage">
+    <canvas id="compass" class="canvas-fill play-grid" aria-label="Compass"></canvas>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { drawCompassRose, sizeCompassCanvas } from "../../shared/compass-rose.js";
+    import { wireScreenHold } from "../../shared/hold-play.js";
+    import { createMotionExpression } from "../../shared/motion-express.js";
+    import { playAmpFromTiltAndMotion } from "../../shared/tilt-amp.js";
+    import { enableSensors, onMotion, onOrientation, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+    const canvas = document.getElementById("compass");
+    const g = canvas.getContext("2d");
+    const SENSOR_OPTS = { needMotion: true, needOrientation: true };
+
+    const motionExpr = createMotionExpression({ baseAmp: 0.28 });
+    let motion = { amp: 0.28, vibCents: 0, vibHz: 5 };
+
+    let ctx, master, osc, filt, gate, vibOsc, vibGain, built = false;
+    let sensorsReady = false;
+    let holding = false;
+    let alpha = 0;
+    let beta = 90;
+
+    function headingFromOrientation(o) {
+      if (typeof o.webkitCompassHeading === "number" && Number.isFinite(o.webkitCompassHeading)) {
+        return o.webkitCompassHeading;
+      }
+      if (typeof o.alpha === "number" && Number.isFinite(o.alpha)) return o.alpha;
+      return alpha;
+    }
+
+    function draw() {
+      const { w, h, dpr } = sizeCompassCanvas(canvas);
+      drawCompassRose(g, w, h, dpr, { heading: alpha, beta });
+    }
+
+    function applyVoice() {
+      if (!built || !ctx) return;
+      const t = ctx.currentTime;
+      const heading = ((alpha % 360) + 360) % 360;
+      document.getElementById("headOut").textContent = heading.toFixed(0);
+      if (!holding) {
+        gate.gain.setTargetAtTime(0, t, 0.05);
+        vibGain.gain.setTargetAtTime(0, t, 0.05);
+        document.getElementById("cutOut").textContent = "—";
+        document.getElementById("ampOut").textContent = "—";
+        document.getElementById("vibOut").textContent = "—";
+        draw();
+        return;
+      }
+      const cut = 200 + (heading / 360) * 6000;
+      const playAmp = playAmpFromTiltAndMotion(beta, motion.amp);
+      filt.frequency.setTargetAtTime(cut, t, 0.04);
+      gate.gain.setTargetAtTime(0.06 + playAmp * 0.44, t, 0.06);
+      vibGain.gain.setTargetAtTime(motion.vibCents, t, 0.07);
+      vibOsc.frequency.setTargetAtTime(motion.vibHz, t, 0.08);
+      document.getElementById("cutOut").textContent = cut.toFixed(0);
+      document.getElementById("ampOut").textContent = `${(playAmp * 100).toFixed(0)}%`;
+      document.getElementById("vibOut").textContent = motion.vibCents.toFixed(1);
+      draw();
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      gate = ctx.createGain();
+      gate.gain.value = 0;
+      filt = ctx.createBiquadFilter();
+      filt.type = "lowpass";
+      filt.Q.value = 10;
+      osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.value = 110;
+      vibOsc = c.createOscillator();
+      vibGain = c.createGain();
+      vibOsc.type = "sine";
+      vibOsc.frequency.value = 5;
+      vibGain.gain.value = 0;
+      vibOsc.connect(vibGain);
+      vibGain.connect(osc.detune);
+      osc.connect(filt);
+      filt.connect(gate);
+      gate.connect(master);
+      osc.start();
+      vibOsc.start();
+      built = true;
+      draw();
+    }
+
+    registerAudioBoot(buildAudio);
+
+    async function initSensors() {
+      if (sensorsReady) return true;
+      const ok = await enableSensors(SENSOR_OPTS);
+      if (!ok) {
+        setStatus("status", "Allow orientation + motion in Settings", "warn");
+        draw();
+        return false;
+      }
+      onOrientation((o) => {
+        alpha = headingFromOrientation(o);
+        const b = o.beta;
+        if (typeof b === "number" && Number.isFinite(b) && b !== 0) beta = b;
+        applyVoice();
+      });
+      onMotion((data) => {
+        if (!holding) return;
+        motion = motionExpr.update(data);
+        applyVoice();
+      });
+      sensorsReady = true;
+      setStatus("status", "Hold screen to play", "ok");
+      draw();
+      return true;
+    }
+
+    wireScreenHold(document.body, {
+      async onStart() {
+        primeSensors(SENSOR_OPTS);
+        await startAudio(!built ? buildAudio : undefined);
+        await initSensors();
+        holding = true;
+        canvas.classList.add("active");
+        motionExpr.reset();
+        motion = motionExpr.update({ x: 0, y: 0, z: 0 });
+        applyVoice();
+      },
+      onEnd() {
+        holding = false;
+        canvas.classList.remove("active");
+        applyVoice();
+      },
+    });
+
+    new ResizeObserver(() => draw()).observe(canvas.parentElement);
+    requestAnimationFrame(() => draw());
+  </script>
+</body>
+</html>

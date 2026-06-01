@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Harmonizer — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell harmonizer-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Harmonizer</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Neighbourhood tonality</h2>
+    <p>Turn <strong>Audio on</strong> and allow the <strong>mic</strong>. Tap <strong>Start</strong> — the mic gathers many partials from nearby phones and voices into one <strong>chroma</strong> picture.</p>
+    <p>Over time this phone <strong>slides</strong> its pitch toward the group’s strongest notes (a shared root chord). <strong>Hold</strong> the circle to sing the aligned tone; release to listen only.</p>
+    <p><strong>Scale</strong> can stay on Auto (major vs minor from the room), or you can lock Major/Minor. <strong>Lock root</strong> freezes the detected key while you keep listening.</p>
+    <p>Works best in a circle at moderate volume; avoid covering the mic with your hand.</p>
+  </div>
+  <div class="harm-toolbar">
+    <div class="evo-actions">
+      <button type="button" class="btn btn-play" id="startBtn">Start</button>
+      <label class="slide-toggle">
+        <input type="checkbox" id="chordMode" checked />
+        Chord (Ⅰ–Ⅲ–Ⅴ)
+      </label>
+      <label class="harm-scale" for="scaleMode">Scale</label>
+      <select id="scaleMode" class="harm-select">
+        <option value="auto" selected>Auto</option>
+        <option value="major">Major</option>
+        <option value="minor">Minor</option>
+      </select>
+      <label class="slide-toggle">
+        <input type="checkbox" id="rootLock" />
+        Lock root
+      </label>
+    </div>
+    <p class="status-bar" id="status">Stopped · Audio on</p>
+    <div class="readout-row">
+      <p class="value-chip">Root <strong id="rootOut">—</strong></p>
+      <p class="value-chip">Playing <strong id="hzOut">—</strong> Hz</p>
+      <p class="value-chip">Lock <strong id="lockOut">0</strong>%</p>
+      <p class="value-chip">Peaks <strong id="peaksOut">0</strong></p>
+    </div>
+  </div>
+  <div class="main-stage harm-main">
+    <div class="harm-chroma-wrap">
+      <canvas id="chromaViz" class="harm-chroma-viz" aria-label="Chroma consensus"></canvas>
+    </div>
+    <button type="button" class="harm-hold-btn" id="holdBtn" disabled aria-label="Hold to play aligned tone">
+      <span class="harm-glow" id="glow"></span>
+      <span class="harm-hold-label">Hold</span>
+    </button>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { connectMicAnalyser, createMasterBus, getMicStream } from "../../shared/audio.js";
+    import { chromaFromSpectrum } from "../../shared/chroma-detect.js";
+    import { createHarmonyConsensus } from "../../shared/harmony-sync.js";
+
+    bindLearn();
+
+    const NOTE = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+    const chromaCanvas = document.getElementById("chromaViz");
+    const chromaWrap = chromaCanvas.parentElement;
+    const cg = chromaCanvas.getContext("2d");
+    const holdBtn = document.getElementById("holdBtn");
+    const glow = document.getElementById("glow");
+
+    let ctx, master, built = false;
+    let micStream = null;
+    let analyser = null;
+    let consensus = createHarmonyConsensus({ startHz: 220 });
+    let running = false;
+    let holding = false;
+    let raf = 0;
+    let oscs = [];
+
+    function midiLabel(m) {
+      const n = Math.round(m);
+      return `${NOTE[((n % 12) + 12) % 12]}${Math.floor(n / 12) - 1}`;
+    }
+
+    function sizeChromaCanvas() {
+      const dpr = devicePixelRatio || 1;
+      const rect = chromaWrap.getBoundingClientRect();
+      const w = Math.max(1, Math.floor(rect.width * dpr));
+      const h = Math.max(1, Math.floor(56 * dpr));
+      if (chromaCanvas.width !== w || chromaCanvas.height !== h) {
+        chromaCanvas.width = w;
+        chromaCanvas.height = h;
+      }
+      return { w, h, dpr };
+    }
+
+    function drawChroma(chroma, rootPc) {
+      const { w, h, dpr } = sizeChromaCanvas();
+      const barW = w / 12;
+      let max = 1e-6;
+      for (let i = 0; i < 12; i++) max = Math.max(max, chroma[i]);
+      cg.setTransform(1, 0, 0, 1, 0, 0);
+      cg.fillStyle = "#0f172a";
+      cg.fillRect(0, 0, w, h);
+      for (let i = 0; i < 12; i++) {
+        const norm = chroma[i] / max;
+        const bh = Math.max(4 * dpr, norm * (h - 16 * dpr));
+        cg.fillStyle = i === rootPc ? "#6ee7b7" : "#334155";
+        cg.fillRect(i * barW + 2 * dpr, h - bh, barW - 4 * dpr, bh);
+        cg.fillStyle = "#94a3b8";
+        cg.font = `${9 * dpr}px system-ui,sans-serif`;
+        cg.textAlign = "center";
+        cg.textBaseline = "bottom";
+        cg.fillText(NOTE[i], i * barW + barW / 2, h - 2 * dpr);
+      }
+    }
+
+    function drawIdleChroma() {
+      const idle = new Float32Array(12);
+      for (let i = 0; i < 12; i++) idle[i] = 0.08;
+      drawChroma(idle, 0);
+    }
+
+    function setVoiceHz(list) {
+      if (!ctx || !holding) return;
+      const t = ctx.currentTime;
+      const g = 0.14 / Math.max(1, list.length);
+      list.forEach((hz, i) => {
+        if (!oscs[i]) {
+          const osc = ctx.createOscillator();
+          const gn = ctx.createGain();
+          osc.type = "sine";
+          osc.connect(gn);
+          gn.connect(master);
+          gn.gain.value = 0;
+          osc.start();
+          oscs[i] = { osc, gn };
+        }
+        oscs[i].osc.frequency.setTargetAtTime(hz, t, 0.12);
+        oscs[i].gn.gain.setTargetAtTime(g, t, 0.08);
+      });
+      for (let i = list.length; i < oscs.length; i++) {
+        oscs[i].gn.gain.setTargetAtTime(0, t, 0.06);
+      }
+    }
+
+    function stopVoices() {
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      oscs.forEach(({ gn }) => gn.gain.setTargetAtTime(0, t, 0.05));
+      holdBtn.classList.remove("active");
+      glow.classList.remove("on");
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.42));
+      built = true;
+    }
+
+    registerAudioBoot(buildAudio, { mic: true });
+
+    async function ensureMic() {
+      if (micStream) return true;
+      try {
+        micStream = await getMicStream();
+      } catch {
+        setStatus("status", "Mic blocked", "warn");
+        return false;
+      }
+      if (!analyser) {
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 8192;
+        analyser.smoothingTimeConstant = 0.35;
+        connectMicAnalyser(ctx, micStream, analyser, { inputGain: 1.8 });
+      }
+      return true;
+    }
+
+    function listenFrame() {
+      if (!running || !analyser || !ctx) return;
+      const { chroma, peakCount } = chromaFromSpectrum(analyser, ctx.sampleRate);
+      consensus.ingest(chroma, peakCount);
+
+      const lock = consensus.lockAmount();
+      const hz = consensus.getPlayHz();
+      const rootPc = ((consensus.getRootMidi() % 12) + 12) % 12;
+
+      document.getElementById("rootOut").textContent = `${consensus.keyLabel()} · ${midiLabel(consensus.getRootMidi())}`;
+      document.getElementById("hzOut").textContent = hz.toFixed(1);
+      document.getElementById("lockOut").textContent = String(Math.round(lock * 100));
+      document.getElementById("peaksOut").textContent = consensus.getPeakEma().toFixed(0);
+      drawChroma(consensus.getChromaView(), rootPc);
+
+      if (holding) {
+        const freqs = document.getElementById("chordMode").checked ? consensus.chordHz() : [hz];
+        setVoiceHz(freqs);
+      }
+
+      raf = requestAnimationFrame(listenFrame);
+    }
+
+    async function start() {
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built) return;
+      if (!(await ensureMic())) return;
+      running = true;
+      holdBtn.disabled = false;
+      document.getElementById("startBtn").textContent = "■ Stop";
+      document.getElementById("startBtn").classList.add("active");
+      setStatus("status", "Listening… hold circle below", "ok");
+      listenFrame();
+    }
+
+    function stop() {
+      running = false;
+      holding = false;
+      cancelAnimationFrame(raf);
+      stopVoices();
+      holdBtn.disabled = true;
+      document.getElementById("startBtn").textContent = "Start";
+      document.getElementById("startBtn").classList.remove("active");
+      setStatus("status", "Stopped", "");
+      drawIdleChroma();
+    }
+
+    document.getElementById("startBtn").addEventListener("click", () => {
+      if (running) stop();
+      else void start();
+    });
+
+    holdBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (!running) return;
+      holding = true;
+      holdBtn.classList.add("active");
+      glow.classList.add("on");
+      holdBtn.setPointerCapture(e.pointerId);
+      const hz = consensus.getPlayHz();
+      const freqs = document.getElementById("chordMode").checked ? consensus.chordHz() : [hz];
+      setVoiceHz(freqs);
+    });
+
+    document.getElementById("scaleMode").addEventListener("change", (e) => {
+      consensus.setMode(e.target.value);
+    });
+
+    document.getElementById("rootLock").addEventListener("change", (e) => {
+      consensus.setRootLock(e.target.checked);
+    });
+
+    const endHold = (e) => {
+      if (!holding) return;
+      holding = false;
+      stopVoices();
+      try {
+        holdBtn.releasePointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+    };
+    holdBtn.addEventListener("pointerup", endHold);
+    holdBtn.addEventListener("pointercancel", endHold);
+    holdBtn.addEventListener("lostpointercapture", endHold);
+
+    new ResizeObserver(() => {
+      const rootPc = ((consensus.getRootMidi() % 12) + 12) % 12;
+      if (running) drawChroma(consensus.getChromaView(), rootPc);
+      else drawIdleChroma();
+    }).observe(chromaWrap);
+
+    requestAnimationFrame(() => drawIdleChroma());
+    window.addEventListener("pagehide", stop);
+  </script>
+</body>
+</html>

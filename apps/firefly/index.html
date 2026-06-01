@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Firefly — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell firefly-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Firefly</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Synchronizing pulses</h2>
+    <p>Turn <strong>Audio on</strong> and allow the <strong>mic</strong>. This phone plays a steady click; the mic listens for other pulses nearby and gently adjusts <strong>speed</strong> and <strong>timing</strong> to line up — like fireflies syncing.</p>
+    <p>Set a starting <strong>BPM</strong>, tap <strong>Start</strong>, and play in a circle with other phones. Louder speakers help the mic lock on.</p>
+    <p>Turn on <strong>Visual flash</strong> for a full-screen pulse on each beat (stronger on downbeats) — useful when you cannot hear the click.</p>
+  </div>
+  <div class="firefly-toolbar">
+    <div class="control-row">
+      <label for="bpm">Start BPM</label>
+      <input type="range" id="bpm" min="40" max="140" value="72" />
+      <span id="bpmVal">72</span>
+    </div>
+    <div class="evo-actions">
+      <button type="button" class="btn btn-play" id="startBtn">Start</button>
+      <label class="slide-toggle">
+        <input type="checkbox" id="listen" checked />
+        Listen (mic)
+      </label>
+      <label class="slide-toggle">
+        <input type="checkbox" id="visualFlash" checked />
+        Visual flash
+      </label>
+    </div>
+    <p class="status-bar" id="status">Stopped · Audio on</p>
+    <div class="readout-row">
+      <p class="value-chip">Playing <strong id="playBpm">—</strong> BPM</p>
+      <p class="value-chip">Lock <strong id="lockPct">0</strong>%</p>
+      <p class="value-chip">Phase <strong id="phaseMs">—</strong> ms</p>
+    </div>
+  </div>
+  <div class="countdown-flash firefly-beat-flash" id="beatFlash" aria-hidden="true"></div>
+  <div class="main-stage firefly-stage" id="stage" aria-hidden="true">
+    <div class="firefly-glow" id="glow"></div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus, getMicStream } from "../../shared/audio.js";
+    import { createOnsetDetector } from "../../shared/onset-detect.js";
+    import { createFireflyPulse } from "../../shared/pulse-sync.js";
+
+    bindLearn();
+
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const params = new URLSearchParams(location.search);
+    const initialBpm = params.get("bpm") ? clamp(+params.get("bpm"), 40, 140) : 72;
+    const bpmEl = document.getElementById("bpm");
+    bpmEl.value = String(initialBpm);
+    document.getElementById("bpmVal").textContent = String(initialBpm);
+
+    const glow = document.getElementById("glow");
+    const stage = document.getElementById("stage");
+    const beatFlash = document.getElementById("beatFlash");
+    const visualFlashEl = document.getElementById("visualFlash");
+    let ctx, master, built = false;
+    let engine = null;
+    let detector = null;
+    let micStream = null;
+    let running = false;
+    let ignoreOnsetUntil = 0;
+
+    function flash(downbeat = false) {
+      stage.classList.add("pulse");
+      glow.classList.add("on");
+      if (visualFlashEl.checked && beatFlash) {
+        beatFlash.classList.remove("on", "on-down");
+        beatFlash.classList.add(downbeat ? "on-down" : "on");
+        clearTimeout(flash._beatT);
+        flash._beatT = setTimeout(() => beatFlash.classList.remove("on", "on-down"), downbeat ? 140 : 70);
+      }
+      clearTimeout(flash._t);
+      flash._t = setTimeout(() => {
+        stage.classList.remove("pulse");
+        glow.classList.remove("on");
+      }, downbeat ? 120 : 90);
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.55));
+      engine = createFireflyPulse(ctx, master, {
+        bpm: +bpmEl.value,
+        level: 0.32,
+        onPulse: (t, downbeat) => {
+          flash(downbeat);
+          ignoreOnsetUntil = t + 0.11;
+        },
+        onSync: (s) => {
+          document.getElementById("playBpm").textContent = s.bpm.toFixed(1);
+          document.getElementById("lockPct").textContent = String(Math.round(s.lock * 100));
+          document.getElementById("phaseMs").textContent = s.phaseMs.toFixed(0);
+        },
+      });
+      built = true;
+    }
+
+    registerAudioBoot(buildAudio, { mic: true });
+
+    async function ensureMic() {
+      if (!document.getElementById("listen").checked) return false;
+      if (micStream) return true;
+      try {
+        micStream = await getMicStream();
+      } catch {
+        setStatus("status", "Mic blocked — solo pulse only", "warn");
+        return false;
+      }
+      if (!detector && ctx) {
+        detector = createOnsetDetector(ctx, micStream, {
+          onOnset: (t, strength) => {
+            if (t < ignoreOnsetUntil) return;
+            engine?.externalPulse(t, strength);
+          },
+        });
+      }
+      return true;
+    }
+
+    async function start() {
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built || !engine) return;
+      if (document.getElementById("listen").checked) {
+        await ensureMic();
+        detector?.start();
+      }
+      engine.setBpm(+bpmEl.value);
+      engine.start();
+      running = true;
+      document.getElementById("startBtn").textContent = "■ Stop";
+      document.getElementById("startBtn").classList.add("active");
+      setStatus("status", "Pulsing · listening for neighbours", "ok");
+    }
+
+    function stop() {
+      engine?.stop();
+      detector?.stop();
+      running = false;
+      document.getElementById("startBtn").textContent = "Start";
+      document.getElementById("startBtn").classList.remove("active");
+      document.getElementById("playBpm").textContent = "—";
+      document.getElementById("lockPct").textContent = "0";
+      document.getElementById("phaseMs").textContent = "—";
+      setStatus("status", "Stopped", "");
+    }
+
+    document.getElementById("startBtn").addEventListener("click", () => {
+      if (running) stop();
+      else void start();
+    });
+
+    document.getElementById("listen").addEventListener("change", async (e) => {
+      if (!running) return;
+      if (e.target.checked) {
+        if (await ensureMic()) detector?.start();
+      } else {
+        detector?.stop();
+      }
+    });
+
+    bpmEl.addEventListener("input", (e) => {
+      document.getElementById("bpmVal").textContent = e.target.value;
+      if (!running) engine?.setBpm(+e.target.value);
+    });
+
+    window.addEventListener("pagehide", () => {
+      stop();
+      detector?.disconnect();
+    });
+  </script>
+</body>
+</html>

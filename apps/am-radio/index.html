@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Am Radio — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell am-radio-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Am Radio</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>AM radio</h2>
+    <p>Turn <strong>Audio on</strong> (top right) and allow the <strong>mic</strong> if asked. <strong>Hold</strong> the pad — room sound drives modulation depth; drag <strong>X</strong> for carrier pitch.</p>
+    <p>Old-radio sidebands: a carrier tone is amplitude-modulated by a second oscillator shaped by mic level.</p>
+  </div>
+  <p class="status-bar" id="status">Turn Audio on · hold pad to play</p>
+  <div class="readout-row">
+    <p class="value-chip">Carrier <strong id="cHz">—</strong> Hz</p>
+    <p class="value-chip">Mod <strong id="mHz">—</strong> Hz</p>
+    <p class="value-chip">Depth <strong id="depthOut">—</strong></p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <div class="touch-dot" id="dot"></div>
+    </div>
+  </div>
+  <script type="module">
+    import {
+      bindLearn,
+      registerAudioBoot,
+      setStatus,
+      startAudio,
+    } from "../../shared/app.js";
+    import { connectMicAnalyser, createMasterBus, getMicStream } from "../../shared/audio.js";
+
+    bindLearn();
+
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let ctx, master, carrier, mod, modDepth, amp;
+    let built = false;
+    let holding = false;
+    let activeId = null;
+    let micStream = null;
+    let analyser = null;
+    let micRaf = 0;
+    let baseModHz = 120;
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.52));
+      carrier = ctx.createOscillator();
+      mod = ctx.createOscillator();
+      modDepth = ctx.createGain();
+      amp = ctx.createGain();
+      carrier.type = "sine";
+      mod.type = "sine";
+      carrier.frequency.value = 220;
+      mod.frequency.value = baseModHz;
+      modDepth.gain.value = 0.35;
+      amp.gain.value = 0;
+      mod.connect(modDepth);
+      modDepth.connect(amp.gain);
+      amp.gain.value = 0.55;
+      carrier.connect(amp);
+      amp.connect(master);
+      carrier.start();
+      mod.start();
+      built = true;
+    }
+
+    registerAudioBoot(buildAudio, { mic: true });
+
+    async function ensureMic() {
+      if (micStream) return true;
+      try {
+        micStream = await getMicStream();
+      } catch {
+        setStatus("status", "Mic blocked — fixed mod depth only", "warn");
+        return false;
+      }
+      if (!analyser && ctx) {
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        connectMicAnalyser(ctx, micStream, analyser, { inputGain: 1.4 });
+      }
+      return true;
+    }
+
+    function micLoop() {
+      if (!analyser || !ctx || !mod) return;
+      const buf = new Float32Array(analyser.fftSize);
+      analyser.getFloatTimeDomainData(buf);
+      let s = 0;
+      for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+      const rms = Math.sqrt(s / buf.length);
+      const depth = 0.12 + rms * 2.2;
+      const mHz = 40 + rms * 520;
+      baseModHz = mHz;
+      const t = ctx.currentTime;
+      modDepth.gain.setTargetAtTime(clamp(depth, 0.05, 0.85), t, 0.06);
+      mod.frequency.setTargetAtTime(mHz, t, 0.06);
+      document.getElementById("mHz").textContent = mHz.toFixed(0);
+      document.getElementById("depthOut").textContent = `${(depth * 100).toFixed(0)}%`;
+      if (holding) micRaf = requestAnimationFrame(micLoop);
+    }
+
+    function setPad(nx, ny, on) {
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const cHz = 80 * Math.pow(6, nx);
+      carrier.frequency.setTargetAtTime(cHz, t, 0.03);
+      document.getElementById("cHz").textContent = cHz.toFixed(0);
+      amp.gain.setTargetAtTime(on ? 0.55 : 0, t, on ? 0.02 : 0.06);
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${ny * 100}%`;
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built) return;
+      await ensureMic();
+      holding = true;
+      activeId = e.pointerId;
+      pad.setPointerCapture(activeId);
+      pad.classList.add("active");
+      const r = pad.getBoundingClientRect();
+      const nx = clamp((e.clientX - r.left) / r.width, 0, 1);
+      const ny = clamp((e.clientY - r.top) / r.height, 0, 1);
+      setPad(nx, ny, true);
+      cancelAnimationFrame(micRaf);
+      micLoop();
+      setStatus("status", "Playing · mic drives AM depth", "ok");
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!holding || e.pointerId !== activeId) return;
+      const r = pad.getBoundingClientRect();
+      setPad(
+        clamp((e.clientX - r.left) / r.width, 0, 1),
+        clamp((e.clientY - r.top) / r.height, 0, 1),
+        true
+      );
+    });
+
+    const end = (e) => {
+      if (e.pointerId !== activeId) return;
+      holding = false;
+      pad.classList.remove("active");
+      cancelAnimationFrame(micRaf);
+      setPad(0.5, 0.5, false);
+      setStatus("status", "Turn Audio on · hold pad to play", "");
+    };
+    pad.addEventListener("pointerup", end);
+    pad.addEventListener("pointercancel", end);
+    pad.addEventListener("lostpointercapture", end);
+  </script>
+</body>
+</html>

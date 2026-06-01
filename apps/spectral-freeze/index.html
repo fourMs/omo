@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Spectral Freeze — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell spectral-freeze-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Spectral Freeze</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Frozen spectrum pad</h2>
+    <p>Turn <strong>Audio on</strong>, tap <strong>Start cloud</strong>. Allow the <strong>mic</strong> when asked — grains spray from what the room sounds like.</p>
+    <p><strong>Hold</strong> the scope to freeze the current spectrum as a shimmering chord. Release to return to live grains.</p>
+  </div>
+  <div class="app-toolbar">
+    <button type="button" class="btn btn-sm" id="playBtn">Start cloud</button>
+  </div>
+  <p class="status-bar" id="status">Tap Start cloud or Audio on</p>
+  <div class="readout-row">
+    <p class="value-chip">Mode <strong id="modeOut">live</strong></p>
+    <p class="value-chip">Partials <strong id="partialsOut">0</strong></p>
+  </div>
+  <div class="main-stage">
+    <div id="tapZone" class="stage-fill play-grid">
+      <canvas id="scope" class="canvas-fill"></canvas>
+    </div>
+  </div>
+  <script type="module">
+    import {
+      bindLearn,
+      setStatus,
+      startAudio,
+      isAudioActive,
+      registerAudioBoot,
+    } from "../../shared/app.js";
+    import { createMasterBus, getMicStream, primeMicStream, connectMicAnalyser, unlockAudio } from "../../shared/audio.js";
+
+    bindLearn();
+    const tapZone = document.getElementById("tapZone");
+    const canvas = document.getElementById("scope");
+    const playBtn = document.getElementById("playBtn");
+    const g = canvas.getContext("2d");
+    const PARTIALS = 20;
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let ctx, master, analyser, micStream;
+    let built = false;
+    let cloudOn = false;
+    let frozen = false;
+    let scheduleTimer = null;
+    let frozenBands = null;
+    let partialOscs = [];
+    let captureBuf = null;
+    let freqData = null;
+    let holdPointer = null;
+
+    function resizeCanvas() {
+      const box = canvas.parentElement.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.floor(box.width * devicePixelRatio));
+      canvas.height = Math.max(1, Math.floor(box.height * devicePixelRatio));
+    }
+
+    function defaultCaptureBuffer(c) {
+      const len = Math.floor(c.sampleRate * 0.35);
+      const b = c.createBuffer(1, len, c.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.4;
+      return b;
+    }
+
+    function spawnGrain() {
+      if (!cloudOn || frozen || !ctx || !captureBuf) return;
+      const dur = 0.02 + Math.random() * 0.04;
+      const maxOff = captureBuf.duration - dur - 0.002;
+      if (maxOff <= 0) return;
+      const src = ctx.createBufferSource();
+      src.buffer = captureBuf;
+      src.playbackRate.value = 0.6 + Math.random() * 1.4;
+      const gn = ctx.createGain();
+      const t = ctx.currentTime;
+      src.connect(gn);
+      gn.connect(master);
+      gn.gain.setValueAtTime(0, t);
+      gn.gain.linearRampToValueAtTime(0.2, t + 0.003);
+      gn.gain.linearRampToValueAtTime(0, t + dur);
+      try {
+        src.start(t, Math.random() * maxOff, dur);
+      } catch {
+        /* skip */
+      }
+    }
+
+    function scheduleGrains() {
+      if (!cloudOn || frozen) return;
+      spawnGrain();
+      scheduleTimer = setTimeout(scheduleGrains, 30 + Math.random() * 70);
+    }
+
+    function stopSchedule() {
+      if (scheduleTimer != null) clearTimeout(scheduleTimer);
+      scheduleTimer = null;
+    }
+
+    function captureSpectrum() {
+      if (!analyser || !freqData) return null;
+      analyser.getByteFrequencyData(freqData);
+      const bands = new Float32Array(PARTIALS);
+      const binCount = freqData.length;
+      const per = binCount / PARTIALS;
+      for (let p = 0; p < PARTIALS; p++) {
+        let sum = 0;
+        const i0 = (p * per) | 0;
+        const i1 = Math.min(binCount, ((p + 1) * per) | 0);
+        for (let i = i0; i < i1; i++) sum += freqData[i];
+        bands[p] = sum / Math.max(1, i1 - i0) / 255;
+      }
+      return bands;
+    }
+
+    function hzForPartial(i) {
+      const lo = 80;
+      const hi = 6000;
+      const t = i / (PARTIALS - 1);
+      return lo * Math.pow(hi / lo, t);
+    }
+
+    function buildPartials() {
+      partialOscs.forEach(({ osc, gn }) => {
+        try {
+          gn.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
+          osc.stop(ctx.currentTime + 0.05);
+        } catch {
+          /* noop */
+        }
+      });
+      partialOscs = [];
+      if (!frozenBands) return;
+      const t = ctx.currentTime;
+      let active = 0;
+      for (let i = 0; i < PARTIALS; i++) {
+        const amp = frozenBands[i];
+        if (amp < 0.04) continue;
+        active++;
+        const osc = ctx.createOscillator();
+        const gn = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = hzForPartial(i);
+        gn.gain.value = 0;
+        osc.connect(gn);
+        gn.connect(master);
+        osc.start(t);
+        gn.gain.setTargetAtTime(amp * 0.14, t + 0.02, 0.04);
+        partialOscs.push({ osc, gn });
+      }
+      document.getElementById("partialsOut").textContent = String(active);
+    }
+
+    function releasePartials() {
+      const t = ctx.currentTime;
+      partialOscs.forEach(({ osc, gn }) => {
+        gn.gain.setTargetAtTime(0, t, 0.05);
+        try {
+          osc.stop(t + 0.08);
+        } catch {
+          /* noop */
+        }
+      });
+      partialOscs = [];
+      document.getElementById("partialsOut").textContent = "0";
+    }
+
+    function freezeSpectrum() {
+      frozenBands = captureSpectrum();
+      if (!frozenBands) return;
+      frozen = true;
+      stopSchedule();
+      buildPartials();
+      document.getElementById("modeOut").textContent = "frozen";
+      setStatus("status", "Spectrum frozen — release to continue", "ok");
+    }
+
+    function unfreeze() {
+      if (!frozen) return;
+      frozen = false;
+      frozenBands = null;
+      releasePartials();
+      document.getElementById("modeOut").textContent = "live";
+      if (cloudOn) scheduleGrains();
+    }
+
+    function draw() {
+      if (!cloudOn) return;
+      resizeCanvas();
+      const w = canvas.width;
+      const h = canvas.height;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.fillStyle = "#0f172a";
+      g.fillRect(0, 0, w, h);
+      const data = frozenBands || captureSpectrum();
+      if (!data) {
+        requestAnimationFrame(draw);
+        return;
+      }
+      const barW = w / PARTIALS;
+      for (let i = 0; i < PARTIALS; i++) {
+        const bh = data[i] * (h - 8);
+        g.fillStyle = frozen ? "#fbbf24" : "#6ee7b7";
+        g.fillRect(i * barW + 1, h - bh, barW - 2, bh);
+      }
+      requestAnimationFrame(draw);
+    }
+
+    function startCloud() {
+      if (!built || cloudOn) return;
+      cloudOn = true;
+      playBtn.textContent = "Cloud on";
+      playBtn.classList.add("btn-play");
+      setStatus("status", "Live grains — hold scope to freeze", "ok");
+      scheduleGrains();
+      draw();
+    }
+
+    function stopCloud() {
+      cloudOn = false;
+      frozen = false;
+      stopSchedule();
+      releasePartials();
+      playBtn.textContent = "Start cloud";
+      playBtn.classList.remove("btn-play");
+      document.getElementById("modeOut").textContent = "off";
+    }
+
+    function startGrainCapture(stream) {
+      const src = ctx.createMediaStreamSource(stream);
+      const cap = ctx.createGain();
+      cap.gain.value = 1.4;
+      src.connect(cap);
+      const recProc = ctx.createScriptProcessor(4096, 1, 1);
+      const silent = ctx.createGain();
+      silent.gain.value = 0;
+      let chunks = [];
+      let total = 0;
+      const maxLen = Math.floor(ctx.sampleRate * 0.4);
+      recProc.onaudioprocess = (e) => {
+        if (total >= maxLen) return;
+        const ch = e.inputBuffer.getChannelData(0);
+        const copy = new Float32Array(ch.length);
+        copy.set(ch);
+        chunks.push(copy);
+        total += copy.length;
+        if (total >= maxLen) {
+          const buf = ctx.createBuffer(1, total, ctx.sampleRate);
+          const out = buf.getChannelData(0);
+          let off = 0;
+          for (const chunk of chunks) {
+            out.set(chunk, off);
+            off += chunk.length;
+          }
+          captureBuf = buf;
+          recProc.onaudioprocess = null;
+          try {
+            recProc.disconnect();
+            cap.disconnect();
+            src.disconnect();
+          } catch {
+            /* noop */
+          }
+        }
+      };
+      cap.connect(recProc);
+      recProc.connect(silent);
+      silent.connect(ctx.destination);
+    }
+
+    async function boot(c) {
+      ctx = c;
+      if (built) {
+        if (ctx.state === "suspended") await unlockAudio(ctx);
+        if (cloudOn && !frozen) scheduleGrains();
+        return;
+      }
+      ({ master } = createMasterBus(ctx, 0.58));
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.65;
+      freqData = new Uint8Array(analyser.frequencyBinCount);
+      captureBuf = defaultCaptureBuffer(ctx);
+      try {
+        micStream = await getMicStream();
+        connectMicAnalyser(ctx, micStream, analyser, { inputGain: 1.5 });
+        startGrainCapture(micStream);
+      } catch {
+        setStatus("status", "Mic blocked — using noise buffer", "warn");
+      }
+      built = true;
+    }
+
+    registerAudioBoot(boot, { mic: true });
+
+    async function ensurePlaying() {
+      primeMicStream();
+      await startAudio(boot);
+      if (!built) return;
+      if (!cloudOn) startCloud();
+    }
+
+    playBtn.addEventListener("click", () => {
+      if (cloudOn) {
+        stopCloud();
+        setStatus("status", "Stopped", "");
+        return;
+      }
+      void ensurePlaying();
+    });
+
+    document.getElementById("audioToggle")?.addEventListener("click", () => {
+      setTimeout(() => {
+        if (!isAudioActive()) stopCloud();
+      }, 0);
+    });
+
+    tapZone.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      void ensurePlaying().then(() => {
+        if (!built) return;
+        holdPointer = e.pointerId;
+        tapZone.setPointerCapture(e.pointerId);
+        freezeSpectrum();
+      });
+    });
+
+    const endHold = (e) => {
+      if (e.pointerId !== holdPointer) return;
+      holdPointer = null;
+      unfreeze();
+    };
+    tapZone.addEventListener("pointerup", endHold);
+    tapZone.addEventListener("pointercancel", endHold);
+    tapZone.addEventListener("lostpointercapture", endHold);
+
+    new ResizeObserver(resizeCanvas).observe(canvas.parentElement);
+  </script>
+</body>
+</html>

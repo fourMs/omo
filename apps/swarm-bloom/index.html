@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Swarm Bloom — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell swarm-bloom-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Swarm Bloom</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Listening soundscape</h2>
+    <p>Turn <strong>Audio on</strong> and allow the <strong>mic</strong>. Tap <strong>Start</strong> — this phone listens like <strong>Neighbourhood Chord</strong> (chroma from the room) and entrains rhythm like <strong>Firefly</strong> (mic pulses from neighbours).</p>
+    <p>A layered <strong>drone choir</strong> slides toward the group key; <strong>sparse clicks and pings</strong> keep it alive. Every few bars a small <strong>genetic algorithm</strong> breeds new voicing and patterns that fit what it hears.</p>
+    <p>Play in a circle at moderate volume. Each phone evolves differently — together they form a shifting harmonized texture.</p>
+    <p><strong>Evolve now</strong> forces a new generation. <strong>Visual pulse</strong> flashes on rhythmic hits.</p>
+  </div>
+  <div class="swarm-toolbar">
+    <div class="control-row">
+      <label for="bpm">Start BPM</label>
+      <input type="range" id="bpm" min="48" max="100" value="68" />
+      <span id="bpmVal">68</span>
+    </div>
+    <div class="evo-actions">
+      <button type="button" class="btn btn-play" id="startBtn">Start</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="evolveBtn">Evolve now</button>
+      <label class="slide-toggle">
+        <input type="checkbox" id="listen" checked />
+        Listen (mic)
+      </label>
+      <label class="slide-toggle">
+        <input type="checkbox" id="visualFlash" checked />
+        Visual pulse
+      </label>
+      <label class="harm-scale" for="scaleMode">Scale</label>
+      <select id="scaleMode" class="harm-select">
+        <option value="auto" selected>Auto</option>
+        <option value="major">Major</option>
+        <option value="minor">Minor</option>
+      </select>
+    </div>
+    <p class="status-bar" id="status">Stopped · Audio on</p>
+    <div class="readout-row">
+      <p class="value-chip">Key <strong id="keyOut">—</strong></p>
+      <p class="value-chip">BPM <strong id="playBpm">—</strong></p>
+      <p class="value-chip">Harmony <strong id="lockOut">0</strong>%</p>
+      <p class="value-chip">Pulse <strong id="pulseLock">0</strong>%</p>
+      <p class="value-chip">Gen <strong id="genOut">0</strong> · fit <strong id="fitOut">—</strong></p>
+    </div>
+  </div>
+  <div class="countdown-flash swarm-beat-flash" id="beatFlash" aria-hidden="true"></div>
+  <div class="main-stage swarm-main">
+    <div class="harm-chroma-wrap">
+      <canvas id="chromaViz" class="harm-chroma-viz" aria-label="Room chroma"></canvas>
+    </div>
+    <div class="swarm-glow-stage" id="stage">
+      <div class="swarm-glow" id="glow"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { connectMicAnalyser, createMasterBus, getMicStream } from "../../shared/audio.js";
+    import { chromaFromSpectrum } from "../../shared/chroma-detect.js";
+    import { createOnsetDetector } from "../../shared/onset-detect.js";
+    import { createEvoSoundscapeEngine } from "../../shared/evo-soundscape.js";
+
+    bindLearn();
+
+    const NOTE = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+    const chromaCanvas = document.getElementById("chromaViz");
+    const chromaWrap = chromaCanvas.parentElement;
+    const cg = chromaCanvas.getContext("2d");
+    const glow = document.getElementById("glow");
+    const stage = document.getElementById("stage");
+    const beatFlash = document.getElementById("beatFlash");
+    const visualFlashEl = document.getElementById("visualFlash");
+    const phoneSeed = ((Math.random() * 1000) | 0) % 3;
+
+    let ctx, master, built = false;
+    let engine = null;
+    let micStream = null;
+    let analyser = null;
+    let detector = null;
+    let running = false;
+    let raf = 0;
+
+    function sizeChromaCanvas() {
+      const dpr = devicePixelRatio || 1;
+      const rect = chromaWrap.getBoundingClientRect();
+      const w = Math.max(1, Math.floor(rect.width * dpr));
+      const h = Math.max(1, Math.floor(56 * dpr));
+      if (chromaCanvas.width !== w || chromaCanvas.height !== h) {
+        chromaCanvas.width = w;
+        chromaCanvas.height = h;
+      }
+      return { w, h, dpr };
+    }
+
+    function drawChroma(chroma, rootPc) {
+      const { w, h, dpr } = sizeChromaCanvas();
+      const barW = w / 12;
+      let max = 1e-6;
+      for (let i = 0; i < 12; i++) max = Math.max(max, chroma[i]);
+      cg.setTransform(1, 0, 0, 1, 0, 0);
+      cg.fillStyle = "#0f172a";
+      cg.fillRect(0, 0, w, h);
+      for (let i = 0; i < 12; i++) {
+        const norm = chroma[i] / max;
+        const bh = Math.max(4 * dpr, norm * (h - 16 * dpr));
+        cg.fillStyle = i === rootPc ? "#a78bfa" : "#334155";
+        cg.fillRect(i * barW + 2 * dpr, h - bh, barW - 4 * dpr, bh);
+        cg.fillStyle = "#94a3b8";
+        cg.font = `${9 * dpr}px system-ui,sans-serif`;
+        cg.textAlign = "center";
+        cg.fillText(NOTE[i], i * barW + barW / 2, h - 2 * dpr);
+      }
+    }
+
+    function drawIdle() {
+      const idle = new Float32Array(12);
+      for (let i = 0; i < 12; i++) idle[i] = 0.08;
+      drawChroma(idle, 0);
+    }
+
+    function flashRhythm(strong = false) {
+      stage.classList.add("pulse");
+      glow.classList.add("on");
+      if (visualFlashEl.checked && beatFlash) {
+        beatFlash.classList.remove("on", "on-strong");
+        beatFlash.classList.add(strong ? "on-strong" : "on");
+        clearTimeout(flashRhythm._t);
+        flashRhythm._t = setTimeout(() => beatFlash.classList.remove("on", "on-strong"), strong ? 100 : 55);
+      }
+      clearTimeout(flashRhythm._s);
+      flashRhythm._s = setTimeout(() => {
+        stage.classList.remove("pulse");
+        glow.classList.remove("on");
+      }, strong ? 100 : 70);
+    }
+
+    function refreshReadouts(sync = {}) {
+      const st = engine?.getState();
+      if (!st) return;
+      document.getElementById("keyOut").textContent = st.key;
+      document.getElementById("playBpm").textContent = (sync.bpm ?? st.bpm).toFixed(1);
+      document.getElementById("lockOut").textContent = String(Math.round(st.lock * 100));
+      document.getElementById("pulseLock").textContent = String(Math.round((sync.lock ?? 0) * 100));
+      document.getElementById("genOut").textContent = String(st.generation);
+      document.getElementById("fitOut").textContent = (st.fitness * 100).toFixed(0) + "%";
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.48));
+      engine = createEvoSoundscapeEngine(ctx, master, {
+        bpm: +document.getElementById("bpm").value,
+        registerSeed: phoneSeed,
+        onPulse: (t, downbeat) => {
+          engine.setIgnoreOnsetUntil(t + 0.1);
+          if (downbeat) flashRhythm(true);
+        },
+        onSync: (s) => refreshReadouts(s),
+        onRhythm: (t, hit) => {
+          if (hit !== 0) flashRhythm(hit === 3);
+        },
+        onEvolve: () => refreshReadouts(),
+      });
+      built = true;
+    }
+
+    registerAudioBoot(buildAudio, { mic: true });
+
+    async function ensureMic() {
+      if (!document.getElementById("listen").checked) return false;
+      if (micStream) return true;
+      try {
+        micStream = await getMicStream();
+      } catch {
+        setStatus("status", "Mic blocked — drones only", "warn");
+        return false;
+      }
+      if (!analyser && ctx) {
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 8192;
+        analyser.smoothingTimeConstant = 0.35;
+        connectMicAnalyser(ctx, micStream, analyser, { inputGain: 1.7 });
+      }
+      if (!detector && ctx) {
+        detector = createOnsetDetector(ctx, micStream, {
+          onOnset: (t, strength) => engine?.externalOnset(t, strength),
+        });
+      }
+      return true;
+    }
+
+    function listenFrame() {
+      if (!running || !analyser || !engine) return;
+      const { chroma, peakCount } = chromaFromSpectrum(analyser, ctx.sampleRate);
+      engine.ingestChroma(chroma, peakCount);
+      drawChroma(engine.getChromaView(), engine.getRootPc());
+      refreshReadouts();
+      raf = requestAnimationFrame(listenFrame);
+    }
+
+    async function start() {
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built || !engine) return;
+      engine.setBpm(+document.getElementById("bpm").value);
+      engine.consensus.setMode(document.getElementById("scaleMode").value);
+      if (document.getElementById("listen").checked) {
+        if (await ensureMic()) detector?.start();
+      }
+      engine.start();
+      running = true;
+      document.getElementById("startBtn").textContent = "■ Stop";
+      document.getElementById("startBtn").classList.add("active");
+      setStatus("status", "Bloom · listening & evolving", "ok");
+      listenFrame();
+    }
+
+    function stop() {
+      running = false;
+      cancelAnimationFrame(raf);
+      engine?.stop();
+      detector?.stop();
+      document.getElementById("startBtn").textContent = "Start";
+      document.getElementById("startBtn").classList.remove("active");
+      setStatus("status", "Stopped", "");
+      drawIdle();
+    }
+
+    document.getElementById("startBtn").addEventListener("click", () => {
+      if (running) stop();
+      else void start();
+    });
+
+    document.getElementById("evolveBtn").addEventListener("click", () => {
+      if (!running || !engine) return;
+      engine.nudgeEvolution();
+      refreshReadouts();
+    });
+
+    document.getElementById("listen").addEventListener("change", async (e) => {
+      if (!running) return;
+      if (e.target.checked) {
+        if (await ensureMic()) detector?.start();
+      } else detector?.stop();
+    });
+
+    document.getElementById("scaleMode").addEventListener("change", (e) => {
+      engine?.consensus.setMode(e.target.value);
+    });
+
+    document.getElementById("bpm").addEventListener("input", (e) => {
+      document.getElementById("bpmVal").textContent = e.target.value;
+      if (running) engine?.setBpm(+e.target.value);
+    });
+
+    new ResizeObserver(() => {
+      if (running && engine) drawChroma(engine.getChromaView(), engine.getRootPc());
+      else drawIdle();
+    }).observe(chromaWrap);
+
+    drawIdle();
+    window.addEventListener("pagehide", () => {
+      stop();
+      detector?.disconnect();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Chaos Attractor — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell chaos-attractor-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Chaos Attractor</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Chaos controls</h2>
+    <p>Turn <strong>Audio on</strong>, allow <strong>motion</strong> if asked. <strong>Hold</strong> the pad — a logistic map and Lorenz attractor steer filter, pitch, and level. <strong>Tap</strong> to reseed; tilt perturbs the orbit.</p>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Cutoff <strong id="cutOut">—</strong></p>
+    <p class="value-chip">Detune <strong id="detOut">—</strong></p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <canvas id="trail" class="chaos-trail"></canvas>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import {
+      chaosToControls,
+      createLogisticMap,
+      createLorenzAttractor,
+    } from "../../shared/chaos-params.js";
+    import { enableSensors, onMotion, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+    const pad = document.getElementById("pad");
+    const trail = document.getElementById("trail");
+    const tg = trail.getContext("2d");
+    const SENSOR_OPTS = { needMotion: true, needOrientation: false };
+
+    let ctx, master, osc, filter, amp;
+    let built = false;
+    let holding = false;
+    let logistic = createLogisticMap(0.41);
+    let lorenz = createLorenzAttractor(0.2);
+    const trailPts = [];
+    let raf = 0;
+
+    function seedFromTouch(nx, ny) {
+      logistic = createLogisticMap(0.15 + nx * 0.7);
+      lorenz = createLorenzAttractor(ny);
+      trailPts.length = 0;
+    }
+
+    function buildVoice(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.48));
+      osc = ctx.createOscillator();
+      filter = ctx.createBiquadFilter();
+      amp = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.value = 110;
+      filter.type = "lowpass";
+      filter.Q.value = 4;
+      amp.gain.value = 0;
+      osc.connect(filter);
+      filter.connect(amp);
+      amp.connect(master);
+      osc.start();
+      built = true;
+      void enableSensors(SENSOR_OPTS).then((ok) => {
+        if (!ok) return;
+        onMotion(({ rotAlpha, rotBeta, rotGamma }) => {
+          if (!holding) return;
+          lorenz.nudge(rotBeta * 0.0004, rotGamma * 0.0004, rotAlpha * 0.0002);
+        });
+      });
+      loop();
+    }
+
+    function drawTrail() {
+      const box = pad.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      const w = Math.max(1, Math.floor(box.width * dpr));
+      const h = Math.max(1, Math.floor(box.height * dpr));
+      if (trail.width !== w || trail.height !== h) {
+        trail.width = w;
+        trail.height = h;
+      }
+      tg.fillStyle = "rgba(15, 23, 42, 0.25)";
+      tg.fillRect(0, 0, w, h);
+      if (trailPts.length < 2) return;
+      tg.strokeStyle = "#6ee7b7";
+      tg.lineWidth = 1.5 * dpr;
+      tg.beginPath();
+      trailPts.forEach((p, i) => {
+        const x = (p.x + 20) / 40 * w;
+        const y = (1 - (p.z + 10) / 50) * h;
+        if (i === 0) tg.moveTo(x, y);
+        else tg.lineTo(x, y);
+      });
+      tg.stroke();
+    }
+
+    function loop() {
+      if (!built || !ctx) return;
+      if (holding) {
+        logistic.step();
+        const p = lorenz.step();
+        trailPts.push({ ...p });
+        if (trailPts.length > 120) trailPts.shift();
+        const ctl = chaosToControls(logistic, lorenz);
+        const t = ctx.currentTime;
+        filter.frequency.setTargetAtTime(ctl.cutoff, t, 0.04);
+        osc.detune.setTargetAtTime(ctl.detune * 100, t, 0.05);
+        amp.gain.setTargetAtTime(ctl.amp, t, 0.03);
+        document.getElementById("cutOut").textContent = `${ctl.cutoff | 0}`;
+        document.getElementById("detOut").textContent = `${ctl.detune.toFixed(1)} st`;
+        drawTrail();
+      }
+      raf = requestAnimationFrame(loop);
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      primeSensors(SENSOR_OPTS);
+      await startAudio(!built ? buildVoice : undefined);
+      if (!built) return;
+      const r = pad.getBoundingClientRect();
+      const nx = (e.clientX - r.left) / r.width;
+      const ny = (e.clientY - r.top) / r.height;
+      seedFromTouch(nx, ny);
+      holding = true;
+      pad.classList.add("active");
+      pad.setPointerCapture(e.pointerId);
+    });
+
+    const stop = (e) => {
+      if (!holding) return;
+      holding = false;
+      pad.classList.remove("active");
+      if (ctx) amp.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
+    };
+    pad.addEventListener("pointerup", stop);
+    pad.addEventListener("pointercancel", stop);
+    pad.addEventListener("lostpointercapture", stop);
+  </script>
+</body>
+</html>

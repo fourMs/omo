@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Fm Matrix — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .matrix-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem;
+      padding: 0.35rem 0.5rem;
+      flex-shrink: 0;
+    }
+    .matrix-grid button {
+      min-height: 52px;
+      font-size: 0.68rem;
+      line-height: 1.25;
+      text-align: center;
+    }
+    .matrix-grid button.active {
+      border-color: var(--accent);
+      background: rgba(110, 231, 183, 0.12);
+    }
+    .matrix-grid .muted { color: var(--muted); font-size: 0.62rem; }
+  </style>
+</head>
+<body class="app-shell fm-matrix-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Fm Matrix</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>2×2 FM routing</h2>
+    <p>Turn <strong>Audio on</strong>. Pick a routing preset, then hold the pad — <strong>X</strong> = pitch, <strong>Y</strong> = depth.</p>
+    <p><strong>M → C</strong> classic FM · <strong>M → M</strong> self-mod · <strong>Parallel</strong> C+M out · <strong>Chaos</strong> M→C + feedback.</p>
+  </div>
+  <div class="matrix-grid" id="matrix">
+    <button type="button" data-p="0" class="active">M → C<br /><span class="muted">Classic FM</span></button>
+    <button type="button" data-p="1">M → M<br /><span class="muted">Self-mod</span></button>
+    <button type="button" data-p="2">Parallel<br /><span class="muted">C + M out</span></button>
+    <button type="button" data-p="3">Chaos<br /><span class="muted">M→C + M fb</span></button>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Carrier <strong id="cHz">220</strong> Hz</p>
+    <p class="value-chip">Depth <strong id="depthOut">0.5</strong></p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid"><div class="touch-dot" id="dot"></div></div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+
+    bindLearn();
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    let ctx, master, built = false;
+    let preset = 0;
+    let activePointer = null;
+    let carrier, mod, modGain, fbGain, ampGain, modAmp;
+
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const mapX = (nx) => 55 * Math.pow(660 / 55, nx);
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      carrier = ctx.createOscillator();
+      mod = ctx.createOscillator();
+      modGain = ctx.createGain();
+      fbGain = ctx.createGain();
+      ampGain = ctx.createGain();
+      modAmp = ctx.createGain();
+      carrier.type = mod.type = "sine";
+      modGain.gain.value = 0;
+      fbGain.gain.value = 0;
+      ampGain.gain.value = 0;
+      modAmp.gain.value = 0;
+      mod.connect(modGain);
+      mod.connect(modAmp);
+      carrier.connect(ampGain);
+      ampGain.connect(master);
+      modAmp.connect(master);
+      carrier.start();
+      mod.start();
+      built = true;
+      applyPreset();
+    }
+
+    function applyPreset() {
+      try { modGain.disconnect(); } catch { /* noop */ }
+      try { fbGain.disconnect(); } catch { /* noop */ }
+      fbGain.gain.value = 0;
+      const r = ["mc", "cm", "par", "chaos"][preset];
+      if (r === "mc") modGain.connect(carrier.frequency);
+      else if (r === "cm") {
+        modGain.connect(mod.frequency);
+      } else if (r === "chaos") {
+        modGain.connect(carrier.frequency);
+        fbGain.gain.value = 0.4;
+        modGain.connect(fbGain);
+        fbGain.connect(mod.frequency);
+      }
+    }
+
+    function setFromEvent(ev) {
+      const rect = pad.getBoundingClientRect();
+      const nx = clamp((ev.clientX - rect.left) / rect.width, 0, 1);
+      const ny = clamp((ev.clientY - rect.top) / rect.height, 0, 1);
+      const cf = mapX(nx);
+      const depth = 1 - ny;
+      const t = ctx.currentTime;
+      carrier.frequency.setTargetAtTime(cf, t, 0.02);
+      mod.frequency.setTargetAtTime(cf * (0.5 + depth * 2.5), t, 0.02);
+      modGain.gain.setTargetAtTime(30 + depth * 500, t, 0.03);
+      if (preset === 1) mod.frequency.setTargetAtTime(cf * (2.5 + depth * 4), t, 0.02);
+      ampGain.gain.setTargetAtTime(0.1 + depth * 0.2, t, 0.02);
+      modAmp.gain.setTargetAtTime(preset === 2 ? depth * 0.14 : 0, t, 0.02);
+      document.getElementById("cHz").textContent = cf.toFixed(0);
+      document.getElementById("depthOut").textContent = depth.toFixed(2);
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${ny * 100}%`;
+    }
+
+    document.querySelectorAll("#matrix button").forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll("#matrix button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        preset = +btn.dataset.p;
+        if (built) applyPreset();
+      };
+    });
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await startAudio(!built ? buildAudio : undefined);
+      activePointer = e.pointerId;
+      pad.setPointerCapture(e.pointerId);
+      pad.classList.add("active");
+      setFromEvent(e);
+    });
+    pad.addEventListener("pointermove", (e) => {
+      if (!built || e.pointerId !== activePointer) return;
+      setFromEvent(e);
+    });
+    const stop = (e) => {
+      if (e.pointerId !== activePointer) return;
+      pad.classList.remove("active");
+      ampGain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      modAmp.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      activePointer = null;
+    };
+    pad.addEventListener("pointerup", stop);
+    pad.addEventListener("pointercancel", stop);
+    pad.addEventListener("lostpointercapture", stop);
+  </script>
+</body>
+</html>

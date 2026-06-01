@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Fm Touch — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Fm Touch</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>FM synthesis</h2>
+    <p>Turn <strong>Audio on</strong>, pick <strong>mod source</strong>, then hold the pad. <strong>X</strong> = carrier pitch.</p>
+    <p><strong>Finger</strong>: <strong>Y</strong> = modulator pitch &amp; depth. <strong>Tilt</strong>: <strong>Y</strong> = volume, tilt = modulator.</p>
+  </div>
+  <div class="control-row" style="margin:0 0.35rem">
+    <label for="modSelect">Mod</label>
+    <select id="modSelect">
+      <option value="finger">Finger</option>
+      <option value="tilt">Tilt</option>
+    </select>
+  </div>
+  <div class="main-stage">
+    <div id="playArea" class="stage-fill play-grid">
+      <div class="touch-dot" id="dot"></div>
+    </div>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Carrier <strong id="carrierHz">220</strong> Hz</p>
+    <p class="value-chip" id="modReadout">Mod <strong id="modHz">110</strong> Hz</p>
+    <p class="value-chip hidden" id="ampReadout">Amp <strong id="ampValue">0</strong></p>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+    const playArea = document.getElementById("playArea");
+    const dot = document.getElementById("dot");
+    const modSelect = document.getElementById("modSelect");
+    const modReadout = document.getElementById("modReadout");
+    const ampReadout = document.getElementById("ampReadout");
+    const SENSOR_OPTS = { needMotion: false, needOrientation: true };
+    let ctx, master, carrierOsc, modOsc, modGain, ampGain;
+    let built = false;
+    let tiltReady = false;
+    let activePointerId = null;
+    let modMode = new URLSearchParams(location.search).get("mod") === "tilt" ? "tilt" : "finger";
+    if (modMode === "tilt") modSelect.value = "tilt";
+
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const safeNum = (v, fb) => (typeof v === "number" && Number.isFinite(v) ? v : fb);
+    const mapX = (nx) => 90 * Math.pow(880 / 90, nx);
+    const mapY = (ny) => 40 * Math.pow(1200 / 40, 1 - ny);
+    const mapTilt = (t) => 30 * Math.pow(1600 / 30, t);
+    const tiltAmount = (beta, gamma) => {
+      const b = clamp(safeNum(beta, 45), 0, 90);
+      const g = clamp(safeNum(gamma, 0), -90, 90);
+      return clamp(Math.sqrt(b * b + g * g) / 90, 0, 1);
+    };
+
+    modSelect.addEventListener("change", () => {
+      modMode = modSelect.value;
+      const u = new URL(location.href);
+      if (modMode === "tilt") u.searchParams.set("mod", "tilt");
+      else u.searchParams.delete("mod");
+      history.replaceState({}, "", u);
+      modReadout.classList.toggle("hidden", modMode === "tilt");
+      ampReadout.classList.toggle("hidden", modMode !== "tilt");
+    });
+    modReadout.classList.toggle("hidden", modMode === "tilt");
+    ampReadout.classList.toggle("hidden", modMode !== "tilt");
+
+    function buildVoice(c) {
+      ctx = c;
+      ({ master } = createMasterBus(ctx, 0.55));
+      carrierOsc = ctx.createOscillator();
+      modOsc = ctx.createOscillator();
+      modGain = ctx.createGain();
+      ampGain = ctx.createGain();
+      carrierOsc.type = modOsc.type = "sine";
+      carrierOsc.frequency.value = 220;
+      modOsc.frequency.value = 110;
+      modGain.gain.value = 180;
+      ampGain.gain.value = 0;
+      modOsc.connect(modGain);
+      modGain.connect(carrierOsc.frequency);
+      carrierOsc.connect(ampGain);
+      ampGain.connect(master);
+      carrierOsc.start();
+      modOsc.start();
+      built = true;
+    }
+
+    async function enableTilt() {
+      if (tiltReady) return;
+      primeSensors(SENSOR_OPTS);
+      if (await enableSensors(SENSOR_OPTS)) {
+        tiltReady = true;
+        onOrientation((o) => {
+          if (!built || modMode !== "tilt" || activePointerId == null) return;
+          const modHz = mapTilt(tiltAmount(o.beta, o.gamma));
+          modOsc.frequency.setTargetAtTime(modHz, ctx.currentTime, 0.04);
+          document.getElementById("modHz").textContent = modHz.toFixed(0);
+        });
+      }
+    }
+
+    function setFromEvent(ev) {
+      const rect = playArea.getBoundingClientRect();
+      const x = clamp(ev.clientX - rect.left, 0, rect.width);
+      const y = clamp(ev.clientY - rect.top, 0, rect.height);
+      const nx = rect.width > 0 ? x / rect.width : 0;
+      const ny = rect.height > 0 ? y / rect.height : 0;
+      const t = ctx.currentTime;
+      carrierOsc.frequency.setTargetAtTime(mapX(nx), t, 0.02);
+      document.getElementById("carrierHz").textContent = mapX(nx).toFixed(0);
+      dot.style.left = `${(nx * 100).toFixed(2)}%`;
+      dot.style.top = `${(ny * 100).toFixed(2)}%`;
+      if (modMode === "finger") {
+        modOsc.frequency.setTargetAtTime(mapY(ny), t, 0.02);
+        modGain.gain.setTargetAtTime(40 + (1 - ny) * 420, t, 0.03);
+        document.getElementById("modHz").textContent = mapY(ny).toFixed(0);
+        ampGain.gain.setTargetAtTime(0.24, t, 0.02);
+      } else {
+        const amp = (1 - ny) * 0.35;
+        ampGain.gain.setTargetAtTime(amp, t, 0.02);
+        document.getElementById("ampValue").textContent = amp.toFixed(2);
+      }
+    }
+
+    playArea.addEventListener("pointerdown", async (ev) => {
+      ev.preventDefault();
+      if (modMode === "tilt") void enableTilt();
+      await startAudio(!built ? buildVoice : undefined);
+      activePointerId = ev.pointerId;
+      playArea.setPointerCapture(activePointerId);
+      playArea.classList.add("active");
+      setFromEvent(ev);
+      ampGain.gain.cancelScheduledValues(ctx.currentTime);
+      ampGain.gain.setTargetAtTime(0.24, ctx.currentTime, 0.01);
+    });
+
+    playArea.addEventListener("pointermove", (ev) => {
+      if (!built || ev.pointerId !== activePointerId) return;
+      ev.preventDefault();
+      setFromEvent(ev);
+    });
+
+    const stop = (ev) => {
+      if (!built || ev.pointerId !== activePointerId) return;
+      playArea.classList.remove("active");
+      ampGain.gain.cancelScheduledValues(ctx.currentTime);
+      ampGain.gain.setTargetAtTime(0, ctx.currentTime, 0.03);
+      activePointerId = null;
+    };
+
+    playArea.addEventListener("pointerup", stop);
+    playArea.addEventListener("pointercancel", stop);
+    playArea.addEventListener("lostpointercapture", stop);
+  </script>
+</body>
+</html>

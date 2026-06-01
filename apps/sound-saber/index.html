@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Sound Saber — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell motion-wah-app sound-saber-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Sound Saber</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Sound Saber</h2>
+    <p>Turn <strong>Audio on</strong>, then <strong>hold</strong> the pad and swing the phone like a saber rod. Allow <strong>motion</strong> (and orientation on iPhone).</p>
+    <p><strong>Speed</strong> → loudness · <strong>tilt height</strong> → filter · <strong>horizontal / vertical swing</strong> → twin delay lines · <strong>pointing</strong> → ring modulation.</p>
+    <p>Based on the fourMs <a href="https://github.com/fourMs/MoCap-Synthesiser">MoCap-Synthesiser</a> <code>fSM.soundsaber</code> patch (pulse, delays, ring mod, bandpass). Research: Nymoen et al., NIME 2011 — <a href="https://urn.nb.no/URN:NBN:no-29584">URN:NBN:no-29584</a>.</p>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Speed <strong id="velOut">—</strong></p>
+    <p class="value-chip">Cutoff <strong id="cutOut">—</strong> Hz</p>
+    <p class="value-chip">Delay <strong id="dlyOut">—</strong> ms</p>
+  </div>
+  <div class="main-stage">
+    <div class="touch-zone saber-beam" id="touchZone">
+      <div class="phone-icon" id="phone"></div>
+      <div class="motion-meters">
+        <label class="motion-meter-label">↔ horiz</label>
+        <div class="meter"><div class="meter-fill" id="meterHoriz"></div></div>
+        <label class="motion-meter-label">↕ vert</label>
+        <div class="meter"><div class="meter-fill" id="meterVert"></div></div>
+        <label class="motion-meter-label">⚡ amp</label>
+        <div class="meter"><div class="meter-fill meter-fill-warm" id="meterAmp"></div></div>
+      </div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { createMotionFeatures, createSoundSaberVoice } from "../../shared/sound-saber.js";
+    import { enableSensors, onMotion, onOrientation, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+    const touchZone = document.getElementById("touchZone");
+    const phone = document.getElementById("phone");
+    const meterHoriz = document.getElementById("meterHoriz");
+    const meterVert = document.getElementById("meterVert");
+    const meterAmp = document.getElementById("meterAmp");
+    const SENSOR_OPTS = { needMotion: true, needOrientation: true };
+
+    const features = createMotionFeatures();
+    let ctx, master, voice, built = false;
+    let sensorsOn = false;
+    let holding = false;
+    let activePointer = null;
+    let alpha = 0;
+    let beta = 45;
+
+    function updateUi(f) {
+      const hor = Math.min(1, f.horizontalVelocity / 3.5);
+      const vert = Math.min(1, f.deltaZ / 3.5);
+      const amp = Math.min(1, f.absoluteVelocity / 3.2);
+      meterHoriz.style.width = `${hor * 100}%`;
+      meterVert.style.width = `${vert * 100}%`;
+      meterAmp.style.width = `${amp * 100}%`;
+      document.getElementById("velOut").textContent = f.absoluteVelocity.toFixed(2);
+      document.getElementById("cutOut").textContent = (70 + f.z * 6200).toFixed(0);
+      const dMs = (22 + hor * 150 + 28 + vert * 170) / 2;
+      document.getElementById("dlyOut").textContent = dMs.toFixed(0);
+      phone.style.transform = `rotateX(${f.z * 50 - 25}deg) rotateZ(${hor * 28 - vert * 14}deg)`;
+    }
+
+    function resetUi() {
+      meterHoriz.style.width = "0%";
+      meterVert.style.width = "0%";
+      meterAmp.style.width = "0%";
+      phone.style.transform = "";
+      document.getElementById("velOut").textContent = "—";
+      document.getElementById("cutOut").textContent = "—";
+      document.getElementById("dlyOut").textContent = "—";
+    }
+
+    function buildVoice(c) {
+      ctx = c;
+      ({ master } = createMasterBus(ctx, 0.52));
+      voice = createSoundSaberVoice(ctx, master);
+      built = true;
+    }
+
+    async function enableMotion() {
+      if (sensorsOn) return;
+      primeSensors(SENSOR_OPTS);
+      const ok = await enableSensors(SENSOR_OPTS);
+      if (!ok) return;
+      sensorsOn = true;
+      onOrientation((o) => {
+        if (typeof o.alpha === "number" && Number.isFinite(o.alpha)) alpha = o.alpha;
+        if (typeof o.beta === "number" && Number.isFinite(o.beta)) beta = o.beta;
+      });
+      onMotion((data) => {
+        const f = features.update(data);
+        if (holding && voice) {
+          voice.apply(f, { holding: true, alpha, beta });
+          updateUi(f);
+        }
+      });
+    }
+
+    function release(e) {
+      if (e && e.pointerId !== activePointer) return;
+      holding = false;
+      activePointer = null;
+      touchZone.classList.remove("active");
+      features.reset();
+      if (voice) voice.apply(features.update({ x: 0, y: 0, z: 0 }), { holding: false });
+      resetUi();
+    }
+
+    touchZone.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      void enableMotion();
+      await startAudio(!built ? buildVoice : undefined);
+      activePointer = e.pointerId;
+      touchZone.setPointerCapture(e.pointerId);
+      holding = true;
+      touchZone.classList.add("active");
+      features.reset();
+    });
+
+    touchZone.addEventListener("pointerup", release);
+    touchZone.addEventListener("pointercancel", release);
+    touchZone.addEventListener("lostpointercapture", release);
+  </script>
+</body>
+</html>

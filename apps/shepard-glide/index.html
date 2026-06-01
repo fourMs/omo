@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Shepard Glide — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Shepard Glide</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Shepard tone</h2>
+    <p>Turn <strong>Audio on</strong>, allow <strong>motion</strong> if asked. <strong>Hold</strong> the pad for an endless rising (or falling) glissando. <strong>Tilt forward/back</strong> for speed; <strong>sideways</strong> flips direction.</p>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Rate <strong id="rateOut">—</strong></p>
+    <p class="value-chip">Dir <strong id="dirOut">up</strong></p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid"></div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { createShepardTone } from "../../shared/shepard.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+    const pad = document.getElementById("pad");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const SENSOR_OPTS = { needMotion: false, needOrientation: true };
+
+    let ctx, master, shepard, built = false;
+    let holding = false;
+    let activeId = null;
+
+    function applyTilt(beta, gamma) {
+      if (!shepard) return;
+      const forward = clamp((beta ?? 0) / 55, -1, 1);
+      const rate = 0.06 + Math.abs(forward) * 0.35;
+      shepard.setRate(rate);
+      shepard.setDirection(forward >= 0 ? 1 : -1);
+      document.getElementById("rateOut").textContent = rate.toFixed(2);
+      document.getElementById("dirOut").textContent = forward >= 0 ? "up" : "down";
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.42));
+      shepard = createShepardTone(ctx, master);
+      built = true;
+      void enableSensors(SENSOR_OPTS).then((ok) => {
+        if (ok) onOrientation((o) => applyTilt(o.beta, o.gamma));
+      });
+      applyTilt(20, 0);
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      primeSensors(SENSOR_OPTS);
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built || !shepard) return;
+      holding = true;
+      activeId = e.pointerId;
+      pad.setPointerCapture(activeId);
+      pad.classList.add("active");
+      shepard.start();
+      shepard.setLevel(1);
+    });
+
+    const stop = (e) => {
+      if (e.pointerId !== activeId) return;
+      holding = false;
+      activeId = null;
+      pad.classList.remove("active");
+      shepard?.stop();
+    };
+    pad.addEventListener("pointerup", stop);
+    pad.addEventListener("pointercancel", stop);
+    pad.addEventListener("lostpointercapture", stop);
+  </script>
+</body>
+</html>

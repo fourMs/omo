@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Gesture Regression — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell gesture-regression-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Gesture Regression</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Gesture → synthesis</h2>
+    <p>Turn <strong>Audio on</strong> and allow <strong>motion</strong> if asked. Tap <strong>Train</strong>, then <strong>hold</strong> the pad at several different tilts — each pose teaches a filter cutoff.</p>
+    <p>Switch to <strong>Play</strong> and hold again: tilt is matched to your examples and drives the sound.</p>
+  </div>
+  <div class="app-toolbar">
+    <button type="button" class="btn btn-sm" id="trainBtn" aria-pressed="true">Train</button>
+    <button type="button" class="btn-secondary btn btn-sm" id="playBtn" aria-pressed="false">Play</button>
+    <button type="button" class="btn-secondary btn btn-sm" id="clearBtn">Clear</button>
+  </div>
+  <p class="status-bar" id="status">Train mode · hold pad at different tilts</p>
+  <div class="readout-row">
+    <p class="value-chip">Mode <strong id="modeOut">train</strong></p>
+    <p class="value-chip">Samples <strong id="countOut">0</strong></p>
+    <p class="value-chip">Cutoff <strong id="cutOut">—</strong> Hz</p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <div class="touch-dot" id="dot"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const trainBtn = document.getElementById("trainBtn");
+    const playBtn = document.getElementById("playBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const SENSOR_OPTS = { needMotion: false, needOrientation: true };
+
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let ctx, master, osc, amp, filt, built = false;
+    let holding = false;
+    let activeId = null;
+    let mode = "train";
+    let train = [];
+    let sensorsReady = false;
+    let lastBeta = 0;
+
+    function betaToCut(b) {
+      return clamp(400 + Math.abs(b) * 40, 200, 6000);
+    }
+
+    function predict(b) {
+      if (!train.length) return betaToCut(b);
+      let best = train[0];
+      let d = Infinity;
+      for (const s of train) {
+        const dd = (s.b - b) ** 2;
+        if (dd < d) {
+          d = dd;
+          best = s;
+        }
+      }
+      return best.cut;
+    }
+
+    function updateCounts() {
+      document.getElementById("countOut").textContent = String(train.length);
+    }
+
+    function setMode(next) {
+      mode = next;
+      trainBtn.classList.toggle("btn", mode === "train");
+      trainBtn.classList.toggle("btn-secondary", mode !== "train");
+      trainBtn.setAttribute("aria-pressed", String(mode === "train"));
+      playBtn.classList.toggle("btn", mode === "play");
+      playBtn.classList.toggle("btn-secondary", mode !== "play");
+      playBtn.setAttribute("aria-pressed", String(mode === "play"));
+      document.getElementById("modeOut").textContent = mode;
+      if (mode === "train") {
+        setStatus("status", "Train mode · hold pad at different tilts", "ok");
+      } else if (!train.length) {
+        setStatus("status", "No samples yet — switch to Train first", "warn");
+      } else {
+        setStatus("status", "Play mode · hold pad and tilt", "ok");
+      }
+    }
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      osc = ctx.createOscillator();
+      amp = ctx.createGain();
+      filt = ctx.createBiquadFilter();
+      filt.type = "lowpass";
+      filt.Q.value = 6;
+      osc.type = "sawtooth";
+      osc.frequency.value = 120;
+      amp.gain.value = 0;
+      osc.connect(filt);
+      filt.connect(amp);
+      amp.connect(master);
+      osc.start();
+      built = true;
+    }
+
+    registerAudioBoot(build);
+
+    async function ensureSensors() {
+      if (sensorsReady) return true;
+      const ok = await enableSensors(SENSOR_OPTS);
+      if (!ok) {
+        setStatus("status", "Motion blocked — allow in Settings", "warn");
+        return false;
+      }
+      onOrientation(({ beta }) => {
+        lastBeta = beta;
+        if (!holding || !built || !ctx) return;
+        const cut = mode === "train" ? betaToCut(beta) : predict(beta);
+        filt.frequency.setTargetAtTime(cut, ctx.currentTime, 0.06);
+        document.getElementById("cutOut").textContent = `${cut | 0}`;
+        if (mode === "train") {
+          const last = train[train.length - 1];
+          if (!last || Math.abs(last.b - beta) > 2) {
+            train.push({ b: beta, cut });
+            updateCounts();
+          }
+        }
+      });
+      sensorsReady = true;
+      return true;
+    }
+
+    async function arm(e) {
+      e.preventDefault();
+      primeSensors(SENSOR_OPTS);
+      await startAudio(!built ? build : undefined);
+      if (!built || !ctx) return;
+      if (!(await ensureSensors())) return;
+      holding = true;
+      activeId = e.pointerId;
+      pad.setPointerCapture(activeId);
+      pad.classList.add("active");
+      dot.style.opacity = "1";
+      osc.frequency.setTargetAtTime(120, ctx.currentTime, 0.02);
+      amp.gain.setTargetAtTime(0.22, ctx.currentTime, 0.02);
+      const cut = mode === "train" ? betaToCut(lastBeta) : predict(lastBeta);
+      filt.frequency.setTargetAtTime(cut, ctx.currentTime, 0.02);
+      document.getElementById("cutOut").textContent = `${cut | 0}`;
+    }
+
+    function release(e) {
+      if (e.pointerId !== activeId) return;
+      holding = false;
+      activeId = null;
+      pad.classList.remove("active");
+      dot.style.opacity = "0";
+      if (ctx && amp) amp.gain.setTargetAtTime(0, ctx.currentTime, 0.06);
+    }
+
+    pad.addEventListener("pointerdown", (e) => void arm(e));
+    pad.addEventListener("pointerup", release);
+    pad.addEventListener("pointercancel", release);
+    pad.addEventListener("lostpointercapture", release);
+
+    trainBtn.addEventListener("click", () => {
+      primeSensors(SENSOR_OPTS);
+      setMode("train");
+    });
+    playBtn.addEventListener("click", () => {
+      primeSensors(SENSOR_OPTS);
+      setMode("play");
+    });
+    clearBtn.addEventListener("click", () => {
+      train = [];
+      updateCounts();
+      document.getElementById("cutOut").textContent = "—";
+      if (mode === "play") setStatus("status", "No samples yet — switch to Train first", "warn");
+      else setStatus("status", "Samples cleared · hold pad at different tilts", "ok");
+    });
+
+    updateCounts();
+    setMode("train");
+  </script>
+</body>
+</html>

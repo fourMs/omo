@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Piano — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Piano</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Piano</h2>
+    <p>Turn <strong>Audio on</strong>, then tap keys. Waveform, volume, reverb, and octave controls are below the header.</p>
+    <p><strong>Slide mode</strong> — glide between notes while holding a key.</p>
+  </div>
+  <div class="wi-controls">
+    <label>Wave <select id="waveform">
+      <option value="triangle" selected>Tri</option>
+      <option value="sine">Sin</option>
+      <option value="sawtooth">Saw</option>
+      <option value="square">Sqr</option>
+    </select></label>
+    <label>Vol <input type="range" id="volume" min="0" max="1" step="0.01" value="0.6" /></label>
+    <label>Rev <input type="range" id="reverb" min="0" max="1" step="0.01" value="0.2" /></label>
+    <span>Oct <button type="button" id="octave-down">−</button><span id="octave-display">4</span><button type="button" id="octave-up">+</button></span>
+    <label class="slide-toggle"><input type="checkbox" id="slideMode" /> Slide</label>
+  </div>
+  <div class="main-stage">
+    <div class="keyboard-scroll">
+      <div class="keyboard-wrap" id="keyboard"></div>
+    </div>
+  </div>
+  <script type="module" src="piano.js"></script>
+</body>
+</html>

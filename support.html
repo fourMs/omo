@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Device support — OMO</title>
+  <link rel="stylesheet" href="shared/ui.css" />
+  <style>
+    .support-list { list-style: none; padding: 0; margin: 1rem 0; }
+    .support-list li { padding: 0.65rem 0.85rem; margin-bottom: 0.35rem; border-radius: 8px; background: var(--panel, #1a1e28); display: flex; justify-content: space-between; gap: 1rem; }
+    .ok { color: #6ee7a0; }
+    .no { color: #f0a090; }
+    .maybe { color: #e8d080; }
+  </style>
+</head>
+<body class="hub">
+  <header class="hub-header">
+    <a class="back-link" href="./">← Orchestra</a>
+    <h1>Device support</h1>
+    <p>What this browser exposes — useful before a workshop.</p>
+  </header>
+  <ul class="support-list" id="list"></ul>
+  <p class="status-bar">Tap <strong>Test motion</strong> on iOS — permission only unlocks after a gesture.</p>
+  <button type="button" class="btn btn-play" id="motionBtn">Test motion</button>
+  <script type="module">
+    const list = document.getElementById("list");
+    const row = (name, status, cls) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span>${name}</span><span class="${cls}">${status}</span>`;
+      list.appendChild(li);
+    };
+    const has = (ok, label) => row(label, ok ? "Yes" : "No", ok ? "ok" : "no");
+
+    has(!!(window.AudioContext || window.webkitAudioContext), "Web Audio");
+    has(!!navigator.mediaDevices?.getUserMedia, "Microphone API");
+    has(!!navigator.mediaDevices?.getUserMedia, "Camera API");
+    has("DeviceMotionEvent" in window, "Device motion");
+    has("DeviceOrientationEvent" in window, "Device orientation");
+    has("AmbientLightSensor" in window, "Ambient light sensor");
+    has("PressureSensor" in window, "Barometer (PressureSensor)");
+    has("Magnetometer" in window, "Magnetometer");
+    has(!!navigator.geolocation, "Geolocation");
+    has(typeof navigator.getBattery === "function", "Battery API");
+    has(typeof navigator.vibrate === "function", "Vibration");
+    has("serviceWorker" in navigator, "Service worker (offline)");
+
+    const conn = navigator.connection;
+    row("Network type", conn?.effectiveType || "—", "maybe");
+
+    document.getElementById("motionBtn").addEventListener("click", async () => {
+      if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+        try {
+          const p = await DeviceMotionEvent.requestPermission();
+          row("Motion permission", p, p === "granted" ? "ok" : "no");
+        } catch (e) {
+          row("Motion permission", String(e), "no");
+        }
+      } else {
+        row("Motion permission", "Not required (tap elsewhere)", "maybe");
+      }
+    });
+  </script>
+</body>
+</html>

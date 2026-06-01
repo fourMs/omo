@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>One Shot Orchestra — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell one-shot-orchestra-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>One Shot Orchestra</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>One-shot orchestra</h2>
+    <p>Turn <strong>Audio on</strong>, then tap each pad for a different ensemble hit — strings, brass, winds, percussion.</p>
+  </div>
+  <div class="main-stage">
+    <div class="one-shot-grid" id="grid" aria-label="Orchestra hits"></div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+
+    bindLearn();
+
+    const grid = document.getElementById("grid");
+    const ZONES = [
+      { label: "Strings", icon: "🎻", hue: "#7f1d1d" },
+      { label: "Brass", icon: "🎺", hue: "#9a3412" },
+      { label: "Winds", icon: "🎷", hue: "#1e40af" },
+      { label: "Perc", icon: "🥁", hue: "#166534" },
+    ];
+
+    let ctx, master, built = false;
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.55));
+      built = true;
+    }
+
+    registerAudioBoot(build);
+
+    function hitStrings(t) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      const f = ctx.createBiquadFilter();
+      f.type = "lowpass";
+      f.frequency.value = 900;
+      o.type = "sawtooth";
+      o.frequency.setValueAtTime(220, t);
+      o.frequency.exponentialRampToValueAtTime(180, t + 0.35);
+      g.gain.setValueAtTime(0.28, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+      o.connect(f);
+      f.connect(g);
+      g.connect(master);
+      o.start(t);
+      o.stop(t + 0.46);
+    }
+
+    function hitBrass(t) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "square";
+      o.frequency.setValueAtTime(330, t);
+      g.gain.setValueAtTime(0.26, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      o.connect(g);
+      g.connect(master);
+      o.start(t);
+      o.stop(t + 0.24);
+    }
+
+    function hitWinds(t) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "triangle";
+      o.frequency.setValueAtTime(440, t);
+      o.frequency.linearRampToValueAtTime(520, t + 0.12);
+      g.gain.setValueAtTime(0.24, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      o.connect(g);
+      g.connect(master);
+      o.start(t);
+      o.stop(t + 0.32);
+    }
+
+    function hitPerc(t) {
+      const len = Math.floor(ctx.sampleRate * 0.12);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      const n = ctx.createBufferSource();
+      n.buffer = buf;
+      const g = ctx.createGain();
+      const f = ctx.createBiquadFilter();
+      f.type = "bandpass";
+      f.frequency.value = 550;
+      f.Q.value = 1.2;
+      g.gain.setValueAtTime(0.35, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+      n.connect(f);
+      f.connect(g);
+      g.connect(master);
+      n.start(t);
+      n.stop(t + 0.15);
+    }
+
+    const HITS = [hitStrings, hitBrass, hitWinds, hitPerc];
+
+    function playZone(zone) {
+      if (!ctx || !built) return;
+      HITS[zone](ctx.currentTime);
+    }
+
+    ZONES.forEach((z, i) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "one-shot-pad";
+      btn.dataset.zone = String(i);
+      btn.style.background = `linear-gradient(135deg, ${z.hue}, #0f172a)`;
+      btn.innerHTML = `<span class="one-shot-icon" aria-hidden="true">${z.icon}</span><span class="one-shot-label">${z.label}</span>`;
+      btn.addEventListener("pointerdown", async (e) => {
+        e.preventDefault();
+        await startAudio(!built ? build : undefined);
+        if (!built) return;
+        playZone(i);
+        btn.classList.add("active");
+        btn.setPointerCapture(e.pointerId);
+      });
+      const off = (e) => {
+        btn.classList.remove("active");
+      };
+      btn.addEventListener("pointerup", off);
+      btn.addEventListener("pointercancel", off);
+      btn.addEventListener("lostpointercapture", off);
+      grid.appendChild(btn);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Pinch Bass — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .pinch-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .pinch-finger {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      margin: -8px 0 0 -8px;
+      border-radius: 50%;
+      border: 2px solid rgba(110, 231, 183, 0.85);
+      background: rgba(110, 231, 183, 0.25);
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+    .pinch-finger.on { opacity: 1; }
+    .pinch-center {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      margin: -5px 0 0 -5px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 14px rgba(110, 231, 183, 0.5);
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+    .pinch-center.on { opacity: 1; }
+    .pinch-span {
+      position: absolute;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(110, 231, 183, 0.55), transparent);
+      transform-origin: 0 50%;
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+    .pinch-span.on { opacity: 1; }
+  </style>
+</head>
+<body class="app-shell pinch-bass-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Pinch Bass</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Pinch bass</h2>
+    <p>Use <strong>two fingers</strong>. Move the pair around the pad: <strong>X</strong> = pitch, <strong>Y</strong> = filter cutoff.</p>
+    <p><strong>Spread</strong> or pinch fingers for level and resonance. One finger sets pitch and cutoff from its position.</p>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Pitch <strong id="hzOut">—</strong> Hz</p>
+    <p class="value-chip">Cutoff <strong id="cutOut">—</strong> Hz</p>
+    <p class="value-chip">Spread <strong id="spreadOut">—</strong></p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <div class="pinch-layer">
+        <div class="pinch-span" id="span"></div>
+        <div class="pinch-finger" id="finger1"></div>
+        <div class="pinch-finger" id="finger2"></div>
+        <div class="pinch-center" id="center"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+
+    bindLearn();
+
+    const pad = document.getElementById("pad");
+    const finger1 = document.getElementById("finger1");
+    const finger2 = document.getElementById("finger2");
+    const center = document.getElementById("center");
+    const span = document.getElementById("span");
+    const hzOut = document.getElementById("hzOut");
+    const cutOut = document.getElementById("cutOut");
+    const spreadOut = document.getElementById("spreadOut");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let ctx, master, osc, amp, filt, built = false;
+    let d1 = null;
+    let d2 = null;
+
+    function build(c) {
+      if (built) return;
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.55));
+      osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      filt = ctx.createBiquadFilter();
+      filt.type = "lowpass";
+      filt.Q.value = 4;
+      amp = ctx.createGain();
+      amp.gain.value = 0;
+      osc.connect(filt);
+      filt.connect(amp);
+      amp.connect(master);
+      osc.start();
+      built = true;
+    }
+
+    registerAudioBoot(build);
+
+    function padRect() {
+      return pad.getBoundingClientRect();
+    }
+
+    function normFromClient(x, y) {
+      const r = padRect();
+      return {
+        nx: clamp((x - r.left) / r.width, 0, 1),
+        ny: clamp((y - r.top) / r.height, 0, 1),
+        px: clamp(x - r.left, 0, r.width),
+        py: clamp(y - r.top, 0, r.height),
+      };
+    }
+
+    function place(el, x, y, on) {
+      const { nx, ny } = normFromClient(x, y);
+      el.style.left = `${nx * 100}%`;
+      el.style.top = `${ny * 100}%`;
+      el.classList.toggle("on", on);
+    }
+
+    function metrics() {
+      const r = padRect();
+      if (d1 && d2) {
+        const mx = (d1.x + d2.x) / 2;
+        const my = (d1.y + d2.y) / 2;
+        const dist = Math.hypot(d2.x - d1.x, d2.y - d1.y);
+        return {
+          nx: clamp((mx - r.left) / r.width, 0, 1),
+          ny: clamp((my - r.top) / r.height, 0, 1),
+          spread: clamp(dist / 280, 0.05, 1),
+          two: true,
+        };
+      }
+      if (d1) {
+        return {
+          nx: clamp((d1.x - r.left) / r.width, 0, 1),
+          ny: clamp((d1.y - r.top) / r.height, 0, 1),
+          spread: 0.45,
+          two: false,
+        };
+      }
+      return null;
+    }
+
+    function refreshVisuals() {
+      place(finger1, d1?.x ?? 0, d1?.y ?? 0, !!d1);
+      place(finger2, d2?.x ?? 0, d2?.y ?? 0, !!d2);
+      if (d1 && d2) {
+        const r = padRect();
+        const mx = (d1.x + d2.x) / 2;
+        const my = (d1.y + d2.y) / 2;
+        place(center, mx, my, true);
+        const dx = d2.x - d1.x;
+        const dy = d2.y - d1.y;
+        const len = Math.hypot(dx, dy);
+        const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+        span.style.left = `${clamp((d1.x - r.left) / r.width, 0, 1) * 100}%`;
+        span.style.top = `${clamp((d1.y - r.top) / r.height, 0, 1) * 100}%`;
+        span.style.width = `${len}px`;
+        span.style.transform = `rotate(${ang}deg)`;
+        span.classList.add("on");
+      } else if (d1) {
+        place(center, d1.x, d1.y, true);
+        span.classList.remove("on");
+      } else {
+        center.classList.remove("on");
+        span.classList.remove("on");
+      }
+    }
+
+    function applyVoice(on) {
+      if (!built || !ctx) return;
+      const m = metrics();
+      const t = ctx.currentTime;
+      if (!on || !m) {
+        amp.gain.setTargetAtTime(0, t, 0.08);
+        hzOut.textContent = "—";
+        cutOut.textContent = "—";
+        spreadOut.textContent = "—";
+        return;
+      }
+      const hz = 42 * Math.pow(2.8, m.nx);
+      const cut = 90 + (1 - m.ny) * 2200;
+      const level = 0.1 + m.spread * 0.3;
+      const q = 2 + m.spread * 10;
+      osc.frequency.setTargetAtTime(hz, t, 0.04);
+      filt.frequency.setTargetAtTime(cut, t, 0.04);
+      filt.Q.setTargetAtTime(q, t, 0.05);
+      amp.gain.setTargetAtTime(level, t, 0.045);
+      hzOut.textContent = hz.toFixed(0);
+      cutOut.textContent = cut.toFixed(0);
+      spreadOut.textContent = `${Math.round(m.spread * 100)}%`;
+    }
+
+    function pointerDown(e) {
+      e.preventDefault();
+      const pt = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      if (!d1 || e.pointerId === d1.id) d1 = pt;
+      else if (!d2 || e.pointerId === d2.id) d2 = pt;
+      else {
+        d1 = pt;
+        d2 = null;
+      }
+      pad.classList.add("active");
+      refreshVisuals();
+      applyVoice(true);
+    }
+
+    function pointerMove(e) {
+      if (d1?.id === e.pointerId) d1 = { ...d1, x: e.clientX, y: e.clientY };
+      if (d2?.id === e.pointerId) d2 = { ...d2, x: e.clientX, y: e.clientY };
+      if (d1?.id !== e.pointerId && d2?.id !== e.pointerId) return;
+      refreshVisuals();
+      applyVoice(true);
+    }
+
+    function pointerUp(e) {
+      if (d1?.id === e.pointerId) d1 = null;
+      if (d2?.id === e.pointerId) d2 = null;
+      refreshVisuals();
+      if (!d1 && !d2) {
+        pad.classList.remove("active");
+        applyVoice(false);
+      } else {
+        applyVoice(true);
+      }
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      await startAudio(!built ? build : undefined);
+      pointerDown(e);
+    });
+    pad.addEventListener("pointermove", pointerMove);
+    pad.addEventListener("pointerup", pointerUp);
+    pad.addEventListener("pointercancel", pointerUp);
+    pad.addEventListener("lostpointercapture", pointerUp);
+  </script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Conductor — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .cond-panel {
+      flex-shrink: 0;
+      margin: 0.35rem 0.5rem;
+      padding: 0.5rem;
+      font-size: 0.75rem;
+    }
+    .cond-panel p { margin: 0.25rem 0; }
+  </style>
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Conductor</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Conductor</h2>
+    <p><strong>1 Conduct</strong> — set BPM, tap <strong>Start 5s countdown</strong>, then show the QR so musicians scan <em>before</em> “Go!”.</p>
+    <p><strong>2 Play</strong> — musician view (or scan QR). Turn <strong>Audio on</strong> for the downbeat beep at “Go!”.</p>
+    <p>Everyone must open the musician link (same URL as the QR) — not only the Conduct tab.</p>
+  </div>
+  <div class="role-tabs">
+    <button type="button" id="tabCond" class="active">Conduct</button>
+    <button type="button" id="tabMus">Play</button>
+  </div>
+
+  <div id="conductorView" class="main-stage">
+    <div class="control-row">
+      <label for="bpm">BPM</label>
+      <input type="range" id="bpm" min="60" max="140" value="96" />
+      <span id="bpmVal">96</span>
+    </div>
+    <div class="countdown-flash" id="beatFlash" aria-hidden="true"></div>
+    <div class="countdown-lg" id="countdown">Ready</div>
+    <div class="scroll-panel hidden" id="sharePanel">
+      <div class="qr-share">
+        <canvas id="shareQr" role="img" aria-label="QR code — scan to join"></canvas>
+      </div>
+      <p style="margin:0 0 0.35rem;font-size:0.75rem;color:var(--muted);">Musician link</p>
+      <div class="link-box" id="musicianLink"></div>
+    </div>
+    <div class="app-toolbar">
+      <button type="button" class="btn" id="goBtn">Start 5s countdown</button>
+      <button type="button" class="btn-secondary btn btn-sm icon-only hidden" id="copyBtn" title="Copy">⎘</button>
+    </div>
+  </div>
+  <p class="status-bar" id="status"></p>
+
+  <div id="musicianView" class="main-stage hidden">
+    <p class="status-bar" id="joinInfo">Waiting…</p>
+    <p class="status-bar" id="joinHint" style="font-size:0.72rem"></p>
+    <div class="countdown-lg" id="musCountdown">—</div>
+    <div class="scroll-panel">
+      <p style="margin:0;font-size:0.72rem;color:var(--muted);">BPM <strong id="joinBpm">—</strong> · start <span id="joinStart">—</span></p>
+    </div>
+    <div class="app-toolbar">
+      <a class="btn" href="../../" style="text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;">Apps</a>
+    </div>
+  </div>
+
+  <script type="module">
+    import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
+
+    bindLearn();
+    import { renderQrCanvas } from "../../shared/qr.js";
+
+    const params = new URLSearchParams(location.search);
+    const isMusician = params.has("start");
+
+    const conductorView = document.getElementById("conductorView");
+    const musicianView = document.getElementById("musicianView");
+    const tabCond = document.getElementById("tabCond");
+    const tabMus = document.getElementById("tabMus");
+
+    function showRole(musician) {
+      conductorView.classList.toggle("hidden", musician);
+      musicianView.classList.toggle("hidden", !musician);
+      tabCond.classList.toggle("active", !musician);
+      tabMus.classList.toggle("active", musician);
+    }
+
+    tabCond.onclick = () => { history.replaceState({}, "", location.pathname); showRole(false); };
+    tabMus.onclick = () => showRole(true);
+
+    document.getElementById("bpm").oninput = (e) => {
+      document.getElementById("bpmVal").textContent = e.target.value;
+    };
+
+    function buildMusicianUrl(startMs, bpm) {
+      const u = new URL(location.href);
+      u.searchParams.set("start", String(startMs));
+      u.searchParams.set("bpm", String(bpm));
+      return u.toString();
+    }
+
+    document.getElementById("goBtn").onclick = () => {
+      const bpm = document.getElementById("bpm").value;
+      const startMs = Date.now() + 5000;
+      const url = buildMusicianUrl(startMs, bpm);
+      document.getElementById("sharePanel").classList.remove("hidden");
+      document.getElementById("musicianLink").textContent = url;
+      renderQrCanvas(document.getElementById("shareQr"), url, { scale: 4, border: 2 });
+      document.getElementById("copyBtn").classList.remove("hidden");
+      setStatus("status", "Musicians: scan QR or open link below", "ok");
+      runCountdown(document.getElementById("countdown"), startMs, () => {
+        document.getElementById("countdown").textContent = "Go!";
+      });
+    };
+
+    document.getElementById("copyBtn").onclick = async () => {
+      const text = document.getElementById("musicianLink").textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus("status", "Link copied", "ok");
+      } catch {
+        setStatus("status", "Copy the link manually", "warn");
+      }
+    };
+
+    function flashBeat() {
+      const f = document.getElementById("beatFlash");
+      if (!f) return;
+      f.classList.add("on");
+      setTimeout(() => f.classList.remove("on"), 80);
+    }
+
+    function runCountdown(el, startMs, onZero) {
+      let lastSec = -1;
+      const tick = () => {
+        const left = startMs - Date.now();
+        if (left <= 0) {
+          el.textContent = "0";
+          flashBeat();
+          onZero?.();
+          return;
+        }
+        const sec = Math.ceil(left / 1000);
+        if (sec !== lastSec) {
+          lastSec = sec;
+          flashBeat();
+        }
+        el.textContent = String(sec);
+        requestAnimationFrame(tick);
+      };
+      tick();
+    }
+
+    if (isMusician) {
+      showRole(true);
+      const startMs = parseInt(params.get("start"), 10);
+      const bpm = params.get("bpm") || "96";
+      document.getElementById("joinBpm").textContent = bpm;
+      document.getElementById("joinStart").textContent = new Date(startMs).toLocaleTimeString();
+      const left = startMs - Date.now();
+      if (left < -2000) {
+        document.getElementById("joinInfo").textContent = "Start time passed";
+        document.getElementById("joinHint").textContent =
+          "Ask the conductor for a new countdown link.";
+        document.getElementById("musCountdown").textContent = "—";
+      } else {
+        document.getElementById("joinInfo").textContent = "Countdown — Audio on for beep";
+        document.getElementById("joinHint").textContent =
+          left > 8000 ? "You joined early — wait for the numbers." : "Get ready…";
+        runCountdown(document.getElementById("musCountdown"), startMs, () => {
+        document.getElementById("musCountdown").textContent = "Go!";
+        void startAudio((ctx) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g);
+          g.connect(ctx.destination);
+          o.frequency.value = 880;
+          const t = ctx.currentTime;
+          g.gain.setValueAtTime(0.3, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+          o.start(t);
+          o.stop(t + 0.35);
+        });
+        });
+      }
+    } else {
+      tabMus.onclick = () => {
+        showRole(true);
+        document.getElementById("joinInfo").textContent = "No session yet";
+        document.getElementById("joinHint").textContent =
+          "In Conduct, tap Start 5s countdown and share the QR.";
+        document.getElementById("musCountdown").textContent = "—";
+      };
+    }
+  </script>
+</body>
+</html>

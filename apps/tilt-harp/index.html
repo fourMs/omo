@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Tilt Harp — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell tilt-harp-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Tilt Harp</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Plucked gliss</h2>
+    <p>Turn <strong>Audio on</strong>, tap the strings and <strong>slide</strong> for a glissando. Allow motion/orientation on iPhone when asked.</p>
+    <p><strong>Tilt</strong> the phone to change key (shown next to Scale).</p>
+  </div>
+  <div class="control-row">
+    <label for="scale">Scale</label>
+    <select id="scale">
+      <option value="pent">Pentatonic</option>
+      <option value="maj">Major</option>
+      <option value="min">Minor</option>
+    </select>
+    <span id="keyOut">C</span>
+  </div>
+  <div class="main-stage">
+    <div id="strings" class="harp-strings stage-fill" role="application" aria-label="Harp strings — tap or slide"></div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus, midiToFreq } from "../../shared/audio.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+    const SCALES = {
+      pent: [0, 2, 4, 7, 9],
+      maj: [0, 2, 4, 5, 7, 9, 11],
+      min: [0, 2, 3, 5, 7, 8, 10],
+    };
+    const ROOTS = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+    const SENSOR_OPTS = { needMotion: false, needOrientation: true };
+    const STRING_COUNT = 8;
+
+    const strings = document.getElementById("strings");
+    const stringEls = [];
+    let ctx, master, built = false;
+    let sensorsReady = false;
+    let rootMidi = 60;
+    let activePointer = null;
+    let lastPlucked = -1;
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      built = true;
+    }
+
+    async function initSensors() {
+      if (sensorsReady) return;
+      const ok = await enableSensors(SENSOR_OPTS);
+      if (!ok) return;
+      onOrientation((o) => {
+        const tilt = Math.min(1, Math.sqrt((o.beta || 0) ** 2 + (o.gamma || 0) ** 2) / 90);
+        rootMidi = 48 + Math.floor(tilt * 14);
+        document.getElementById("keyOut").textContent = ROOTS[rootMidi % 12];
+      });
+      sensorsReady = true;
+    }
+
+    function midiForString(i) {
+      const scale = SCALES[document.getElementById("scale").value];
+      return rootMidi + scale[i % scale.length] + Math.floor(i / scale.length) * 12;
+    }
+
+    function pluck(midi, stringIndex = 0) {
+      const t = ctx.currentTime;
+      const dur = 0.65;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "triangle";
+      o.frequency.value = midiToFreq(midi);
+
+      const vib = ctx.createOscillator();
+      const vibGain = ctx.createGain();
+      vib.type = "sine";
+      vib.frequency.value = 5 + (stringIndex % 4) * 0.35 + Math.random() * 0.4;
+      const depth = 6 + (stringIndex / STRING_COUNT) * 8;
+      vib.connect(vibGain);
+      vibGain.connect(o.detune);
+      vibGain.gain.setValueAtTime(0, t);
+      vibGain.gain.linearRampToValueAtTime(depth, t + 0.08);
+      vibGain.gain.setValueAtTime(depth, t + dur * 0.75);
+      vibGain.gain.linearRampToValueAtTime(0, t + dur);
+
+      g.gain.setValueAtTime(0.35, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+      o.connect(g);
+      g.connect(master);
+      o.start(t);
+      vib.start(t);
+      o.stop(t + dur);
+      vib.stop(t + dur);
+    }
+
+    function stringIndexFromX(clientX) {
+      const r = strings.getBoundingClientRect();
+      if (r.width <= 0) return 0;
+      const nx = (clientX - r.left) / r.width;
+      return Math.max(0, Math.min(STRING_COUNT - 1, Math.round(nx * (STRING_COUNT - 1))));
+    }
+
+    function highlightString(i) {
+      stringEls.forEach((el, idx) => el.classList.toggle("active", idx === i));
+    }
+
+    function pluckAt(i, force = false) {
+      if (!built || !ctx) return;
+      if (!force && i === lastPlucked) return;
+      lastPlucked = i;
+      pluck(midiForString(i), i);
+      highlightString(i);
+    }
+
+    function clearStrings() {
+      lastPlucked = -1;
+      stringEls.forEach((el) => el.classList.remove("active"));
+    }
+
+    async function ensureReady() {
+      primeSensors(SENSOR_OPTS);
+      await startAudio(!built ? buildAudio : undefined);
+      await initSensors();
+    }
+
+    for (let i = 0; i < STRING_COUNT; i++) {
+      const s = document.createElement("div");
+      s.className = "harp-string";
+      s.style.left = `${(i / (STRING_COUNT - 1)) * 100}%`;
+      s.setAttribute("aria-hidden", "true");
+      strings.appendChild(s);
+      stringEls.push(s);
+    }
+
+    strings.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      void ensureReady().then(() => {
+        if (!built) return;
+        activePointer = e.pointerId;
+        strings.setPointerCapture(e.pointerId);
+        clearStrings();
+        pluckAt(stringIndexFromX(e.clientX), true);
+      });
+    });
+
+    strings.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== activePointer || !built) return;
+      pluckAt(stringIndexFromX(e.clientX));
+    });
+
+    const end = (e) => {
+      if (e.pointerId !== activePointer) return;
+      if (strings.hasPointerCapture(e.pointerId)) strings.releasePointerCapture(e.pointerId);
+      activePointer = null;
+      clearStrings();
+    };
+
+    strings.addEventListener("pointerup", end);
+    strings.addEventListener("pointercancel", end);
+    strings.addEventListener("lostpointercapture", end);
+  </script>
+</body>
+</html>

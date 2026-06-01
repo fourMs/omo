@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Circular Drum — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell circular-drum-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Circular Drum</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Circular sequencer</h2>
+    <p>Turn <strong>Audio on</strong>. <strong>Tap</strong> segments on the rings to toggle hits — outer ring kick, inner open hat. Press ▶ to play.</p>
+    <p>16 steps go clockwise from the top. Pick a <strong>pattern</strong> or draw your own.</p>
+  </div>
+  <div class="seq-toolbar">
+    <div class="control-row">
+      <label for="bpm">BPM</label>
+      <input type="range" id="bpm" min="60" max="160" value="100" />
+      <span id="bpmVal">100</span>
+      <button type="button" class="btn btn-play" id="playBtn">▶</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="clearBtn">Clear</button>
+    </div>
+    <div class="control-row">
+      <label for="swing">Swing</label>
+      <input type="range" id="swing" min="0" max="75" value="0" />
+      <span id="swingVal">0%</span>
+    </div>
+    <div class="circ-drum-legend" aria-hidden="true">
+      <span>💥</span><span>🥁</span><span>🔔</span><span>🔓</span>
+      <span class="circ-legend-hint">outer → inner</span>
+    </div>
+    <div class="control-row">
+      <label for="template">Pattern</label>
+      <select id="template">
+        <option value="custom">Custom</option>
+        <option value="rock">Rock</option>
+        <option value="house">House</option>
+        <option value="disco">Disco</option>
+        <option value="hiphop">Hip-hop</option>
+        <option value="funk">Funk</option>
+        <option value="techno">Techno</option>
+      </select>
+    </div>
+  </div>
+  <p class="status-bar" id="status">Tap ring to edit · Audio on</p>
+  <div class="main-stage circular-drum-stage">
+    <canvas id="seq" class="canvas-fill" aria-label="Circular drum sequencer"></canvas>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { drawCircularSeq, expandPattern8to16, hitCircularSeq } from "../../shared/circular-seq.js";
+    import { DRUM_SEQ_ROWS } from "../../shared/drum-sounds.js";
+
+    bindLearn();
+
+    const STEPS = 16;
+    const canvas = document.getElementById("seq");
+    const g = canvas.getContext("2d");
+    const pattern = DRUM_SEQ_ROWS.map(() => Array(STEPS).fill(false));
+    let ctx, master, playing = false, stepIndex = 0, nextTime = 0;
+    let audioReady = false;
+    let applyingTemplate = false;
+    let playStep = -1;
+
+    const TEMPLATES_8 = {
+      rock: {
+        bpm: 110,
+        swing: 0,
+        rows: [
+          [1, 0, 0, 0, 1, 0, 0, 0],
+          [0, 0, 1, 0, 0, 0, 1, 0],
+          [1, 0, 1, 0, 1, 0, 1, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0],
+        ],
+      },
+      house: {
+        bpm: 124,
+        swing: 0,
+        rows: [
+          [1, 1, 1, 1, 1, 1, 1, 1],
+          [0, 0, 1, 0, 0, 0, 1, 0],
+          [0, 1, 0, 1, 0, 1, 0, 1],
+          [0, 0, 0, 0, 0, 0, 0, 0],
+        ],
+      },
+      disco: {
+        bpm: 118,
+        swing: 12,
+        rows: [
+          [1, 0, 0, 0, 1, 0, 0, 0],
+          [0, 0, 1, 0, 0, 0, 1, 0],
+          [1, 1, 1, 1, 1, 1, 1, 1],
+          [0, 0, 0, 1, 0, 0, 0, 1],
+        ],
+      },
+      hiphop: {
+        bpm: 92,
+        swing: 8,
+        rows: [
+          [1, 0, 0, 1, 0, 0, 1, 0],
+          [0, 0, 1, 0, 0, 0, 1, 0],
+          [1, 0, 1, 0, 1, 0, 1, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0],
+        ],
+      },
+      funk: {
+        bpm: 104,
+        swing: 18,
+        rows: [
+          [1, 0, 0, 1, 0, 0, 1, 0],
+          [0, 0, 1, 0, 0, 1, 0, 0],
+          [1, 1, 0, 1, 1, 1, 0, 1],
+          [0, 0, 0, 0, 0, 0, 0, 1],
+        ],
+      },
+      techno: {
+        bpm: 130,
+        swing: 0,
+        rows: [
+          [1, 1, 1, 1, 1, 1, 1, 1],
+          [0, 0, 0, 0, 1, 0, 0, 0],
+          [1, 0, 1, 0, 1, 0, 1, 0],
+          [0, 0, 0, 1, 0, 0, 0, 1],
+        ],
+      },
+    };
+
+    function sizeCanvas() {
+      const box = canvas.parentElement.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      const w = Math.max(1, Math.floor(box.width * dpr));
+      const h = Math.max(1, Math.floor(box.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      return { w, h, dpr };
+    }
+
+    function redraw() {
+      const { w, h, dpr } = sizeCanvas();
+      drawCircularSeq(g, w, h, dpr, {
+        pattern,
+        rows: DRUM_SEQ_ROWS,
+        playStep: playing ? playStep : -1,
+      });
+    }
+
+    function toggleCell(ring, step, preview = false) {
+      pattern[ring][step] = !pattern[ring][step];
+      if (!applyingTemplate) document.getElementById("template").value = "custom";
+      redraw();
+      if (preview && audioReady && pattern[ring][step]) {
+        DRUM_SEQ_ROWS[ring].play(ctx, master);
+      }
+    }
+
+    function applyTemplate(id) {
+      const t = TEMPLATES_8[id];
+      if (!t) return;
+      applyingTemplate = true;
+      const rows16 = expandPattern8to16(t.rows);
+      for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+        for (let ci = 0; ci < STEPS; ci++) pattern[ri][ci] = rows16[ri][ci];
+      }
+      document.getElementById("bpm").value = String(t.bpm);
+      document.getElementById("bpmVal").textContent = String(t.bpm);
+      document.getElementById("swing").value = String(t.swing);
+      document.getElementById("swingVal").textContent = `${t.swing}%`;
+      applyingTemplate = false;
+      redraw();
+    }
+
+    async function boot(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.65));
+      audioReady = true;
+    }
+
+    registerAudioBoot(boot);
+
+    function ensureAudio() {
+      if (audioReady) return Promise.resolve(ctx);
+      return startAudio(boot);
+    }
+
+    function pointerToCanvas(e) {
+      const r = canvas.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      return {
+        px: ((e.clientX - r.left) / r.width) * canvas.width,
+        py: ((e.clientY - r.top) / r.height) * canvas.height,
+      };
+    }
+
+    function hitFromEvent(e) {
+      const { px, py } = pointerToCanvas(e);
+      return hitCircularSeq(px, py, canvas.width, canvas.height, DRUM_SEQ_ROWS.length, STEPS);
+    }
+
+    canvas.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await ensureAudio();
+      const hit = hitFromEvent(e);
+      if (!hit) return;
+      toggleCell(hit.ring, hit.step, true);
+    });
+
+    function stepDuration(step) {
+      const bpm = +document.getElementById("bpm").value;
+      const base = 60 / bpm / 4;
+      const swing = +document.getElementById("swing").value / 100;
+      if (swing === 0) return base;
+      const skew = swing * 0.5;
+      return step % 2 === 1 ? base * (1 + skew) : base * (1 - skew);
+    }
+
+    function scheduler() {
+      if (!playing || !ctx) return;
+      const now = ctx.currentTime;
+      while (nextTime <= now + 0.05) {
+        const col = stepIndex;
+        playStep = col;
+        redraw();
+        for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+          if (pattern[ri][col]) DRUM_SEQ_ROWS[ri].play(ctx, master);
+        }
+        nextTime += stepDuration(col);
+        stepIndex = (col + 1) % STEPS;
+      }
+      requestAnimationFrame(scheduler);
+    }
+
+    document.getElementById("bpm").oninput = (e) => {
+      document.getElementById("bpmVal").textContent = e.target.value;
+    };
+
+    document.getElementById("swing").oninput = (e) => {
+      document.getElementById("swingVal").textContent = `${e.target.value}%`;
+    };
+
+    document.getElementById("template").addEventListener("change", (e) => {
+      const id = e.target.value;
+      if (id === "custom") return;
+      void ensureAudio().then(() => applyTemplate(id));
+    });
+
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+        for (let ci = 0; ci < STEPS; ci++) pattern[ri][ci] = false;
+      }
+      document.getElementById("template").value = "custom";
+      redraw();
+    });
+
+    const playBtn = document.getElementById("playBtn");
+    playBtn.addEventListener("click", async () => {
+      await ensureAudio();
+      if (!ctx) return;
+      if (playing) {
+        playing = false;
+        playStep = -1;
+        playBtn.classList.remove("active");
+        playBtn.textContent = "▶";
+        redraw();
+        return;
+      }
+      playing = true;
+      stepIndex = 0;
+      playStep = 0;
+      nextTime = ctx.currentTime + 0.05;
+      playBtn.classList.add("active");
+      playBtn.textContent = "■";
+      scheduler();
+    });
+
+    new ResizeObserver(() => redraw()).observe(canvas.parentElement);
+    requestAnimationFrame(() => redraw());
+  </script>
+</body>
+</html>

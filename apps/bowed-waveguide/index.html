@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Bowed Waveguide — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Bowed Waveguide</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Bowed string</h2>
+    <p>Turn <strong>Audio on</strong>, <strong>hold</strong> the pad, and <strong>drag</strong> horizontally. Slow strokes = soft tone · faster = brighter. <strong>Vertical</strong> = pitch.</p>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Pitch <strong id="hzOut">220</strong> Hz</p>
+    <p class="value-chip">Bow <strong id="bowOut">0</strong>%</p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <div class="touch-dot" id="dot"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { createKSPool, karplusPluck } from "../../shared/ks.js";
+    import { createBowedString } from "../../shared/bowed-string.js";
+
+    bindLearn();
+
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const hzOut = document.getElementById("hzOut");
+    const bowOut = document.getElementById("bowOut");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const mapY = (ny) => 98 * Math.pow(392 / 98, 1 - ny);
+
+    const pool = createKSPool(1);
+    const MIN_PLUCK_MS = 105;
+
+    let ctx, master, sustain, built = false;
+    let holding = false;
+    let activeId = null;
+    let lastX = 0;
+    let lastT = 0;
+    let lastPluckAt = 0;
+    let smoothBow = 0;
+    let lastHz = 220;
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.48));
+      sustain = createBowedString(ctx, master, 220);
+      built = true;
+    }
+
+    registerAudioBoot(buildAudio);
+
+    function maybePluck(hz, bow) {
+      const now = performance.now();
+      if (now - lastPluckAt < MIN_PLUCK_MS) return;
+      lastPluckAt = now;
+      const strength = 0.14 + bow * 0.28;
+      const dampHz = clamp(hz * 3.2, 450, 4800);
+      karplusPluck(ctx, master, pool, hz, {
+        strength,
+        dampHz,
+        feedback: 0.79 + bow * 0.05,
+        level: 0.14 + bow * 0.1,
+        decaySec: 1.6,
+      });
+    }
+
+    function updateFromEvent(ev) {
+      const r = pad.getBoundingClientRect();
+      const nx = clamp((ev.clientX - r.left) / Math.max(1, r.width), 0, 1);
+      const ny = clamp((ev.clientY - r.top) / Math.max(1, r.height), 0, 1);
+      const hz = mapY(ny);
+
+      const dt = Math.max(1, performance.now() - lastT);
+      const vx = (ev.clientX - lastX) / dt;
+      lastX = ev.clientX;
+      lastT = performance.now();
+
+      const speed = Math.abs(vx);
+      const targetBow = clamp(speed * 0.014, 0, 1);
+      smoothBow = smoothBow * 0.88 + targetBow * 0.12;
+
+      sustain.setPitch(hz);
+      sustain.setBow(smoothBow * 0.35);
+
+      if (smoothBow > 0.06) {
+        const pitchMoved = Math.abs(hz - lastHz) / Math.max(lastHz, 1) > 0.04;
+        if (pitchMoved || speed > 0.12) maybePluck(hz, smoothBow);
+      }
+      lastHz = hz;
+
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${ny * 100}%`;
+      dot.style.opacity = "1";
+      hzOut.textContent = hz.toFixed(0);
+      bowOut.textContent = String(Math.round(smoothBow * 100));
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built) return;
+      holding = true;
+      activeId = e.pointerId;
+      pad.setPointerCapture(activeId);
+      pad.classList.add("active");
+      lastX = e.clientX;
+      lastT = performance.now();
+      lastPluckAt = 0;
+      smoothBow = 0;
+      updateFromEvent(e);
+      maybePluck(mapY(clamp((e.clientY - pad.getBoundingClientRect().top) / pad.getBoundingClientRect().height, 0, 1)), 0.25);
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!holding || e.pointerId !== activeId) return;
+      e.preventDefault();
+      updateFromEvent(e);
+    });
+
+    const stop = (e) => {
+      if (e && e.pointerId !== activeId) return;
+      holding = false;
+      activeId = null;
+      pad.classList.remove("active");
+      dot.style.opacity = "0.35";
+      bowOut.textContent = "0";
+      smoothBow = 0;
+      if (sustain) sustain.release();
+    };
+
+    pad.addEventListener("pointerup", stop);
+    pad.addEventListener("pointercancel", stop);
+    pad.addEventListener("lostpointercapture", stop);
+  </script>
+</body>
+</html>

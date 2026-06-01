@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Ring Mod Gong — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell ring-mod-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Ring Mod Gong</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Ring modulation</h2>
+    <p>Turn <strong>Audio on</strong>, then <strong>hold</strong> the pad. <strong>X</strong> = carrier pitch. <strong>Y</strong> = modulator ratio (metallic when inharmonic).</p>
+    <p>Two sines are multiplied — sidebands create a gong-like clang.</p>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Carrier <strong id="cHz">180</strong> Hz</p>
+    <p class="value-chip">Mod <strong id="mHz">—</strong> Hz</p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <div class="touch-dot" id="dot"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+
+    bindLearn();
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let ctx, master, carrier, mod, ring, out, shaper;
+    let built = false;
+    let activeId = null;
+
+    const mapX = (nx) => 70 * Math.pow(520 / 70, nx);
+    const mapRatio = (ny) => 1.1 + (1 - ny) * 7.8;
+
+    function buildVoice(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      carrier = ctx.createOscillator();
+      mod = ctx.createOscillator();
+      ring = ctx.createGain();
+      ring.gain.value = 0;
+      out = ctx.createGain();
+      out.gain.value = 0;
+      shaper = ctx.createWaveShaper();
+      const curve = new Float32Array(256);
+      for (let i = 0; i < 256; i++) {
+        const x = (i / 127.5) - 1;
+        curve[i] = Math.tanh(x * 2.2);
+      }
+      shaper.curve = curve;
+      carrier.type = mod.type = "sine";
+      carrier.frequency.value = 180;
+      mod.frequency.value = 360;
+      mod.connect(ring.gain);
+      carrier.connect(ring);
+      ring.connect(shaper);
+      shaper.connect(out);
+      out.connect(master);
+      carrier.start();
+      mod.start();
+      built = true;
+    }
+
+    function setFromEvent(ev) {
+      const r = pad.getBoundingClientRect();
+      const nx = clamp((ev.clientX - r.left) / r.width, 0, 1);
+      const ny = clamp((ev.clientY - r.top) / r.height, 0, 1);
+      const cHz = mapX(nx);
+      const ratio = mapRatio(ny);
+      const mHz = cHz * ratio;
+      const t = ctx.currentTime;
+      carrier.frequency.setTargetAtTime(cHz, t, 0.02);
+      mod.frequency.setTargetAtTime(mHz, t, 0.02);
+      ring.gain.setTargetAtTime(0.35 + (1 - ny) * 0.55, t, 0.03);
+      document.getElementById("cHz").textContent = cHz.toFixed(0);
+      document.getElementById("mHz").textContent = mHz.toFixed(0);
+      dot.style.left = `${(nx * 100).toFixed(1)}%`;
+      dot.style.top = `${(ny * 100).toFixed(1)}%`;
+    }
+
+    pad.addEventListener("pointerdown", async (ev) => {
+      ev.preventDefault();
+      await startAudio(!built ? buildVoice : undefined);
+      if (!built) return;
+      activeId = ev.pointerId;
+      pad.setPointerCapture(activeId);
+      pad.classList.add("active");
+      setFromEvent(ev);
+      out.gain.setTargetAtTime(0.42, ctx.currentTime, 0.015);
+    });
+
+    pad.addEventListener("pointermove", (ev) => {
+      if (ev.pointerId !== activeId) return;
+      setFromEvent(ev);
+    });
+
+    const stop = (ev) => {
+      if (ev.pointerId !== activeId) return;
+      activeId = null;
+      pad.classList.remove("active");
+      out.gain.setTargetAtTime(0, ctx.currentTime, 0.06);
+    };
+    pad.addEventListener("pointerup", stop);
+    pad.addEventListener("pointercancel", stop);
+    pad.addEventListener("lostpointercapture", stop);
+  </script>
+</body>
+</html>

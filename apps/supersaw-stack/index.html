@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Supersaw Stack — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell supersaw-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Supersaw Stack</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>SuperSaw stack</h2>
+    <p>Turn <strong>Audio on</strong>, allow <strong>motion</strong> if asked. <strong>Hold</strong> the pad — <strong>X</strong> = pitch, <strong>Y</strong> = base spread.</p>
+    <p><strong>Blade</strong>: spin widens detune on the saw cluster. <strong>Spin</strong> timbre: sine + gyro vibrato (former Spin Chorus).</p>
+  </div>
+  <div class="control-row" style="margin:0 0.35rem">
+    <label for="timbreSelect">Timbre</label>
+    <select id="timbreSelect">
+      <option value="blade">Blade</option>
+      <option value="spin">Spin</option>
+    </select>
+  </div>
+  <p class="status-bar" id="status">Turn Audio on · hold pad</p>
+  <div class="readout-row">
+    <p class="value-chip">Pitch <strong id="hzOut">—</strong> Hz</p>
+    <p class="value-chip">Spread <strong id="spreadOut">—</strong> ¢</p>
+    <p class="value-chip">Gyro <strong id="gyroOut">—</strong></p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <div class="touch-dot" id="dot"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, onMotion, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const timbreSelect = document.getElementById("timbreSelect");
+    const hzOut = document.getElementById("hzOut");
+    const spreadOut = document.getElementById("spreadOut");
+    const gyroOut = document.getElementById("gyroOut");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let timbre = new URLSearchParams(location.search).get("timbre") === "spin" ? "spin" : "blade";
+    if (timbre === "spin") timbreSelect.value = "spin";
+
+    let ctx, master, saws = [];
+    let spinOsc, spinAmp, spinPan, spinLfo, spinLfoG;
+    let built = false;
+    let holding = false;
+    let activeId = null;
+    let baseSpread = 1;
+    let gyroBoost = 0;
+    let padNy = 0.5;
+
+    function totalSpreadCents() {
+      const base = 8 + padNy * 40;
+      return base + gyroBoost * 120;
+    }
+
+    function refreshReadouts(hz) {
+      hzOut.textContent = Number.isFinite(hz) ? hz.toFixed(0) : "—";
+      spreadOut.textContent = String(Math.round(totalSpreadCents()));
+      gyroOut.textContent = gyroBoost > 0.02 ? gyroBoost.toFixed(2) : "—";
+    }
+
+    function applyDetune() {
+      if (!ctx || timbre !== "blade" || !saws.length) return;
+      const spread = totalSpreadCents();
+      const t = ctx.currentTime;
+      saws.forEach((s) => {
+        s.o.detune.setTargetAtTime(s.det * spread * 0.15, t, 0.05);
+      });
+      spreadOut.textContent = String(Math.round(spread));
+    }
+
+    timbreSelect.addEventListener("change", () => {
+      timbre = timbreSelect.value;
+      const u = new URL(location.href);
+      if (timbre === "spin") u.searchParams.set("timbre", "spin");
+      else u.searchParams.delete("timbre");
+      history.replaceState({}, "", u);
+      spreadOut.parentElement.classList.toggle("hidden", timbre === "spin");
+      built = false;
+      saws = [];
+    });
+    spreadOut.parentElement.classList.toggle("hidden", timbre === "spin");
+
+    function wireGyro() {
+      primeSensors({ needMotion: true, needOrientation: false });
+      enableSensors({ needMotion: true, needOrientation: false }).then((ok) => {
+        if (!ok) {
+          gyroOut.textContent = "off";
+          return;
+        }
+        onMotion(({ rotAlpha: a, rotBeta: b, rotGamma: g }) => {
+          const rate = Math.sqrt(a * a + b * b + g * g);
+          gyroBoost = rate * 0.15;
+          gyroOut.textContent = rate.toFixed(1);
+          if (!holding) return;
+          if (timbre === "blade") applyDetune();
+          if (timbre === "spin" && spinLfo && spinLfoG && spinPan) {
+            const t = ctx.currentTime;
+            spinLfo.frequency.setTargetAtTime(3 + rate * 0.08, t, 0.05);
+            spinLfoG.gain.setTargetAtTime(Math.min(45, rate * 0.4), t, 0.05);
+            spinPan.pan.setTargetAtTime(clamp(rate * 0.002, -1, 1), t, 0.06);
+          }
+        });
+      });
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.42));
+      saws = [];
+      if (timbre === "blade") {
+        for (let i = -3; i <= 3; i++) {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = "sawtooth";
+          g.gain.value = 0;
+          o.connect(g);
+          g.connect(master);
+          o.start();
+          saws.push({ o, g, det: i * 3 });
+        }
+      } else {
+        spinOsc = ctx.createOscillator();
+        spinAmp = ctx.createGain();
+        spinPan = ctx.createStereoPanner();
+        spinLfo = ctx.createOscillator();
+        spinLfoG = ctx.createGain();
+        spinLfo.frequency.value = 5;
+        spinLfoG.gain.value = 0;
+        spinLfo.connect(spinLfoG);
+        spinLfoG.connect(spinOsc.detune);
+        spinOsc.type = "sine";
+        spinOsc.connect(spinAmp);
+        spinAmp.connect(spinPan);
+        spinPan.connect(master);
+        spinOsc.start();
+        spinLfo.start();
+      }
+      built = true;
+      wireGyro();
+    }
+
+    registerAudioBoot(buildAudio);
+
+    function setPad(nx, ny, on) {
+      if (!ctx) return;
+      padNy = ny;
+      const hz = 90 * Math.pow(5, nx);
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${ny * 100}%`;
+      dot.style.opacity = on ? "1" : "0.35";
+      const t = ctx.currentTime;
+      if (timbre === "blade") {
+        saws.forEach((s) => {
+          s.o.frequency.setTargetAtTime(hz, t, 0.03);
+          s.g.gain.setTargetAtTime(on ? 0.04 : 0, t, on ? 0.02 : 0.06);
+        });
+        if (on) applyDetune();
+      } else if (spinOsc) {
+        spinOsc.frequency.setTargetAtTime(hz, t, 0.03);
+        spinAmp.gain.setTargetAtTime(on ? 0.28 : 0, t, on ? 0.02 : 0.06);
+      }
+      refreshReadouts(hz);
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built) return;
+      holding = true;
+      activeId = e.pointerId;
+      pad.setPointerCapture(activeId);
+      pad.classList.add("active");
+      const r = pad.getBoundingClientRect();
+      const nx = clamp((e.clientX - r.left) / r.width, 0, 1);
+      const ny = clamp((e.clientY - r.top) / r.height, 0, 1);
+      setPad(nx, ny, true);
+      setStatus("status", "Blade chorus · spin for spread", "ok");
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!holding || e.pointerId !== activeId) return;
+      const r = pad.getBoundingClientRect();
+      setPad(
+        clamp((e.clientX - r.left) / r.width, 0, 1),
+        clamp((e.clientY - r.top) / r.height, 0, 1),
+        true
+      );
+    });
+
+    const end = (e) => {
+      if (e.pointerId !== activeId) return;
+      holding = false;
+      pad.classList.remove("active");
+      try {
+        pad.releasePointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+      setPad(0.5, 0.5, false);
+      setStatus("status", "Turn Audio on · hold pad", "");
+    };
+    pad.addEventListener("pointerup", end);
+    pad.addEventListener("pointercancel", end);
+    pad.addEventListener("lostpointercapture", end);
+
+    refreshReadouts();
+  </script>
+</body>
+</html>

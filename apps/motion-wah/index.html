@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Motion Wah — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell motion-wah-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Motion Wah</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Resonant filter</h2>
+    <p>Turn <strong>Audio on</strong>, then <strong>hold</strong> the pad to play. Allow motion if asked on iPhone.</p>
+    <p><strong>Tilt forward/back</strong> sweeps wah frequency. <strong>Tilt sideways</strong> changes filter resonance (sharp ↔ mellow).</p>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Wah <strong id="freqOut">—</strong> Hz</p>
+    <p class="value-chip">Res <strong id="qOut">—</strong></p>
+  </div>
+  <div class="main-stage">
+    <div class="touch-zone" id="touchZone">
+      <div class="phone-icon" id="phone"></div>
+      <div class="motion-meters">
+        <label class="motion-meter-label">↕</label>
+        <div class="meter"><div class="meter-fill" id="meterY"></div></div>
+        <label class="motion-meter-label">↔</label>
+        <div class="meter"><div class="meter-fill" id="meterX"></div></div>
+      </div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, onMotion, normalizeAccel } from "../../shared/sensors.js";
+
+    bindLearn();
+    const touchZone = document.getElementById("touchZone");
+    const meterY = document.getElementById("meterY");
+    const meterX = document.getElementById("meterX");
+    const phone = document.getElementById("phone");
+    let ctx, filter, osc, gate, master;
+    let built = false;
+    let sensorsOn = false;
+    let holding = false;
+    let activePointer = null;
+
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+    function buildVoice(c) {
+      ctx = c;
+      ({ master } = createMasterBus(ctx, 0.5));
+      gate = ctx.createGain();
+      gate.gain.value = 0;
+      osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.value = 110;
+      filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = 800;
+      filter.Q.value = 12;
+      osc.connect(filter);
+      filter.connect(gate);
+      gate.connect(master);
+      osc.start();
+      built = true;
+    }
+
+    function applyTilt(x, y, z) {
+      if (!holding || !built) return;
+      const n = normalizeAccel(x, y, z);
+      const tiltY = clamp((n.y + 1) / 2, 0, 1);
+      const tiltX = clamp((n.x + 1) / 2, 0, 1);
+      const freq = 150 + tiltY * 3500;
+      const q = 4 + tiltX * 16;
+      const t = ctx.currentTime;
+      filter.frequency.setTargetAtTime(freq, t, 0.03);
+      filter.Q.setTargetAtTime(q, t, 0.03);
+      meterY.style.width = `${tiltY * 100}%`;
+      meterX.style.width = `${tiltX * 100}%`;
+      document.getElementById("freqOut").textContent = freq.toFixed(0);
+      document.getElementById("qOut").textContent = q.toFixed(1);
+      phone.style.transform = `rotateX(${tiltY * 40 - 20}deg) rotateY(${tiltX * 40 - 20}deg)`;
+    }
+
+    async function enableTilt() {
+      if (sensorsOn) return;
+      if (await enableSensors()) {
+        sensorsOn = true;
+        onMotion(({ x, y, z }) => applyTilt(x, y, z));
+      }
+    }
+
+    function resetTiltUi() {
+      meterY.style.width = "0%";
+      meterX.style.width = "0%";
+      phone.style.transform = "";
+      document.getElementById("freqOut").textContent = "—";
+      document.getElementById("qOut").textContent = "—";
+    }
+
+    function release(e) {
+      if (e && e.pointerId !== activePointer) return;
+      holding = false;
+      activePointer = null;
+      touchZone.classList.remove("active");
+      if (gate && ctx) gate.gain.setTargetAtTime(0, ctx.currentTime, 0.04);
+      resetTiltUi();
+    }
+
+    touchZone.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      void enableTilt();
+      await startAudio(!built ? buildVoice : undefined);
+      activePointer = e.pointerId;
+      touchZone.setPointerCapture(e.pointerId);
+      holding = true;
+      touchZone.classList.add("active");
+      gate.gain.setTargetAtTime(0.5, ctx.currentTime, 0.02);
+    });
+
+    touchZone.addEventListener("pointerup", release);
+    touchZone.addEventListener("pointercancel", release);
+    touchZone.addEventListener("lostpointercapture", release);
+  </script>
+</body>
+</html>

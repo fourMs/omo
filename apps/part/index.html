@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Part — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Part</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Your part</h2>
+    <p>Open with <code>?part=1</code> … <code>?part=20</code> from a QR or score card. Each part suggests a section and instrument.</p>
+    <p>Turn <strong>Audio on</strong> in the app you open.</p>
+  </div>
+  <div class="scroll-panel" style="padding:0.75rem">
+    <p id="partTitle" style="font-size:1.1rem;font-weight:600;margin:0 0 0.5rem">—</p>
+    <p id="partDesc" style="color:var(--muted);font-size:0.8rem;margin:0 0 1rem"></p>
+    <a class="btn" id="goApp" href="../../" style="display:block;text-align:center;text-decoration:none;margin-bottom:0.75rem">Open instrument</a>
+    <a class="btn-secondary btn" href="../../" style="display:block;text-align:center;text-decoration:none">All apps</a>
+    <h2 style="font-size:0.85rem;margin:1rem 0 0.5rem">All parts</h2>
+    <ul class="app-list" id="partList"></ul>
+  </div>
+  <script type="module">
+    import { bindLearn } from "../../shared/app.js";
+    import { slugToTitle } from "../../shared/hub-catalog.js";
+    import { PARTS, SECTIONS, getPartFromUrl } from "../../shared/workshop.js";
+
+    bindLearn();
+
+    const part = getPartFromUrl();
+    const go = document.getElementById("goApp");
+    if (part) {
+      document.getElementById("partTitle").textContent = part.label;
+      document.getElementById("partDesc").textContent =
+        `${SECTIONS[part.section].name} section · suggested app below`;
+      go.href = `../${part.app}/`;
+      go.textContent = `Open ${slugToTitle(part.app)}`;
+      document.body.style.setProperty("--accent", SECTIONS[part.section].color);
+    } else {
+      go.textContent = "Browse orchestra";
+    }
+
+    const ul = document.getElementById("partList");
+    PARTS.forEach((p) => {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = `?part=${p.part}`;
+      a.innerHTML = `<span class="tag">${p.section}</span><span class="title">Part ${p.part}</span>`;
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+  </script>
+</body>
+</html>

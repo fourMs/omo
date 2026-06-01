@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Mic Theremin — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell mic-theremin-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Mic Theremin</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Mic → pitch</h2>
+    <p>Tap <strong>Start mic</strong> and allow the microphone. Hum or sing — the keyboard shows the pitch you sing.</p>
+    <p><strong>Hold the circle</strong> to hear the tracked tone. Release to stop.</p>
+  </div>
+  <div class="app-toolbar">
+    <button type="button" class="btn" id="startBtn">Start mic</button>
+  </div>
+  <p class="status-bar" id="status">Tap Start mic to allow microphone</p>
+  <div class="breath-row">
+    <label>Mic</label>
+    <div class="breath-meter" id="micMeterWrap">
+      <div class="breath-meter-fill" id="micMeter"></div>
+    </div>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Pitch <strong id="hzOut">—</strong></p>
+    <p class="value-chip">Note <strong id="noteOut">—</strong></p>
+  </div>
+  <div class="keyboard-scroll theremin-keyboard-scroll">
+    <div class="keyboard-wrap" id="pitchKeyboard" aria-label="Pitch display"></div>
+  </div>
+  <div class="theremin-play-area">
+    <button type="button" class="theremin-play-btn" id="playBtn" aria-label="Hold to play tone">
+      <span class="theremin-play-inner" id="playInner"></span>
+      <span class="theremin-play-label">Hold</span>
+    </button>
+  </div>
+  <script type="module">
+    import {
+      bindLearn,
+      setStatus,
+      setAudioOn,
+      setAudioOff,
+      isAudioActive,
+      initHeaderControls,
+      registerAudioBoot,
+    } from "../../shared/app.js";
+    import { createMasterBus, connectMicAnalyser, getMicStream, primeMicStream } from "../../shared/audio.js";
+    import { detectPitchHz, hzToMidi } from "../../shared/pitch.js";
+
+    bindLearn();
+    initHeaderControls();
+
+    const playBtn = document.getElementById("playBtn");
+    const playInner = document.getElementById("playInner");
+    const startBtn = document.getElementById("startBtn");
+    const pitchKeyboard = document.getElementById("pitchKeyboard");
+
+    const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+    const BLACK_PCS = new Set([1, 3, 6, 8, 10]);
+    const MIDI_LO = 60;
+    const MIDI_HI = 83;
+    const WHITE_W = 22;
+    const BLACK_NUDGE = 14;
+    const PLAY_GAIN = 0.38;
+
+    let ctx, master, osc, amp, analyser, micStream, buf;
+    let built = false;
+    let booting = false;
+    let holding = false;
+    let lastHz = null;
+    let litMidi = null;
+    const keyByMidi = new Map();
+
+    function blackKeyLeft(semi) {
+      const inOct = semi % 12;
+      const oct = Math.floor(semi / 12);
+      const whiteBefore = { 1: 0, 3: 1, 6: 3, 8: 4, 10: 5 }[inOct];
+      return oct * 7 * WHITE_W + whiteBefore * WHITE_W + BLACK_NUDGE;
+    }
+
+    function buildPitchKeyboard() {
+      pitchKeyboard.innerHTML = "";
+      const blackDefs = [];
+      for (let midi = MIDI_LO; midi <= MIDI_HI; midi++) {
+        const pc = ((midi % 12) + 12) % 12;
+        if (BLACK_PCS.has(pc)) {
+          blackDefs.push(midi);
+          continue;
+        }
+        const el = document.createElement("div");
+        el.className = "piano-key white theremin-key";
+        el.dataset.midi = String(midi);
+        const label = document.createElement("span");
+        label.className = "key-note";
+        label.textContent = `${NOTE_NAMES[pc]}${Math.floor(midi / 12) - 1}`;
+        el.appendChild(label);
+        pitchKeyboard.appendChild(el);
+        keyByMidi.set(midi, el);
+      }
+      for (const midi of blackDefs) {
+        const pc = ((midi % 12) + 12) % 12;
+        const semi = midi - MIDI_LO;
+        const el = document.createElement("div");
+        el.className = "piano-key black theremin-key";
+        el.dataset.midi = String(midi);
+        el.style.left = `${blackKeyLeft(semi)}px`;
+        const label = document.createElement("span");
+        label.className = "key-note";
+        label.textContent = NOTE_NAMES[pc];
+        el.appendChild(label);
+        pitchKeyboard.appendChild(el);
+        keyByMidi.set(midi, el);
+      }
+    }
+
+    function setLitMidi(midi) {
+      if (litMidi === midi) return;
+      if (litMidi != null) keyByMidi.get(litMidi)?.classList.remove("active", "pitch-detected");
+      litMidi = midi;
+      if (midi == null) return;
+      const el = keyByMidi.get(midi);
+      if (!el) return;
+      el.classList.add("active", "pitch-detected");
+      el.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    }
+
+    buildPitchKeyboard();
+
+    function syncStartBtn() {
+      const on = isAudioActive();
+      startBtn.textContent = on ? "Audio on" : "Start mic";
+      startBtn.classList.toggle("btn-play", on);
+      startBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+
+    function getRms() {
+      if (!analyser) return 0;
+      analyser.getFloatTimeDomainData(buf);
+      let s = 0;
+      for (let i = 0; i < buf.length; i++) s += buf[i] ** 2;
+      return Math.sqrt(s / buf.length);
+    }
+
+    function micTrackLive() {
+      const track = micStream?.getAudioTracks?.()[0];
+      return track && track.readyState === "live" && !track.muted;
+    }
+
+    async function build(c) {
+      if (built && micTrackLive()) {
+        tick();
+        syncStartBtn();
+        return;
+      }
+      if (built) {
+        micStream?.getTracks?.().forEach((t) => t.stop());
+        micStream = null;
+        built = false;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("status", "Mic not supported in this browser", "warn");
+        throw new Error("no mic");
+      }
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.45));
+      osc = ctx.createOscillator();
+      amp = ctx.createGain();
+      amp.gain.value = 0;
+      osc.type = "sine";
+      osc.connect(amp);
+      amp.connect(master);
+      osc.start();
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.2;
+      buf = new Float32Array(analyser.fftSize);
+      setStatus("status", "Allow microphone when asked…", "");
+      try {
+        micStream = await getMicStream();
+      } catch {
+        setStatus("status", "Mic denied — allow in browser Settings", "warn");
+        throw new Error("denied");
+      }
+      connectMicAnalyser(ctx, micStream, analyser, { inputGain: 2.5 });
+      built = true;
+      setStatus("status", "Mic live — hold circle to play", "ok");
+      syncStartBtn();
+      tick();
+    }
+
+    function tick() {
+      if (!built) return;
+      const rms = getRms();
+      const pct = Math.min(100, (rms / 0.08) * 100);
+      document.getElementById("micMeter").style.width = `${pct}%`;
+      document.getElementById("micMeter").classList.toggle("blowing", rms > 0.004);
+
+      const hz = rms > 0.003 ? detectPitchHz(buf, ctx.sampleRate) : null;
+      if (hz) {
+        lastHz = lastHz ? lastHz * 0.35 + hz * 0.65 : hz;
+        const t = ctx.currentTime;
+        osc.frequency.setTargetAtTime(lastHz, t, 0.05);
+        document.getElementById("hzOut").textContent = lastHz.toFixed(0);
+        const m = Math.round(hzToMidi(lastHz));
+        const clamped = Math.max(MIDI_LO, Math.min(MIDI_HI, m));
+        document.getElementById("noteOut").textContent = `${NOTE_NAMES[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
+        setLitMidi(clamped);
+      } else if (rms <= 0.003) {
+        document.getElementById("hzOut").textContent = "—";
+        document.getElementById("noteOut").textContent = "—";
+        setLitMidi(null);
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    async function bootMic() {
+      if (booting) return;
+      booting = true;
+      primeMicStream();
+      try {
+        await setAudioOn();
+      } catch {
+        syncStartBtn();
+      } finally {
+        booting = false;
+      }
+    }
+
+    registerAudioBoot(build, { mic: true });
+
+    startBtn.addEventListener("click", () => {
+      if (isAudioActive()) {
+        void setAudioOff().then(syncStartBtn);
+        return;
+      }
+      void bootMic();
+    });
+
+    document.getElementById("audioToggle")?.addEventListener("click", () => {
+      setTimeout(syncStartBtn, 0);
+    });
+
+    function startHold() {
+      if (!built || !amp || !ctx) return;
+      holding = true;
+      playBtn.classList.add("active");
+      playInner.classList.add("on");
+      amp.gain.setTargetAtTime(PLAY_GAIN, ctx.currentTime, 0.03);
+    }
+
+    function stopHold() {
+      if (!holding) return;
+      holding = false;
+      playBtn.classList.remove("active");
+      playInner.classList.remove("on");
+      if (amp && ctx) amp.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+    }
+
+    playBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      primeMicStream();
+      void bootMic().then(() => {
+        playBtn.setPointerCapture(e.pointerId);
+        startHold();
+      });
+    });
+
+    playBtn.addEventListener("pointerup", (e) => {
+      if (playBtn.hasPointerCapture(e.pointerId)) playBtn.releasePointerCapture(e.pointerId);
+      stopHold();
+    });
+    playBtn.addEventListener("pointercancel", stopHold);
+    playBtn.addEventListener("lostpointercapture", stopHold);
+
+    syncStartBtn();
+  </script>
+</body>
+</html>

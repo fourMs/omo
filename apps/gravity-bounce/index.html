@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Gravity Bounce — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Gravity Bounce</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel"><h2>Gravity bounce</h2><p>Set pitch with <strong>X</strong> on the pad. A sharp <strong>downward jerk</strong> triggers a pluck.</p></div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid"><div class="touch-dot" id="dot"></div></div>
+  </div>
+  <script type="module">
+
+import { bindLearn, startAudio } from "../../shared/app.js";
+import { createMasterBus } from "../../shared/audio.js";
+bindLearn();
+const pad=document.getElementById("pad");
+const dot=document.getElementById("dot");
+const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+let ctx,master,built=false,holding=false,activeId=null;
+
+import { createKSPool, karplusPluck } from "../../shared/ks.js";
+import { enableSensors, onMotion, primeSensors } from "../../shared/sensors.js";
+let pool,hz=220,lastM=9.8;
+function build(c){ctx=c;({master}=createMasterBus(c,0.55));pool=createKSPool(4);built=true;
+primeSensors({needMotion:true,needOrientation:false});enableSensors({needMotion:true,needOrientation:false}).then(ok=>{if(!ok)return;onMotion(({x,y,z})=>{const m=Math.sqrt(x*x+y*y+z*z);if(m<lastM-2.2)karplusPluck(ctx,master,pool,hz,{strength:0.55,level:0.35});lastM=m;});});}
+pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio(!built?build:undefined);const r=pad.getBoundingClientRect();hz=110*Math.pow(4,clamp((e.clientX-r.left)/r.width,0,1));pad.classList.add("active");});
+pad.addEventListener("pointerup",()=>pad.classList.remove("active"));
+  </script>
+</body>
+</html>

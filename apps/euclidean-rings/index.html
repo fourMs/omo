@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Euclidean Rings — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell circular-drum-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Euclidean Rings</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Euclidean pulse</h2>
+    <p>Turn <strong>Audio on</strong>, press ▶. Each ring is a Euclidean rhythm (evenly spaced hits). Tap <strong>Phase − / +</strong> to rotate all rings — polyrhythms against each other.</p>
+  </div>
+  <div class="seq-toolbar">
+    <div class="control-row">
+      <label for="bpm">BPM</label>
+      <input type="range" id="bpm" min="60" max="160" value="108" />
+      <span id="bpmVal">108</span>
+      <button type="button" class="btn btn-play" id="playBtn">▶</button>
+    </div>
+    <div class="control-row">
+      <label>Phase</label>
+      <button type="button" class="btn btn-secondary btn-sm" id="phaseDown" aria-label="Phase back">−</button>
+      <span id="phaseVal">0</span>
+      <button type="button" class="btn btn-secondary btn-sm" id="phaseUp" aria-label="Phase forward">+</button>
+    </div>
+  </div>
+  <p class="status-bar" id="status">Euclidean 16-step rings</p>
+  <div class="main-stage circular-drum-stage">
+    <canvas id="seq" class="canvas-fill" aria-label="Euclidean rings"></canvas>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { drawCircularSeq } from "../../shared/circular-seq.js";
+    import { euclideanRhythm } from "../../shared/euclidean.js";
+    import { DRUM_SEQ_ROWS } from "../../shared/drum-sounds.js";
+
+    bindLearn();
+    const STEPS = 16;
+    const RINGS = [
+      { pulses: 4, label: "E(4,16)" },
+      { pulses: 5, label: "E(5,16)" },
+      { pulses: 7, label: "E(7,16)" },
+      { pulses: 3, label: "E(3,16)" },
+    ];
+    const canvas = document.getElementById("seq");
+    const g = canvas.getContext("2d");
+    let ctx, master, playing = false, stepIndex = 0, nextTime = 0, playStep = -1;
+    let built = false;
+    let phase = 0;
+    let pattern = [];
+
+    function setPhase(next) {
+      phase = ((next % STEPS) + STEPS) % STEPS;
+      document.getElementById("phaseVal").textContent = String(phase);
+      pattern = RINGS.map((r) => euclideanRhythm(r.pulses, STEPS, phase));
+      redraw();
+    }
+
+    function rebuildPattern() {
+      setPhase(phase);
+    }
+
+    function sizeCanvas() {
+      const box = canvas.parentElement.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      const w = Math.max(1, Math.floor(box.width * dpr));
+      const h = Math.max(1, Math.floor(box.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      return { w, h, dpr };
+    }
+
+    function redraw() {
+      const { w, h, dpr } = sizeCanvas();
+      drawCircularSeq(g, w, h, dpr, {
+        pattern,
+        rows: DRUM_SEQ_ROWS,
+        playStep: playing ? playStep : -1,
+      });
+    }
+
+    async function boot(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.65));
+      built = true;
+      rebuildPattern();
+      redraw();
+    }
+
+    registerAudioBoot(boot);
+    rebuildPattern();
+
+    function scheduler() {
+      if (!playing || !ctx) return;
+      const now = ctx.currentTime;
+      const base = 60 / +document.getElementById("bpm").value / 4;
+      while (nextTime <= now + 0.05) {
+        const col = stepIndex;
+        playStep = col;
+        redraw();
+        for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+          if (pattern[ri]?.[col]) DRUM_SEQ_ROWS[ri].play(ctx, master);
+        }
+        nextTime += base;
+        stepIndex = (col + 1) % STEPS;
+      }
+      requestAnimationFrame(scheduler);
+    }
+
+    document.getElementById("phaseDown").onclick = () => setPhase(phase - 1);
+    document.getElementById("phaseUp").onclick = () => setPhase(phase + 1);
+
+    document.getElementById("bpm").oninput = (e) => {
+      document.getElementById("bpmVal").textContent = e.target.value;
+    };
+
+    document.getElementById("playBtn").onclick = async () => {
+      await startAudio(!built ? boot : undefined);
+      if (!ctx) return;
+      if (playing) {
+        playing = false;
+        playStep = -1;
+        document.getElementById("playBtn").textContent = "▶";
+        document.getElementById("playBtn").classList.remove("active");
+        redraw();
+        return;
+      }
+      playing = true;
+      stepIndex = 0;
+      nextTime = ctx.currentTime + 0.05;
+      document.getElementById("playBtn").textContent = "■";
+      document.getElementById("playBtn").classList.add("active");
+      scheduler();
+    };
+
+    new ResizeObserver(() => redraw()).observe(canvas.parentElement);
+    requestAnimationFrame(() => redraw());
+  </script>
+</body>
+</html>

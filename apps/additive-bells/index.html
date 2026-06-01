@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Additive Bells — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell additive-bells-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Additive Bells</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Additive synthesis</h2>
+    <p>Turn <strong>Audio on</strong>. <strong>Tap the pad</strong> or <strong>hit downward</strong> (phone upright, tap the bottom on a surface). Set partial sliders and <strong>root</strong> first.</p>
+    <p>Allow <strong>motion</strong> on iPhone when asked.</p>
+  </div>
+  <p class="status-bar" id="status">Audio on · tap pad to play</p>
+  <div class="main-stage bells-layout">
+    <div class="bells-scroll">
+      <div class="control-row">
+        <label for="root">Root</label>
+        <input type="range" id="root" min="48" max="72" value="60" />
+        <span id="rootLbl">C4</span>
+      </div>
+      <div id="partials" class="bells-partials"></div>
+    </div>
+    <div class="bells-pad-wrap">
+      <div id="pad" class="bells-pad stage-fill play-grid" role="button" tabindex="0" aria-label="Strike bell">Tap to strike</div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus, midiToFreq } from "../../shared/audio.js";
+    import { enableSensors, onMotion, primeSensors, stopSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+
+    const RATIOS = [1, 2.56, 5.12, 8.21, 10.45, 13.8, 17.2, 21.5];
+    const NAMES = ["1×", "2.6×", "5.1×", "8.2×", "10×", "14×", "17×", "22×"];
+    const SENSOR_OPTS = { needMotion: true, needOrientation: false };
+    /** Portrait upright: sharp +Y linear accel ≈ downward tap on a surface. */
+    const DOWN_JERK = 2.2;
+    const HIT_COOLDOWN_MS = 360;
+    const GAIN_FLOOR = 0.0001;
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    const pad = document.getElementById("pad");
+    const partialsEl = document.getElementById("partials");
+    let ctx, master, reverb, reverbWet, built = false;
+    let sensorsReady = false;
+    let motionPrimed = false;
+    let lastDownY = 0;
+    let lastHitAt = 0;
+    const levels = [0.9, 0.55, 0.4, 0.35, 0.28, 0.22, 0.18, 0.14];
+
+    NAMES.forEach((name, i) => {
+      const row = document.createElement("label");
+      row.className = "control-row";
+      row.innerHTML = `${name} <input type="range" min="0" max="100" value="${(levels[i] * 100) | 0}" data-i="${i}" />`;
+      partialsEl.appendChild(row);
+    });
+
+    function getLevels() {
+      return [...partialsEl.querySelectorAll("input[type=range]")].map((el) => +el.value / 100);
+    }
+
+    function bellReverbImpulse(c, sec) {
+      const len = Math.floor(c.sampleRate * sec);
+      const b = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = b.getChannelData(ch);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2.2;
+      }
+      return b;
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.52));
+      reverb = c.createConvolver();
+      reverb.buffer = bellReverbImpulse(c, 2.2);
+      reverbWet = c.createGain();
+      reverbWet.gain.value = 0.38;
+      reverb.connect(reverbWet);
+      reverbWet.connect(master);
+      built = true;
+      primeSensors(SENSOR_OPTS);
+      void initMotion();
+    }
+
+    registerAudioBoot(buildAudio);
+
+    function flashPad() {
+      pad.classList.add("active");
+      clearTimeout(flashPad._t);
+      flashPad._t = setTimeout(() => pad.classList.remove("active"), 120);
+    }
+
+    function strike(nx, impact = 1) {
+      if (!built || !ctx) return;
+      if (ctx.state === "suspended") void ctx.resume();
+      const amps = getLevels();
+      if (!amps.some((a) => a >= 0.02)) {
+        setStatus("status", "Raise at least one partial slider", "warn");
+        return;
+      }
+      const f0 = midiToFreq(+document.getElementById("root").value);
+      const t = ctx.currentTime;
+      const bright = 0.65 + (1 - nx) * 0.35;
+      const hitGain = clamp(0.8 + impact / 3, 0.8, 1.25);
+
+      RATIOS.forEach((ratio, i) => {
+        const amp = amps[i];
+        if (amp < 0.02) return;
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        const det = 1 + (i - 3.5) * 0.0006;
+        osc.frequency.value = f0 * ratio * det;
+        const g = ctx.createGain();
+        const send = ctx.createGain();
+        send.gain.value = 0.5 * Math.exp(-i * 0.2);
+        g.connect(master);
+        g.connect(send);
+        send.connect(reverb);
+        osc.connect(g);
+
+        const attack = 0.002 + i * 0.0004;
+        const decay = 3.1 * Math.exp(-i * 0.42);
+        const peak = Math.max(
+          GAIN_FLOOR,
+          amp * bright * hitGain * 0.36 * (0.55 + 0.45 * Math.exp(-i * 0.12))
+        );
+        const strike = peak * (i < 3 ? 1.12 : 1 + 0.08 * Math.max(0, 4 - i));
+        const t1 = t + attack;
+        const t2 = t1 + 0.028 + i * 0.004;
+        const tEnd = t + attack + decay;
+
+        g.gain.setValueAtTime(GAIN_FLOOR, t);
+        g.gain.exponentialRampToValueAtTime(Math.max(GAIN_FLOOR, strike), t1);
+        g.gain.exponentialRampToValueAtTime(Math.max(GAIN_FLOOR, peak * 0.22), t2);
+        g.gain.exponentialRampToValueAtTime(GAIN_FLOOR, tEnd);
+        osc.start(t);
+        osc.stop(tEnd + 0.06);
+      });
+      flashPad();
+    }
+
+    function linearY(data) {
+      return data.linear?.y ?? data.y;
+    }
+
+    function onMotionSample(data) {
+      if (!built) return;
+      const ay = linearY(data);
+      if (!motionPrimed) {
+        lastDownY = ay;
+        motionPrimed = true;
+        return;
+      }
+      const downJerk = ay - lastDownY;
+      lastDownY = ay;
+      const now = performance.now();
+      if (downJerk < DOWN_JERK || now - lastHitAt < HIT_COOLDOWN_MS) return;
+      lastHitAt = now;
+      const nx = clamp(0.25 + Math.min(0.7, downJerk / 5), 0, 1);
+      strike(nx, downJerk);
+    }
+
+    async function initMotion() {
+      if (sensorsReady || !built) return;
+      const ok = await enableSensors(SENSOR_OPTS);
+      if (!ok) {
+        setStatus("status", "Motion blocked — tap pad only", "warn");
+        return;
+      }
+      motionPrimed = false;
+      lastDownY = 0;
+      onMotion(onMotionSample);
+      sensorsReady = true;
+      setStatus("status", "Tap pad or hit downward", "ok");
+    }
+
+    async function ensureReady() {
+      primeSensors(SENSOR_OPTS);
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built) return false;
+      await initMotion();
+      return true;
+    }
+
+    document.getElementById("root").oninput = (e) => {
+      const m = +e.target.value;
+      const names = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+      document.getElementById("rootLbl").textContent = `${names[m % 12]}${Math.floor(m / 12) - 1}`;
+    };
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      if (!(await ensureReady())) return;
+      const r = pad.getBoundingClientRect();
+      const nx = clamp((e.clientX - r.left) / r.width, 0, 1);
+      strike(nx);
+    });
+    pad.addEventListener("pointerup", () => pad.classList.remove("active"));
+    pad.addEventListener("pointercancel", () => pad.classList.remove("active"));
+
+    window.addEventListener("pagehide", () => {
+      stopSensors();
+    });
+  </script>
+</body>
+</html>

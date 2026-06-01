@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0d0f14" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>Oslo Mobile Orchestra</title>
+  <link rel="stylesheet" href="shared/ui.css" />
+</head>
+<body class="hub">
+  <header class="hub-header">
+    <h1>Oslo Mobile Orchestra</h1>
+    <p>Each card shows synthesis and sensors. Tap to play.</p>
+  </header>
+
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Oslo Mobile Orchestra</h2>
+    <p>Pick an instrument below. In each app use <strong>Learn</strong> and <strong>Audio on/off</strong> in the top-right corner.</p>
+    <p><strong>Browsers:</strong> <strong>iPhone/iPad → Safari</strong> (Chrome/Firefox OK too). <strong>Android → Chrome</strong> (Firefox/Samsung Internet usually OK). Open the site in the browser — not inside Instagram, email, or other apps.</p>
+    <p><strong>Permissions</strong> You need to enable the use of mic, camera and motion sensors when asked.</p>
+    <p><strong>Volume:</strong> Should be turned up to at least 70%, possibly higher.</p>
+    <p><strong>Install:</strong> Add to Home Screen for full-screen (works offline for core pages).</p>
+    <p><a href="support.html">Device support</a> — check mic, motion, and other APIs before a workshop.</p>
+  </div>
+
+  <div id="partBanner" class="hub-banner hidden"></div>
+
+  <div class="control-row" style="margin:0 0.35rem">
+    <label class="slide-toggle"><input type="checkbox" id="a11yToggle" /> Larger UI</label>
+    <label for="sectionFilter">Section</label>
+    <select id="sectionFilter">
+      <option value="">All</option>
+      <option value="drones">Drones</option>
+      <option value="rhythm">Rhythm</option>
+      <option value="melody">Melody</option>
+      <option value="texture">Texture</option>
+      <option value="synthesis">Synthesis</option>
+      <option value="ai">AI</option>
+    </select>
+  </div>
+
+  <ul class="app-list" id="appList"></ul>
+
+  <script type="module">
+    import { bindLearn } from "./shared/app.js";
+    import { injectLearnPedagogy } from "./shared/learn-pedagogy.js";
+    import { HUB_APPS, catalogEntryForHref } from "./shared/hub-catalog.js";
+    import { SECTIONS, getPartFromUrl, getSectionFromUrl, wireA11yToggle } from "./shared/workshop.js";
+
+    bindLearn();
+    injectLearnPedagogy("learnPanel", "hub");
+    wireA11yToggle();
+
+    const APPS = [...HUB_APPS].sort((a, b) =>
+      a.title.localeCompare(b.title, "en", { sensitivity: "base" })
+    );
+
+    const list = document.getElementById("appList");
+    const filter = document.getElementById("sectionFilter");
+
+    function render() {
+      const sec = filter.value || getSectionFromUrl() || "";
+      list.innerHTML = "";
+      APPS.filter((a) => !sec || a.section === sec).forEach((a) => {
+        const li = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = a.href;
+        link.dataset.section = a.section;
+        const sectionLabel = SECTIONS[a.section]?.name || a.section;
+        link.innerHTML = `<span class="tag">${sectionLabel}</span><span class="title">${a.title}</span><span class="meta"><span class="meta-synth">${a.synth}</span><span class="meta-sep"> · </span><span class="meta-sensors">${a.sensors}</span></span>`;
+        li.appendChild(link);
+        list.appendChild(li);
+      });
+    }
+
+    filter.onchange = () => {
+      const u = new URL(location.href);
+      if (filter.value) u.searchParams.set("section", filter.value);
+      else u.searchParams.delete("section");
+      history.replaceState({}, "", u);
+      render();
+    };
+
+    const part = getPartFromUrl();
+    if (part) {
+      const b = document.getElementById("partBanner");
+      b.classList.remove("hidden");
+      const partHref = `apps/${part.app}/`;
+      const partTitle = catalogEntryForHref(partHref)?.title || part.app;
+      b.innerHTML = `${part.label} → <a href="${partHref}">${partTitle}</a>`;
+    }
+
+    const urlSec = getSectionFromUrl();
+    if (urlSec) filter.value = urlSec;
+    render();
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+  </script>
+</body>
+</html>

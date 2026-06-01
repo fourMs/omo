@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Evo Drumkit — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell evo-drumkit-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Evo Drumkit</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Evolutionary learning</h2>
+    <p>Turn <strong>Audio on</strong>. <strong>Record groove</strong> gives a <strong>4-beat count-in</strong>, then record a one-bar pattern on the pads.</p>
+    <p>Press <strong>Evolve</strong>: a population of random patterns competes; each generation keeps the fittest and breeds new ones via <strong>crossover</strong> and <strong>mutation</strong>.</p>
+    <p><strong>Play best</strong> loops the winner. <strong>👍</strong> nudges the next generation toward the pattern you just heard.</p>
+  </div>
+  <div class="evo-toolbar">
+    <div class="control-row">
+      <label for="volume">Vol</label>
+      <input type="range" id="volume" min="0" max="1" step="0.01" value="0.7" />
+      <label for="bpm">BPM</label>
+      <input type="range" id="bpm" min="72" max="132" value="96" />
+      <span id="bpmVal">96</span>
+    </div>
+    <div class="evo-actions">
+      <button type="button" class="btn btn-secondary btn-sm" id="recordBtn">Record groove</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="evolveBtn">Evolve</button>
+      <button type="button" class="btn btn-play btn-sm" id="playBestBtn">Play best</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="likeBtn" title="Boost fitness">👍</button>
+    </div>
+    <p class="status-bar evo-stats" id="stats">Gen 0 · Match — · Record a groove to teach</p>
+    <canvas id="patternViz" class="evo-pattern-viz" width="320" height="48" aria-label="Best pattern"></canvas>
+  </div>
+  <div class="main-stage evo-stage-wrap">
+    <div class="drums-grid" id="pads-grid"></div>
+    <div id="recordCountdown" class="evo-countdown hidden" aria-live="polite"></div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { DRUM_KIT } from "../../shared/drum-sounds.js";
+    import {
+      EVO_REST,
+      EVO_STEPS,
+      createPopulation,
+      evolveGeneration,
+      quantizeHits,
+    } from "../../shared/evo-pattern.js";
+
+    bindLearn();
+
+    const grid = document.getElementById("pads-grid");
+    const viz = document.getElementById("patternViz");
+    const vg = viz.getContext("2d");
+    const PAD_COLORS = ["#b91c1c", "#ea580c", "#ca8a04", "#16a34a", "#2563eb", "#7c3aed", "#0d9488", "#64748b"];
+
+    let ctx, master, built = false;
+    let target = null;
+    let population = createPopulation(20, null);
+    let generation = 0;
+    let userBonus = 0;
+    let recording = false;
+    let countingDown = false;
+    let recordStart = 0;
+    const recordHits = [];
+    let playing = false;
+    let playTimer = null;
+    let stepIndex = 0;
+
+    function bestIndividual() {
+      return population[0];
+    }
+
+    function updateStats() {
+      const best = bestIndividual();
+      const match = target ? `${(best.fitness * 100).toFixed(0)}%` : "—";
+      const tgt = target ? "target set" : "no target";
+      document.getElementById("stats").textContent =
+        `Gen ${generation} · Match ${match} · ${tgt} · pop ${population.length}`;
+    }
+
+    function drawPatternViz(genes) {
+      const dpr = devicePixelRatio || 1;
+      const w = Math.floor(viz.clientWidth * dpr) || 320;
+      const h = Math.floor(48 * dpr);
+      if (viz.width !== w) viz.width = w;
+      if (viz.height !== h) viz.height = h;
+      const stepW = w / EVO_STEPS;
+      vg.setTransform(1, 0, 0, 1, 0, 0);
+      vg.fillStyle = "#0f172a";
+      vg.fillRect(0, 0, w, h);
+      for (let s = 0; s < EVO_STEPS; s++) {
+        const x = s * stepW;
+        const pad = genes[s];
+        vg.fillStyle = pad === EVO_REST ? "#1e293b" : PAD_COLORS[pad] ?? "#475569";
+        vg.fillRect(x + 1, 1, stepW - 2, h - 2);
+        if (target && target[s] !== EVO_REST) {
+          vg.strokeStyle = "#6ee7b7";
+          vg.lineWidth = 2;
+          vg.strokeRect(x + 2, 2, stepW - 4, h - 4);
+        }
+      }
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, parseFloat(document.getElementById("volume").value)));
+      built = true;
+    }
+
+    registerAudioBoot(buildAudio);
+
+    async function ensureAudio() {
+      await startAudio(!built ? buildAudio : undefined);
+      if (master) master.gain.value = parseFloat(document.getElementById("volume").value);
+      return built;
+    }
+
+    function triggerPad(padIndex, el) {
+      void ensureAudio();
+      if (!ctx) return;
+      DRUM_KIT[padIndex].play(ctx, master);
+      if (el) {
+        el.classList.add("active");
+        setTimeout(() => el.classList.remove("active"), 100);
+      }
+      if (recording) {
+        recordHits.push({ t: ctx.currentTime - recordStart, pad: padIndex });
+      }
+    }
+
+    DRUM_KIT.forEach((pad, i) => {
+      const el = document.createElement("div");
+      el.className = "drum-pad";
+      el.dataset.pad = String(i);
+      el.innerHTML = `<span class="pad-icon">${pad.icon}</span><span class="pad-name">${pad.name}</span>`;
+      el.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        triggerPad(i, el);
+      });
+      grid.appendChild(el);
+    });
+
+    document.getElementById("volume").addEventListener("input", (e) => {
+      if (master) master.gain.value = +e.target.value;
+    });
+
+    document.getElementById("bpm").addEventListener("input", (e) => {
+      document.getElementById("bpmVal").textContent = e.target.value;
+    });
+
+    const recordBtn = document.getElementById("recordBtn");
+    const countEl = document.getElementById("recordCountdown");
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    function playCountClick() {
+      if (!ctx || !master) return;
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(660, t);
+      osc.frequency.exponentialRampToValueAtTime(440, t + 0.04);
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      osc.connect(g);
+      g.connect(master);
+      osc.start(t);
+      osc.stop(t + 0.09);
+    }
+
+    async function runBeatCountdown(bpm) {
+      const beatMs = (60 / bpm) * 1000;
+      countingDown = true;
+      recordBtn.disabled = true;
+      countEl.classList.remove("hidden");
+      for (let beat = 4; beat >= 1; beat--) {
+        countEl.textContent = String(beat);
+        setStatus("stats", `Count-in · ${beat}`, "ok");
+        playCountClick();
+        await sleep(beatMs);
+      }
+      countEl.textContent = "Go!";
+      setStatus("stats", "Go! · tap your groove", "ok");
+      playCountClick();
+      await sleep(280);
+      countEl.classList.add("hidden");
+      countingDown = false;
+      recordBtn.disabled = false;
+    }
+
+    recordBtn.addEventListener("click", async () => {
+      await ensureAudio();
+      if (countingDown) return;
+      if (recording) {
+        recording = false;
+        recordBtn.classList.remove("active");
+        recordBtn.textContent = "Record groove";
+        const bpm = +document.getElementById("bpm").value;
+        target = quantizeHits(recordHits, bpm);
+        generation = 0;
+        userBonus = 0;
+        population = createPopulation(20, target);
+        population = evolveGeneration(population, target);
+        generation = 1;
+        drawPatternViz(bestIndividual().genes);
+        updateStats();
+        setStatus("stats", `Recorded ${recordHits.length} hits · evolved gen 1`, "ok");
+        return;
+      }
+      recordHits.length = 0;
+      recordBtn.textContent = "Count-in…";
+      await runBeatCountdown(+document.getElementById("bpm").value);
+      recording = true;
+      recordStart = ctx.currentTime;
+      recordBtn.classList.add("active");
+      recordBtn.textContent = "Stop recording";
+      setStatus("stats", "Tap your groove…", "ok");
+    });
+
+    document.getElementById("evolveBtn").addEventListener("click", async () => {
+      await ensureAudio();
+      if (!target) {
+        setStatus("stats", "Record a groove first", "warn");
+        return;
+      }
+      if (userBonus > 0) {
+        population[0].fitness = Math.min(1, population[0].fitness + userBonus);
+        population.sort((a, b) => b.fitness - a.fitness);
+        userBonus = 0;
+      }
+      for (let i = 0; i < 5; i++) {
+        population = evolveGeneration(population, target, { popSize: 20 });
+        generation++;
+      }
+      drawPatternViz(bestIndividual().genes);
+      updateStats();
+    });
+
+    document.getElementById("likeBtn").addEventListener("click", () => {
+      userBonus = 0.25;
+      setStatus("stats", "👍 — next Evolve favors current best", "ok");
+    });
+
+    function stopPlayback() {
+      playing = false;
+      document.getElementById("playBestBtn").classList.remove("active");
+      document.getElementById("playBestBtn").textContent = "Play best";
+      if (playTimer) clearTimeout(playTimer);
+      playTimer = null;
+    }
+
+    function scheduleStep() {
+      if (!playing || !ctx) return;
+      const genes = bestIndividual().genes;
+      const pad = genes[stepIndex];
+      if (pad !== EVO_REST) DRUM_KIT[pad].play(ctx, master);
+      drawPatternViz(genes);
+      vg.fillStyle = "rgba(110, 231, 183, 0.45)";
+      const dpr = devicePixelRatio || 1;
+      const stepW = viz.width / EVO_STEPS;
+      vg.fillRect(stepIndex * stepW, 0, stepW, viz.height);
+      stepIndex = (stepIndex + 1) % EVO_STEPS;
+      const bpm = +document.getElementById("bpm").value;
+      const dur = (60 / bpm / 4) * 1000;
+      playTimer = setTimeout(scheduleStep, dur);
+    }
+
+    document.getElementById("playBestBtn").addEventListener("click", async () => {
+      await ensureAudio();
+      if (playing) {
+        stopPlayback();
+        drawPatternViz(bestIndividual().genes);
+        return;
+      }
+      playing = true;
+      stepIndex = 0;
+      document.getElementById("playBestBtn").classList.add("active");
+      document.getElementById("playBestBtn").textContent = "■ Stop";
+      scheduleStep();
+    });
+
+    new ResizeObserver(() => {
+      if (population.length) drawPatternViz(bestIndividual().genes);
+    }).observe(viz);
+
+    drawPatternViz(bestIndividual().genes);
+    updateStats();
+  </script>
+</body>
+</html>

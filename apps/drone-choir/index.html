@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Drone Choir — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Drone Choir</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Ensemble harmony</h2>
+    <p>Keep the phone <strong>portrait</strong> (vertical — turn off landscape lock if needed). Turn <strong>Audio on</strong>, pick a chord tone, <strong>hold</strong> the pad, slide <strong>up/down</strong> for pitch, rotate to detune.</p>
+  </div>
+  <p class="pick-label" aria-hidden="true">F minor</p>
+  <div class="note-grid" id="notes"></div>
+  <div class="main-stage">
+    <div id="pitchPad" class="stage-fill play-grid">
+      <div class="semitone-ruler" aria-hidden="true">
+        <span>+5</span><span>+3</span><span>0</span><span>−3</span><span>−5</span>
+      </div>
+      <span class="pad-readout" id="readout">—</span>
+      <div class="finger-dot" id="finger" style="top:50%;left:50%;opacity:0"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, createAudioBoot } from "../../shared/app.js";
+    import { createMasterBus, midiToFreq } from "../../shared/audio.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+    const CHORD = [{ name: "F", midi: 53 }, { name: "A♭", midi: 56 }, { name: "C", midi: 60 }, { name: "E♭", midi: 63 }];
+    let selected = 60, fingerSemitones = 0, orientDetune = 0;
+    let ctx, osc, gain, master;
+    const pitchPad = document.getElementById("pitchPad");
+    const finger = document.getElementById("finger");
+
+    function readoutLabel(midi) {
+      const n = Math.round(midi);
+      const names = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+      return `${names[((n % 12) + 12) % 12]}${Math.floor(n / 12) - 1}`;
+    }
+
+    function applyPitch() {
+      const midi = selected + fingerSemitones;
+      document.getElementById("readout").textContent =
+        `${readoutLabel(midi)}${orientDetune ? ` ${orientDetune > 0 ? "+" : ""}${orientDetune.toFixed(0)}¢` : ""}`;
+      if (!osc) return;
+      osc.frequency.setTargetAtTime(midiToFreq(midi), ctx.currentTime, 0.04);
+      osc.detune.setTargetAtTime(orientDetune, ctx.currentTime, 0.04);
+    }
+
+    const ensureReady = createAudioBoot(async (c) => {
+      ctx = c;
+      ({ master } = createMasterBus(ctx, 0.35));
+      gain = ctx.createGain();
+      gain.gain.value = 0;
+      osc = ctx.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.value = midiToFreq(selected);
+      const lfo = ctx.createOscillator();
+      const lfoG = ctx.createGain();
+      lfo.frequency.value = 0.15;
+      lfoG.gain.value = 4;
+      lfo.connect(lfoG);
+      lfoG.connect(osc.frequency);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start();
+      lfo.start();
+      primeSensors({ needMotion: false, needOrientation: true });
+      await enableSensors({ needMotion: false, needOrientation: true });
+      onOrientation(({ gamma }) => {
+        const g = typeof gamma === "number" && Number.isFinite(gamma) ? gamma : 0;
+        orientDetune = Math.max(-50, Math.min(50, g * 0.5));
+        applyPitch();
+      });
+      applyPitch();
+    });
+
+    function placeFinger(ny) {
+      finger.style.top = `${ny * 100}%`;
+      finger.style.left = "50%";
+      finger.style.opacity = "1";
+      fingerSemitones = (1 - ny) * 10 - 5;
+      applyPitch();
+    }
+
+    function nyFromEvent(e) {
+      const r = pitchPad.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (e.clientY - r.top) / Math.max(1, r.height)));
+    }
+
+    pitchPad.addEventListener("pointerdown", async (e) => {
+      primeSensors({ needMotion: false, needOrientation: true });
+      await ensureReady();
+      pitchPad.setPointerCapture(e.pointerId);
+      pitchPad.classList.add("active");
+      gain.gain.setTargetAtTime(0.4, ctx.currentTime, 0.06);
+      placeFinger(nyFromEvent(e));
+    });
+    pitchPad.addEventListener("pointermove", (e) => {
+      if (!pitchPad.classList.contains("active")) return;
+      placeFinger(nyFromEvent(e));
+    });
+    pitchPad.addEventListener("pointerup", () => {
+      pitchPad.classList.remove("active");
+      finger.style.opacity = "0";
+      gain.gain.setTargetAtTime(0, ctx.currentTime, 0.12);
+    });
+
+    const grid = document.getElementById("notes");
+    CHORD.forEach((n) => {
+      const b = document.createElement("button");
+      b.textContent = n.name;
+      b.type = "button";
+      if (n.midi === selected) b.classList.add("selected");
+      b.onclick = async () => {
+        await ensureReady();
+        selected = n.midi;
+        fingerSemitones = 0;
+        finger.style.top = "50%";
+        grid.querySelectorAll("button").forEach((x) => x.classList.remove("selected"));
+        b.classList.add("selected");
+        applyPitch();
+      };
+      grid.appendChild(b);
+    });
+  </script>
+</body>
+</html>

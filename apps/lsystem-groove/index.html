@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Lsystem Groove — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Lsystem Groove</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>L-system groove</h2>
+    <p>Turn <strong>Audio on</strong>, press ▶. Each bar the pattern <strong>rewrites</strong> (A→AB, B→A) and maps to the four drum tracks. Watch the rule string grow in the readout.</p>
+  </div>
+  <div class="app-toolbar">
+    <div class="control-row">
+      <label for="bpm">BPM</label>
+      <input type="range" id="bpm" min="70" max="150" value="100" />
+      <span id="bpmVal">100</span>
+      <button type="button" class="btn btn-play" id="playBtn">▶</button>
+      <button type="button" class="btn-secondary btn btn-sm" id="resetBtn">Reset rule</button>
+    </div>
+  </div>
+  <p class="status-bar" id="status">L-system: A → AB, B → A</p>
+  <div class="readout-row">
+    <p class="value-chip">Gen <strong id="genOut">0</strong></p>
+    <p class="value-chip">Rule <strong id="ruleOut">A</strong></p>
+  </div>
+  <div class="main-stage lsystem-stage">
+    <div id="grid" class="lsystem-grid" aria-label="Drum pattern"></div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { createLSystemGroove } from "../../shared/lsystem-groove.js";
+    import { DRUM_SEQ_ROWS } from "../../shared/drum-sounds.js";
+
+    bindLearn();
+    const STEPS = 16;
+    const lsys = createLSystemGroove("A", { A: "AB", B: "A" });
+    const pattern = DRUM_SEQ_ROWS.map(() => Array(STEPS).fill(false));
+    let ctx, master, built = false;
+    let playing = false;
+    let stepIndex = 0;
+    let nextTime = 0;
+    let barCount = 0;
+    let generation = 0;
+
+    const grid = document.getElementById("grid");
+    DRUM_SEQ_ROWS.forEach((row, ri) => {
+      const label = document.createElement("span");
+      label.className = "lsystem-row-label";
+      label.textContent = row.icon;
+      grid.appendChild(label);
+      for (let ci = 0; ci < STEPS; ci++) {
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "lsystem-cell";
+        cell.dataset.r = String(ri);
+        cell.dataset.c = String(ci);
+        cell.addEventListener("pointerdown", (e) => {
+          e.preventDefault();
+          void toggleCell(ri, ci);
+        });
+        grid.appendChild(cell);
+      }
+    });
+
+    function applyLSystemToPattern() {
+      const bits = lsys.toPattern(STEPS);
+      for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+        for (let ci = 0; ci < STEPS; ci++) {
+          const v = bits[(ci + ri * 3) % bits.length];
+          pattern[ri][ci] = !!v;
+        }
+      }
+      document.getElementById("ruleOut").textContent = lsys.getState().slice(0, 12);
+      document.getElementById("genOut").textContent = String(generation);
+      redraw();
+    }
+
+    function redraw() {
+      grid.querySelectorAll(".lsystem-cell").forEach((el) => {
+        const ri = +el.dataset.r;
+        const ci = +el.dataset.c;
+        const on = pattern[ri][ci];
+        el.classList.toggle("on", on);
+        el.classList.toggle("play", playing && ci === stepIndex);
+      });
+    }
+
+    async function toggleCell(ri, ci, preview = true) {
+      await startAudio(!built ? boot : undefined);
+      pattern[ri][ci] = !pattern[ri][ci];
+      redraw();
+      if (preview && built && pattern[ri][ci]) DRUM_SEQ_ROWS[ri].play(ctx, master);
+    }
+
+    async function boot(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.65));
+      built = true;
+      applyLSystemToPattern();
+    }
+
+    registerAudioBoot(boot);
+
+    function evolveBar() {
+      lsys.rewrite();
+      generation++;
+      applyLSystemToPattern();
+    }
+
+    function scheduler() {
+      if (!playing || !ctx) return;
+      const now = ctx.currentTime;
+      const base = 60 / +document.getElementById("bpm").value / 4;
+      while (nextTime <= now + 0.05) {
+        const col = stepIndex;
+        if (col === 0 && barCount > 0) evolveBar();
+        for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+          if (pattern[ri][col]) DRUM_SEQ_ROWS[ri].play(ctx, master);
+        }
+        stepIndex = (col + 1) % STEPS;
+        if (stepIndex === 0) barCount++;
+        redraw();
+        nextTime += base;
+      }
+      requestAnimationFrame(scheduler);
+    }
+
+    document.getElementById("bpm").oninput = (e) => {
+      document.getElementById("bpmVal").textContent = e.target.value;
+    };
+
+    document.getElementById("resetBtn").onclick = () => {
+      lsys.reset("A");
+      generation = 0;
+      barCount = 0;
+      applyLSystemToPattern();
+      setStatus("status", "Reset to A", "");
+    };
+
+    document.getElementById("playBtn").onclick = async () => {
+      await startAudio(!built ? boot : undefined);
+      if (!ctx) return;
+      if (playing) {
+        playing = false;
+        document.getElementById("playBtn").textContent = "▶";
+        document.getElementById("playBtn").classList.remove("active");
+        redraw();
+        return;
+      }
+      playing = true;
+      stepIndex = 0;
+      barCount = 0;
+      nextTime = ctx.currentTime + 0.05;
+      document.getElementById("playBtn").textContent = "■";
+      document.getElementById("playBtn").classList.add("active");
+      scheduler();
+    };
+  </script>
+</body>
+</html>

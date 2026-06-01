@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Hum Clap — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .hum-clap-steps {
+      flex-shrink: 0;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.45;
+      background: #111827;
+      border-bottom: 1px solid #2d3548;
+    }
+    .hum-clap-steps strong { color: var(--text); }
+    .rec-hold {
+      position: relative;
+      min-height: 52px;
+    }
+    .rec-hold.recording {
+      border-color: var(--accent) !important;
+      background: rgba(110, 231, 183, 0.15) !important;
+      color: var(--accent);
+    }
+    .rec-hold small {
+      display: block;
+      font-size: 0.58rem;
+      font-weight: 400;
+      opacity: 0.85;
+      margin-top: 0.15rem;
+    }
+    .level-chip {
+      flex-shrink: 0;
+      padding: 0.2rem 0.5rem;
+      text-align: center;
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+    .level-chip strong { color: var(--accent); }
+    #listenBtn.active {
+      background: var(--accent);
+      color: #042f2e;
+    }
+  </style>
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Hum Clap</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Teach then play</h2>
+    <p><strong>1.</strong> Turn <strong>Audio on</strong> and allow the mic.</p>
+    <p><strong>2. Teach</strong> — <strong>hold</strong> each button (don’t tap): hum steadily, clap 2–3 times, then stay silent.</p>
+    <p><strong>3. Listen</strong> — the app guesses hum / clap / silent and plays a different sound for each (tone · clap burst · quiet).</p>
+    <p>Need at least <strong>5</strong> examples per class. If everything sounds the same, tap <strong>Clear</strong> and teach again with louder, clearer gestures.</p>
+  </div>
+
+  <div class="hum-clap-steps" id="stepHint">
+    <strong>Teach:</strong> hold Hum → hold Clap → hold Silent (5+ each) → Listen
+  </div>
+
+  <div class="pred-display still" id="pred">—</div>
+  <p class="status-bar" id="status">Turn Audio on to start</p>
+  <p class="status-bar" id="counts">Hum: 0/5 · Clap: 0/5 · Silent: 0/5</p>
+  <p class="level-chip">Mic level <strong id="levelOut">—</strong> · guess <strong id="confOut">—</strong></p>
+
+  <div class="btn-grid-3">
+    <button type="button" class="btn-secondary btn btn-sm rec-hold" id="recHum">
+      Hold · Hum
+      <small>steady “mmm”</small>
+    </button>
+    <button type="button" class="btn-secondary btn btn-sm rec-hold" id="recClap">
+      Hold · Clap
+      <small>clap 2–3×</small>
+    </button>
+    <button type="button" class="btn-secondary btn btn-sm rec-hold" id="recSil">
+      Hold · Silent
+      <small>no sound</small>
+    </button>
+  </div>
+  <div class="btn-grid-2">
+    <button type="button" class="btn btn-sm" id="listenBtn" disabled>Listen</button>
+    <button type="button" class="btn-danger btn btn-sm" id="clearBtn">Clear training</button>
+  </div>
+
+  <script type="module">
+    import { bindLearn, createAudioBoot, setStatus, registerAudioBoot } from "../../shared/app.js";
+    import { connectMicAnalyser, createMasterBus, getMicStream } from "../../shared/audio.js";
+    import { KNNClassifier } from "../../shared/ml.js";
+
+    bindLearn();
+    const LABELS = ["hum", "clap", "silence"];
+    const MIN = 5;
+    const FEAT_DIM = 5;
+    const CONF_MIN = 0.55;
+    const STABLE_FRAMES = 10;
+    const clf = new KNNClassifier(3);
+    let ctx, master, micStream, analyser, freqBuf, timeBuf;
+    let humGain, humOsc;
+    let listening = false;
+    let monitorId = 0;
+    let lastPred = null;
+    let stableLabel = null;
+    let stableCount = 0;
+
+    function extractFeatures() {
+      analyser.getFloatTimeDomainData(timeBuf);
+      analyser.getByteFrequencyData(freqBuf);
+      let rms = 0;
+      let crossings = 0;
+      for (let i = 0; i < timeBuf.length; i++) {
+        rms += timeBuf[i] ** 2;
+        if (i > 0 && Math.sign(timeBuf[i]) !== Math.sign(timeBuf[i - 1])) crossings++;
+      }
+      rms = Math.sqrt(rms / timeBuf.length);
+      const zcr = crossings / timeBuf.length;
+
+      let sum = 0;
+      let weighted = 0;
+      let hi = 0;
+      let peak = 0;
+      for (let i = 0; i < freqBuf.length; i++) {
+        const v = freqBuf[i];
+        sum += v;
+        weighted += i * v;
+        peak = Math.max(peak, v);
+        if (i > freqBuf.length * 0.35) hi += v;
+      }
+      const centroid = sum > 0 ? weighted / sum / freqBuf.length : 0;
+      const hf = sum > 0 ? hi / sum : 0;
+      const peakiness = sum > 0 ? peak / (sum / freqBuf.length + 1) : 0;
+
+      return [
+        Math.min(1, rms * 10),
+        centroid,
+        Math.min(1, hf * 1.6),
+        Math.min(1, zcr * 7),
+        Math.min(1, peakiness / 8),
+      ];
+    }
+
+    function normalize(features) {
+      if (clf.samples.length < 2) return features.slice();
+      const mean = new Array(FEAT_DIM).fill(0);
+      const std = new Array(FEAT_DIM).fill(1);
+      for (const s of clf.samples) {
+        for (let i = 0; i < FEAT_DIM; i++) mean[i] += s.features[i];
+      }
+      for (let i = 0; i < FEAT_DIM; i++) mean[i] /= clf.samples.length;
+      for (const s of clf.samples) {
+        for (let i = 0; i < FEAT_DIM; i++) {
+          const d = s.features[i] - mean[i];
+          std[i] += d * d;
+        }
+      }
+      for (let i = 0; i < FEAT_DIM; i++) {
+        std[i] = Math.sqrt(std[i] / clf.samples.length) || 1;
+      }
+      return features.map((v, i) => (v - mean[i]) / std[i]);
+    }
+
+    async function bootMic(c) {
+      if (ctx) return;
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.45));
+      humGain = ctx.createGain();
+      humGain.gain.value = 0;
+      humOsc = ctx.createOscillator();
+      humOsc.type = "sine";
+      humOsc.frequency.value = 280;
+      humOsc.connect(humGain);
+      humGain.connect(master);
+      humOsc.start();
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.72;
+      freqBuf = new Uint8Array(analyser.frequencyBinCount);
+      timeBuf = new Float32Array(analyser.fftSize);
+      micStream = await getMicStream();
+      connectMicAnalyser(ctx, micStream, analyser);
+      setStatus("status", "Hold each teach button — then Listen", "ok");
+      startMonitor();
+    }
+
+    registerAudioBoot(bootMic, { mic: true });
+    const ensureReady = createAudioBoot(bootMic, { mic: true });
+
+    function counts() {
+      return LABELS.map((l) => clf.samples.filter((s) => s.label === l).length);
+    }
+
+    function update() {
+      const c = counts();
+      document.getElementById("counts").textContent =
+        `Hum: ${c[0]}/${MIN} · Clap: ${c[1]}/${MIN} · Silent: ${c[2]}/${MIN}`;
+      const ready = LABELS.every((l, i) => c[i] >= MIN);
+      document.getElementById("listenBtn").disabled = !ready;
+      document.getElementById("stepHint").innerHTML = ready
+        ? "<strong>Ready!</strong> Tap Listen, then hum / clap / stay quiet."
+        : "<strong>Teach:</strong> hold Hum → hold Clap → hold Silent (" + MIN + "+ each) → Listen";
+    }
+
+    function playClapBurst() {
+      const t = ctx.currentTime;
+      const len = Math.floor(ctx.sampleRate * 0.08);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g = ctx.createGain();
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 1800;
+      bp.Q.value = 0.8;
+      src.connect(bp);
+      bp.connect(g);
+      g.connect(master);
+      g.gain.setValueAtTime(0.55, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+      src.start(t);
+      src.stop(t + 0.12);
+    }
+
+    function applyLabelSound(label) {
+      const t = ctx.currentTime;
+      if (label === "hum") {
+        humGain.gain.setTargetAtTime(0.35, t, 0.04);
+      } else {
+        humGain.gain.setTargetAtTime(0, t, 0.05);
+      }
+      if (label === "clap" && lastPred !== "clap") {
+        playClapBurst();
+      }
+      lastPred = label;
+    }
+
+    function showPred(label, confidence) {
+      const el = document.getElementById("pred");
+      el.textContent = label ? label.toUpperCase() : "—";
+      el.className = `pred-display ${label || "silence"}`;
+      document.getElementById("confOut").textContent =
+        label ? `${Math.round(confidence * 100)}%` : "—";
+    }
+
+    function startMonitor() {
+      cancelAnimationFrame(monitorId);
+      const loop = () => {
+        if (!ctx || !analyser) return;
+        const f = extractFeatures();
+        const rms = f[0];
+        document.getElementById("levelOut").textContent =
+          rms > 0.02 ? `${Math.round(rms * 100)}%` : "quiet";
+
+        if (listening && LABELS.every((_, i) => counts()[i] >= MIN)) {
+          const { label, confidence } = clf.predict(normalize(f));
+          if (label && confidence >= CONF_MIN) {
+            if (label === stableLabel) stableCount++;
+            else {
+              stableLabel = label;
+              stableCount = 1;
+            }
+          } else {
+            stableCount = 0;
+          }
+          if (stableCount >= STABLE_FRAMES && stableLabel) {
+            showPred(stableLabel, confidence);
+            applyLabelSound(stableLabel);
+          }
+        }
+        monitorId = requestAnimationFrame(loop);
+      };
+      loop();
+    }
+
+    function bindHoldRecord(btn, label, hintWhileRecording) {
+      let recording = false;
+      let batch = [];
+
+      const stop = () => {
+        if (!recording) return;
+        recording = false;
+        btn.classList.remove("recording");
+        if (batch.length) {
+          batch.forEach((feat) => clf.addSample(feat, label));
+          update();
+          setStatus("status", `Saved ${batch.length} × ${label}`, "ok");
+        } else {
+          setStatus("status", "Too short — hold longer", "warn");
+        }
+        batch = [];
+      };
+
+      btn.addEventListener("pointerdown", async (e) => {
+        e.preventDefault();
+        await ensureReady();
+        if (!ctx) return;
+        recording = true;
+        batch = [];
+        btn.classList.add("recording");
+        btn.setPointerCapture(e.pointerId);
+        setStatus("status", hintWhileRecording, "ok");
+
+        const sampleLoop = () => {
+          if (!recording) return;
+          batch.push(extractFeatures().slice());
+          requestAnimationFrame(sampleLoop);
+        };
+        sampleLoop();
+      });
+
+      btn.addEventListener("pointerup", stop);
+      btn.addEventListener("pointercancel", stop);
+      btn.addEventListener("lostpointercapture", stop);
+    }
+
+    bindHoldRecord(
+      document.getElementById("recHum"),
+      "hum",
+      "Holding… hum steadily (mmm)"
+    );
+    bindHoldRecord(
+      document.getElementById("recClap"),
+      "clap",
+      "Holding… clap 2–3 times"
+    );
+    bindHoldRecord(
+      document.getElementById("recSil"),
+      "silence",
+      "Holding… stay completely quiet"
+    );
+
+    document.getElementById("clearBtn").onclick = () => {
+      listening = false;
+      stableLabel = null;
+      stableCount = 0;
+      document.getElementById("listenBtn").classList.remove("active");
+      document.getElementById("listenBtn").textContent = "Listen";
+      clf.clear();
+      lastPred = null;
+      humGain?.gain.setTargetAtTime(0, ctx?.currentTime ?? 0, 0.05);
+      showPred(null, 0);
+      update();
+      setStatus("status", "Training cleared — teach again", "");
+    };
+
+    document.getElementById("listenBtn").onclick = async () => {
+      await ensureReady();
+      listening = !listening;
+      const btn = document.getElementById("listenBtn");
+      btn.classList.toggle("active", listening);
+      btn.textContent = listening ? "Stop" : "Listen";
+      if (!listening) {
+        humGain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+        lastPred = null;
+        showPred(null, 0);
+        setStatus("status", "Stopped", "");
+      } else {
+        stableLabel = null;
+        stableCount = 0;
+        setStatus("status", "Listening… hum, clap, or stay silent", "ok");
+      }
+    };
+
+    update();
+  </script>
+</body>
+</html>

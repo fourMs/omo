@@ -1,0 +1,9 @@
+{
+  "name": "Oslo Mobile Orchestra",
+  "short_name": "OMO",
+  "description": "Phone orchestra — Web Audio instruments for workshops",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0d0f14",
+  "theme_color": "#0d0f14"
+}

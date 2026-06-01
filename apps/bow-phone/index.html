@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Bow Phone — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell bow-phone-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Bow Phone</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Bowed string</h2>
+    <p>Turn <strong>Audio on</strong>, tap <strong>Start camera</strong>, then hold the <strong>lower pad</strong> for pitch. Move your <strong>hand</strong> in the green zone — side to side like a bow; the dot follows your hand.</p>
+    <p>Allow <strong>camera</strong> (front) when asked. If blocked, rocking the phone still drives the bow.</p>
+  </div>
+  <div class="breath-row">
+    <label>Bow</label>
+    <div class="breath-meter" id="bowMeterWrap">
+      <div class="breath-meter-fill" id="bowMeter"></div>
+    </div>
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Pitch <strong id="pOut">220</strong> Hz</p>
+    <p class="value-chip">Amp <strong id="bOut">0</strong></p>
+    <p class="value-chip">Hand <strong id="handOut">—</strong></p>
+    <p class="value-chip">Bow <strong id="bowSrc">—</strong></p>
+  </div>
+  <p class="status-bar" id="status">Audio on · tap Start camera</p>
+  <div class="main-stage bow-split">
+    <div class="bow-cam-wrap" id="camWrap">
+      <video id="cam" playsinline webkit-playsinline muted autoplay></video>
+      <canvas id="camHud" aria-hidden="true"></canvas>
+      <div class="bow-cam-start" id="camStart">
+        <button type="button" class="btn" id="camBtn">Start camera</button>
+      </div>
+      <span class="bow-cam-hint">Hand in green zone · move side to side</span>
+    </div>
+    <div id="pad" class="pitch-pad play-grid" role="application" aria-label="Pitch">
+      <div class="touch-dot" id="dot"></div>
+      <span class="pitch-pad-hint">Left fingers · pitch</span>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus, unlockAudio } from "../../shared/audio.js";
+    import { bowFromHandSpeed, bowFromZoneMotion, createHandBowState, trackHandInBowZone } from "../../shared/hand-bow.js";
+    import { enableSensors, onMotion, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const video = document.getElementById("cam");
+    const camHud = document.getElementById("camHud");
+    const camStart = document.getElementById("camStart");
+    const camBtn = document.getElementById("camBtn");
+    const hudCtx = camHud.getContext("2d");
+    const sample = document.createElement("canvas");
+    const sctx = sample.getContext("2d", { willReadFrequently: true });
+
+    const SENSOR_OPTS = { needMotion: true, needOrientation: false };
+    const CAM_W = 128;
+    const CAM_H = 96;
+    const BOW_ZONE = 0.55;
+    const BOW_SPEED_GAIN = 14;
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    sample.width = CAM_W;
+    sample.height = CAM_H;
+
+    let ctx, master, osc, noise, noiseGain, toneGain, built = false;
+    let stream = null;
+    let camReady = false;
+    let useCameraBow = false;
+    let camRaf = 0;
+    let handState = null;
+    let lastHandCx = null;
+    let handTrack = { present: false, nx: 0.5, ny: 0.25, mass: 0 };
+    let sensorsReady = false;
+    let holding = false;
+    let activePointer = null;
+    let motionBow = 0;
+    let cameraBow = 0;
+    let lastAccel = { x: 0, y: 0, z: 0 };
+    let motionPrimed = false;
+    let pitchHz = 220;
+
+    function motionToAmplitude(jerk, rotAlpha, rotBeta, rotGamma) {
+      const rotMag = Math.sqrt(rotAlpha ** 2 + rotBeta ** 2 + rotGamma ** 2);
+      const fromRot = Math.min(1, rotMag / 95);
+      const fromJerk = Math.min(1, jerk / 2.4);
+      return Math.min(1, fromRot * 0.8 + fromJerk * 0.2);
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.55));
+      osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.value = pitchHz;
+      toneGain = ctx.createGain();
+      toneGain.gain.value = 0;
+      osc.connect(toneGain);
+      toneGain.connect(master);
+      osc.start();
+      const len = ctx.sampleRate * 2;
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      noise = ctx.createBufferSource();
+      noise.buffer = buf;
+      noise.loop = true;
+      noiseGain = ctx.createGain();
+      noiseGain.gain.value = 0;
+      noise.connect(noiseGain);
+      noiseGain.connect(master);
+      noise.start();
+      built = true;
+      tick();
+    }
+
+    registerAudioBoot(buildAudio);
+
+    function requestCameraStream() {
+      if (!navigator.mediaDevices?.getUserMedia) return null;
+      return navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "user" },
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+        audio: false,
+      });
+    }
+
+    function drawCamHud() {
+      const box = camWrap.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      const w = Math.max(1, Math.floor(box.width * dpr));
+      const h = Math.max(1, Math.floor(box.height * dpr));
+      if (camHud.width !== w || camHud.height !== h) {
+        camHud.width = w;
+        camHud.height = h;
+      }
+
+      hudCtx.setTransform(1, 0, 0, 1, 0, 0);
+      hudCtx.clearRect(0, 0, w, h);
+
+      if (camReady && video.readyState >= 2 && video.videoWidth > 0) {
+        hudCtx.save();
+        hudCtx.translate(w, 0);
+        hudCtx.scale(-1, 1);
+        hudCtx.drawImage(video, 0, 0, w, h);
+        hudCtx.restore();
+      } else {
+        hudCtx.fillStyle = "#0f172a";
+        hudCtx.fillRect(0, 0, w, h);
+      }
+
+      const zoneH = h * BOW_ZONE;
+      hudCtx.fillStyle = "rgba(110, 231, 183, 0.14)";
+      hudCtx.fillRect(0, 0, w, zoneH);
+      hudCtx.strokeStyle = "rgba(110, 231, 183, 0.6)";
+      hudCtx.lineWidth = Math.max(2, 2 * dpr);
+      hudCtx.strokeRect(dpr, dpr, w - 2 * dpr, zoneH - 2 * dpr);
+
+      if (handTrack.present) {
+        const hx = (1 - handTrack.nx) * w;
+        const hy = handTrack.ny * zoneH;
+        hudCtx.strokeStyle = "#6ee7b7";
+        hudCtx.fillStyle = "rgba(110, 231, 183, 0.35)";
+        hudCtx.lineWidth = 2.5 * dpr;
+        hudCtx.beginPath();
+        hudCtx.arc(hx, hy, 16 * dpr, 0, Math.PI * 2);
+        hudCtx.fill();
+        hudCtx.stroke();
+        hudCtx.strokeStyle = "rgba(110, 231, 183, 0.25)";
+        hudCtx.lineWidth = 1.5 * dpr;
+        hudCtx.beginPath();
+        hudCtx.moveTo(hx - 28 * dpr, hy);
+        hudCtx.lineTo(hx + 28 * dpr, hy);
+        hudCtx.stroke();
+      }
+    }
+
+    const camWrap = document.getElementById("camWrap");
+
+    function measureHandBow() {
+      if (!video.videoWidth) {
+        handTrack = { present: false, nx: 0.5, ny: 0.25, mass: 0 };
+        return 0;
+      }
+      sctx.drawImage(video, 0, 0, CAM_W, CAM_H);
+      const img = sctx.getImageData(0, 0, CAM_W, CAM_H);
+      const n = CAM_W * Math.floor(CAM_H * BOW_ZONE);
+      if (!handState || handState.prevGray.length !== n) {
+        handState = createHandBowState(CAM_W, CAM_H, BOW_ZONE);
+      }
+
+      const zoneTarget = bowFromZoneMotion(img, CAM_W, CAM_H, handState, BOW_ZONE);
+      handTrack = trackHandInBowZone(img, CAM_W, CAM_H, handState, BOW_ZONE);
+      document.getElementById("handOut").textContent = handTrack.present ? "yes" : "—";
+
+      let target = zoneTarget * 0.65;
+      if (handTrack.present) {
+        target = Math.max(target, bowFromHandSpeed(lastHandCx, handTrack.cx, CAM_W, BOW_SPEED_GAIN));
+        lastHandCx = handTrack.cx;
+      } else {
+        lastHandCx = null;
+      }
+      return target;
+    }
+
+    function camLoop() {
+      if (!stream) return;
+      if (camReady && video.readyState >= 2) {
+        const target = measureHandBow();
+        if (holding) {
+          cameraBow = Math.min(1, cameraBow * 0.72 + target * 0.28);
+        }
+      }
+      drawCamHud();
+      camRaf = requestAnimationFrame(camLoop);
+    }
+
+    async function attachCamera(camPromise) {
+      if (!camPromise) return false;
+      try {
+        stream = await camPromise;
+      } catch {
+        return false;
+      }
+      video.srcObject = stream;
+      video.muted = true;
+      video.setAttribute("playsinline", "");
+      video.setAttribute("webkit-playsinline", "");
+      try {
+        await video.play();
+      } catch {
+        /* retry once metadata loads */
+      }
+      await new Promise((resolve) => {
+        if (video.videoWidth > 0) {
+          resolve();
+          return;
+        }
+        video.onloadedmetadata = () => resolve();
+        setTimeout(resolve, 1500);
+      });
+      try {
+        await video.play();
+      } catch {
+        /* ignore */
+      }
+      camReady = video.videoWidth > 0;
+      if (!camReady) return false;
+      useCameraBow = true;
+      handState = createHandBowState(CAM_W, CAM_H, BOW_ZONE);
+      lastHandCx = null;
+      handTrack = { present: false, nx: 0.5, ny: 0.25, mass: 0 };
+      camStart.classList.add("hidden");
+      document.getElementById("bowSrc").textContent = "Hand";
+      setStatus("status", "Hold pitch pad · move hand in green zone", "ok");
+      if (!camRaf) camLoop();
+      return true;
+    }
+
+    function stopCamera() {
+      if (camRaf) cancelAnimationFrame(camRaf);
+      camRaf = 0;
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
+        stream = null;
+      }
+      video.srcObject = null;
+      camReady = false;
+      useCameraBow = false;
+      handState = createHandBowState(CAM_W, CAM_H, BOW_ZONE);
+      lastHandCx = null;
+      handTrack = { present: false, nx: 0.5, ny: 0.25, mass: 0 };
+      camStart.classList.remove("hidden");
+      drawCamHud();
+    }
+
+    async function ensureCameraFromGesture() {
+      if (stream) return true;
+      const camPromise = requestCameraStream();
+      if (!camPromise) {
+        setStatus("status", "Camera not supported", "warn");
+        return false;
+      }
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built) return false;
+      const ok = await attachCamera(camPromise);
+      if (!ok) {
+        setStatus("status", "Camera denied — allow in Settings, or rock phone", "warn");
+        await initMotionFallback();
+      }
+      return ok;
+    }
+
+    async function initMotionFallback() {
+      if (sensorsReady) return;
+      const ok = await enableSensors(SENSOR_OPTS);
+      if (!ok) return;
+      onMotion(({ x, y, z, rotAlpha, rotBeta, rotGamma }) => {
+        if (!holding || !built) return;
+        if (!motionPrimed) {
+          lastAccel = { x, y, z };
+          motionPrimed = true;
+          return;
+        }
+        const dx = x - lastAccel.x;
+        const dy = y - lastAccel.y;
+        const dz = z - lastAccel.z;
+        lastAccel = { x, y, z };
+        const jerk = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const target = motionToAmplitude(jerk, rotAlpha, rotBeta, rotGamma);
+        motionBow = Math.min(1, motionBow * 0.82 + target * 0.18);
+      });
+      sensorsReady = true;
+      document.getElementById("bowSrc").textContent = "Motion";
+    }
+
+    function bowLevel() {
+      if (!holding) return 0;
+      return Math.min(1, Math.max(motionBow, cameraBow));
+    }
+
+    function applyBow() {
+      if (!built || !ctx) return;
+      const amp = bowLevel();
+      const t = ctx.currentTime;
+      toneGain.gain.setTargetAtTime(amp * 0.4, t, 0.025);
+      noiseGain.gain.setTargetAtTime(amp * 0.48, t, 0.025);
+      osc.frequency.setTargetAtTime(pitchHz, t, 0.04);
+      document.getElementById("bOut").textContent = amp.toFixed(2);
+      document.getElementById("bowMeter").style.width = `${amp * 100}%`;
+      document.getElementById("bowMeter").classList.toggle("blowing", amp > 0.05);
+      document.getElementById("pOut").textContent = pitchHz.toFixed(0);
+    }
+
+    function tick() {
+      if (!built) return;
+      if (!holding) {
+        motionBow *= 0.9;
+        cameraBow *= 0.9;
+        if (motionBow < 0.002) motionBow = 0;
+        if (cameraBow < 0.002) cameraBow = 0;
+      }
+      applyBow();
+      requestAnimationFrame(tick);
+    }
+
+    function setPitchFromTouch(ev) {
+      const r = pad.getBoundingClientRect();
+      const ny = 1 - Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+      pitchHz = 110 * Math.pow(2, ny * 2);
+      dot.style.left = "50%";
+      dot.style.top = `${(1 - ny) * 100}%`;
+      dot.style.opacity = "1";
+      if (built) applyBow();
+    }
+
+    async function armBow(e) {
+      primeSensors(SENSOR_OPTS);
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built) return;
+      if (ctx.state === "suspended") await unlockAudio(ctx);
+      void initMotionFallback();
+      if (!stream) {
+        const camPromise = requestCameraStream();
+        if (camPromise) {
+          const ok = await attachCamera(camPromise);
+          if (!ok) document.getElementById("bowSrc").textContent = "Motion";
+        } else {
+          document.getElementById("bowSrc").textContent = "Motion";
+        }
+      }
+      holding = true;
+      activePointer = e.pointerId;
+      pad.setPointerCapture(e.pointerId);
+      pad.classList.add("active");
+      lastAccel = { x: 0, y: 0, z: 0 };
+      motionPrimed = false;
+      motionBow = 0;
+      cameraBow = 0;
+      if (!camRaf && stream) camLoop();
+      setPitchFromTouch(e);
+    }
+
+    camBtn.addEventListener("click", () => {
+      void ensureCameraFromGesture();
+    });
+
+    camWrap.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (stream || e.target === camBtn) return;
+        e.preventDefault();
+        void ensureCameraFromGesture();
+      },
+      { passive: false }
+    );
+
+    pad.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      void armBow(e);
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== activePointer) return;
+      setPitchFromTouch(e);
+    });
+
+    const stop = (e) => {
+      if (e.pointerId !== activePointer) return;
+      holding = false;
+      activePointer = null;
+      motionBow = 0;
+      cameraBow = 0;
+      motionPrimed = false;
+      pad.classList.remove("active");
+      dot.style.opacity = "0";
+      if (built && ctx) {
+        const t = ctx.currentTime;
+        toneGain.gain.setTargetAtTime(0, t, 0.06);
+        noiseGain.gain.setTargetAtTime(0, t, 0.06);
+        applyBow();
+      }
+    };
+
+    pad.addEventListener("pointerup", stop);
+    pad.addEventListener("pointercancel", stop);
+    pad.addEventListener("lostpointercapture", stop);
+
+    window.addEventListener("resize", drawCamHud);
+    window.addEventListener("pagehide", stopCamera);
+    drawCamHud();
+  </script>
+</body>
+</html>

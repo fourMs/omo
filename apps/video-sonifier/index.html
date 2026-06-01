@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Video Sonifier — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .consent-gate {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: rgba(13, 15, 20, 0.92);
+    }
+    .consent-gate.hidden { display: none; }
+    .consent-card {
+      max-width: 22rem;
+      padding: 0.85rem;
+      background: var(--surface);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+    .consent-card h2 {
+      margin: 0 0 0.5rem;
+      font-size: 0.95rem;
+    }
+    .consent-card p { margin: 0.35rem 0; color: var(--muted); }
+    .consent-card label {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.4rem;
+      margin: 0.65rem 0;
+      cursor: pointer;
+    }
+    .consent-card .btn { width: 100%; margin-top: 0.5rem; }
+    #previewWrap {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #0f172a;
+    }
+    #preview {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    #videoFeed {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .live-badge {
+      position: absolute;
+      top: 0.35rem;
+      left: 0.35rem;
+      font-size: 0.6rem;
+      font-weight: 600;
+      color: #f87171;
+      background: rgba(15, 23, 42, 0.75);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+    .live-badge[hidden] { display: none; }
+  </style>
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Video Sonifier</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Video → music</h2>
+    <p>Turn <strong>Audio on</strong> (top right), then <strong>Start camera</strong>. Even scenes play a soft chord; detailed scenes add pentatonic sparkles.</p>
+    <p><strong>Hold the phone still</strong> — sound fades in. Movement lowers volume. Allow <strong>motion</strong> when asked on iPhone.</p>
+    <p>Camera is used <strong>only while open</strong>. Nothing is recorded or uploaded. <strong>Workshop mode</strong> uses the rear camera.</p>
+  </div>
+
+  <div id="consentGate" class="consent-gate">
+    <div class="consent-card">
+      <h2>Camera</h2>
+      <label>
+        <input type="checkbox" id="workshopMode" checked />
+        <span>Workshop mode (rear · low res)</span>
+      </label>
+      <button type="button" class="btn" id="consentBtn">Audio on + Start camera</button>
+    </div>
+  </div>
+
+  <p class="status-bar" id="status"></p>
+  <div class="readout-row">
+    <p class="value-chip">Key <strong id="keyOut">—</strong></p>
+    <p class="value-chip">Still <strong id="stillOut">—</strong></p>
+    <p class="value-chip">Detail <strong id="detailOut">—</strong></p>
+    <p class="value-chip">Notes <strong id="rateOut">—</strong>/s</p>
+  </div>
+  <div class="control-row">
+    <button type="button" class="btn-secondary btn btn-sm" id="stopBtn" hidden>Stop camera</button>
+  </div>
+  <div class="main-stage">
+    <div id="previewWrap" class="stage-fill">
+      <video id="videoFeed" playsinline muted></video>
+      <canvas id="preview" class="canvas-fill"></canvas>
+      <span class="live-badge" id="liveBadge" hidden>LIVE · on device only</span>
+    </div>
+  </div>
+
+  <script type="module">
+    import { bindLearn, setStatus, startAudio, registerAudioBoot } from "../../shared/app.js";
+    import { createMasterBus, midiToFreq } from "../../shared/audio.js";
+    import { enableSensors, onMotion, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+
+    const GRID_W = 16;
+    const GRID_H = 12;
+    const ANALYZE_MS = 80;
+    const MIN_NOTES = 1;
+    const MAX_NOTES = 20;
+    const TEXTURE_SMOOTH = 0.82;
+    const STILL_SMOOTH = 0.88;
+    const ROOT_SMOOTH = 0.12;
+    const AMP_RAMP = 0.22;
+    const SENSOR_OPTS = { needMotion: true, needOrientation: false };
+    const GAIN_FLOOR = 0.0001;
+    const PENTA = [0, 2, 4, 7, 9];
+    const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    const consentGate = document.getElementById("consentGate");
+    const consentBtn = document.getElementById("consentBtn");
+    const workshopMode = document.getElementById("workshopMode");
+    const video = document.getElementById("videoFeed");
+    const preview = document.getElementById("preview");
+    const pctx = preview.getContext("2d");
+    const sample = document.createElement("canvas");
+    sample.width = GRID_W;
+    sample.height = GRID_H;
+    const sctx = sample.getContext("2d", { willReadFrequently: true });
+
+    let stream = null;
+    let ctx, masterOut, ampGain, dryGain, reverb, reverbWet, padVoices;
+    let running = false;
+    let sensorsReady = false;
+    let motionPrimed = false;
+    let lastAccel = { x: 0, y: 0, z: 0 };
+    let smoothStillness = 0;
+    let smoothRootMidi = 50;
+    let ampRaf = 0;
+    let analyzeTimer = null;
+    let grainTimer = null;
+    let meanBrightness = 0;
+    let smoothTexture = 0;
+    let rootMidi = 50;
+    let grainsPerSec = MIN_NOTES;
+    const cellBrightness = new Float32Array(GRID_W * GRID_H);
+    const cellWeight = new Float32Array(GRID_W * GRID_H);
+
+    function reverbImpulse(c, sec) {
+      const len = Math.floor(c.sampleRate * sec);
+      const b = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = b.getChannelData(ch);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2.5;
+      }
+      return b;
+    }
+
+    function rootFromBrightness() {
+      return 48 + meanBrightness * 16;
+    }
+
+    function labelMidi(midi) {
+      return `${NOTE_NAMES[((Math.round(midi) % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
+    }
+
+    function midiForCell(col, row) {
+      const degree = (col + row * 2) % PENTA.length;
+      const oct = Math.min(2, (row / GRID_H) * 2 | 0);
+      return smoothRootMidi + PENTA[degree] + oct * 12;
+    }
+
+    function applyAmplitudeNow() {
+      if (!ampGain || !ctx) return;
+      const level = 0.04 + smoothStillness * 0.96;
+      ampGain.gain.setTargetAtTime(level, ctx.currentTime, AMP_RAMP);
+      document.getElementById("stillOut").textContent = `${(smoothStillness * 100).toFixed(0)}%`;
+    }
+
+    function applyAmplitude() {
+      if (ampRaf) return;
+      ampRaf = requestAnimationFrame(() => {
+        ampRaf = 0;
+        applyAmplitudeNow();
+      });
+    }
+
+    async function initMotion() {
+      if (sensorsReady) return;
+      primeSensors(SENSOR_OPTS);
+      const ok = await enableSensors(SENSOR_OPTS);
+      if (!ok) {
+        setStatus("status", "Motion blocked — allow for stillness fade", "warn");
+        return;
+      }
+      onMotion(({ x, y, z }) => {
+        if (!running) return;
+        if (!motionPrimed) {
+          lastAccel = { x, y, z };
+          motionPrimed = true;
+          return;
+        }
+        const jerk = Math.hypot(x - lastAccel.x, y - lastAccel.y, z - lastAccel.z);
+        lastAccel = { x, y, z };
+        const stillScore = clamp(1 - jerk / 0.28, 0, 1);
+        smoothStillness = smoothStillness * STILL_SMOOTH + stillScore * (1 - STILL_SMOOTH);
+        applyAmplitude();
+      });
+      sensorsReady = true;
+    }
+
+    function buildPad(c) {
+      padVoices = { gain: c.createGain(), oscs: [] };
+      padVoices.gain.gain.value = 0;
+      padVoices.gain.connect(ampGain);
+      for (let i = 0; i < 3; i++) {
+        const o = c.createOscillator();
+        o.type = "sine";
+        o.connect(padVoices.gain);
+        o.start();
+        padVoices.oscs.push(o);
+      }
+    }
+
+    function updatePad() {
+      if (!padVoices || !ctx) return;
+      const t = ctx.currentTime;
+      const even = 1 - smoothTexture;
+      const chord = [PENTA[0], PENTA[3], PENTA[4]];
+      padVoices.oscs.forEach((o, i) => {
+        o.frequency.setTargetAtTime(midiToFreq(smoothRootMidi + chord[i]), t, 0.45);
+      });
+      padVoices.gain.gain.setTargetAtTime(Math.max(GAIN_FLOOR, even * 0.09), t, 0.35);
+    }
+
+    function measureTexture(cells) {
+      const n = cells.length;
+      let sum = 0;
+      for (let i = 0; i < n; i++) sum += cells[i];
+      const mean = sum / n;
+      let variance = 0;
+      for (let i = 0; i < n; i++) {
+        const d = cells[i] - mean;
+        variance += d * d;
+      }
+      variance /= n;
+
+      let edgeSum = 0;
+      let edgeCount = 0;
+      for (let row = 0; row < GRID_H; row++) {
+        for (let col = 0; col < GRID_W; col++) {
+          const i = row * GRID_W + col;
+          const v = cells[i];
+          if (col + 1 < GRID_W) {
+            edgeSum += Math.abs(v - cells[i + 1]);
+            edgeCount++;
+          }
+          if (row + 1 < GRID_H) {
+            edgeSum += Math.abs(v - cells[i + GRID_W]);
+            edgeCount++;
+          }
+        }
+      }
+      const edgeMean = edgeCount > 0 ? edgeSum / edgeCount : 0;
+      return clamp(Math.sqrt(variance) * 3.4 + edgeMean * 2.2, 0, 1);
+    }
+
+    function spawnTone(col, row, level) {
+      if (!ctx || ctx.state !== "running") return;
+      const tex = smoothTexture;
+      const even = 1 - tex;
+      const nx = GRID_W > 1 ? col / (GRID_W - 1) : 0.5;
+      const ny = GRID_H > 1 ? row / (GRID_H - 1) : 0.5;
+      const midi = midiForCell(col, row);
+      const t = ctx.currentTime;
+      const dur = 0.12 + even * 0.45 + Math.random() * (0.06 + tex * 0.12);
+
+      const peak = Math.max(
+        GAIN_FLOOR,
+        (0.04 + even * 0.06 + level * (0.08 + tex * 0.12)) * (0.2 + smoothStillness * 0.8)
+      );
+      const attack = 0.045;
+      const release = 0.07;
+      const end = t + dur;
+
+      const osc = ctx.createOscillator();
+      osc.type = even > 0.55 ? "sine" : "triangle";
+      const freq = midiToFreq(midi);
+      osc.frequency.setValueAtTime(freq * 0.998, t);
+      osc.frequency.exponentialRampToValueAtTime(freq, t + attack);
+
+      const vib = ctx.createOscillator();
+      const vibG = ctx.createGain();
+      vib.type = "sine";
+      vib.frequency.value = 5 + col * 0.15;
+      vibG.gain.value = 3 + tex * 4;
+      vib.connect(vibG);
+      vibG.connect(osc.detune);
+
+      const filt = ctx.createBiquadFilter();
+      filt.type = "lowpass";
+      filt.Q.value = 0.7;
+      const fTarget = 450 + level * 1600 + ny * 1100;
+      filt.frequency.setValueAtTime(180, t);
+      filt.frequency.exponentialRampToValueAtTime(Math.max(80, fTarget), t + attack * 1.5);
+
+      const gn = ctx.createGain();
+      const send = ctx.createGain();
+      send.gain.value = 0.22;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = nx * 2 - 1;
+      osc.connect(filt);
+      filt.connect(gn);
+      gn.connect(pan);
+      pan.connect(dryGain);
+      pan.connect(send);
+      send.connect(reverb);
+
+      gn.gain.setValueAtTime(GAIN_FLOOR, t);
+      gn.gain.exponentialRampToValueAtTime(peak, t + attack);
+      gn.gain.setValueAtTime(peak, end - release);
+      gn.gain.exponentialRampToValueAtTime(GAIN_FLOOR, end);
+
+      osc.start(t);
+      vib.start(t);
+      const stopAt = end + release + 0.02;
+      osc.stop(stopAt);
+      vib.stop(stopAt);
+    }
+
+    function pickWeightedCell() {
+      let total = 0;
+      for (let i = 0; i < cellWeight.length; i++) {
+        const w = cellWeight[i];
+        total += w;
+      }
+      if (total <= 0) return 0;
+      let r = Math.random() * total;
+      for (let i = 0; i < cellWeight.length; i++) {
+        r -= cellWeight[i];
+        if (r <= 0) return i;
+      }
+      return cellWeight.length - 1;
+    }
+
+    function scheduleGrain() {
+      if (!running) return;
+      const idx = pickWeightedCell();
+      const col = idx % GRID_W;
+      const row = (idx / GRID_W) | 0;
+      spawnTone(col, row, cellBrightness[idx]);
+      const interval = 1000 / Math.max(MIN_NOTES, grainsPerSec);
+      const even = 1 - smoothTexture;
+      const jitterLo = 0.9 + even * 0.08;
+      const jitterHi = 1.05 + smoothTexture * 0.55;
+      grainTimer = setTimeout(scheduleGrain, interval * (jitterLo + Math.random() * (jitterHi - jitterLo)));
+    }
+
+    function analyzeFrame() {
+      if (!stream || video.readyState < 2) return;
+      sctx.drawImage(video, 0, 0, GRID_W, GRID_H);
+      const img = sctx.getImageData(0, 0, GRID_W, GRID_H);
+      let sum = 0;
+      for (let i = 0; i < cellBrightness.length; i++) {
+        const o = i * 4;
+        const b = (img.data[o] + img.data[o + 1] + img.data[o + 2]) / (3 * 255);
+        cellBrightness[i] = b;
+        sum += b;
+      }
+      meanBrightness = sum / cellBrightness.length;
+      const texture = measureTexture(cellBrightness);
+      smoothTexture = smoothTexture * TEXTURE_SMOOTH + texture * (1 - TEXTURE_SMOOTH);
+      const even = 1 - smoothTexture;
+      for (let i = 0; i < cellBrightness.length; i++) {
+        const b = cellBrightness[i];
+        cellWeight[i] = 0.05 + even * 0.2 + (1 - even) * (0.06 + b * b);
+      }
+      const targetRoot = rootFromBrightness();
+      smoothRootMidi += (targetRoot - smoothRootMidi) * ROOT_SMOOTH;
+      rootMidi = Math.round(smoothRootMidi);
+      grainsPerSec = MIN_NOTES + smoothTexture * (MAX_NOTES - MIN_NOTES);
+      document.getElementById("keyOut").textContent = labelMidi(rootMidi);
+      document.getElementById("detailOut").textContent = `${(smoothTexture * 100).toFixed(0)}%`;
+      document.getElementById("rateOut").textContent = grainsPerSec.toFixed(0);
+      updatePad();
+      drawPreview(img);
+    }
+
+    function drawPreview(gridImg) {
+      const box = preview.parentElement.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      preview.width = Math.max(1, Math.floor(box.width * dpr));
+      preview.height = Math.max(1, Math.floor(box.height * dpr));
+      const w = preview.width;
+      const h = preview.height;
+      const mirror = stream && workshopMode.checked === false;
+
+      pctx.save();
+      if (mirror) {
+        pctx.translate(w, 0);
+        pctx.scale(-1, 1);
+      }
+      pctx.drawImage(video, 0, 0, w, h);
+      pctx.restore();
+
+      const cellW = w / GRID_W;
+      const cellH = h / GRID_H;
+      for (let row = 0; row < GRID_H; row++) {
+        for (let col = 0; col < GRID_W; col++) {
+          const i = row * GRID_W + col;
+          const b = cellBrightness[i];
+          const o = i * 4;
+          const r = gridImg.data[o];
+          const g = gridImg.data[o + 1];
+          const bl = gridImg.data[o + 2];
+          pctx.fillStyle = `rgba(${r},${g},${bl},${0.15 + b * 0.55})`;
+          pctx.fillRect(col * cellW, row * cellH, cellW + 1, cellH + 1);
+        }
+      }
+    }
+
+    function resizePreview() {
+      if (running) analyzeFrame();
+    }
+
+    function requestCameraStream() {
+      if (!navigator.mediaDevices?.getUserMedia) return null;
+      const workshop = workshopMode.checked;
+      return navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: workshop ? { ideal: "environment" } : "user",
+          width: { ideal: workshop ? 320 : 480 },
+          height: { ideal: workshop ? 240 : 360 },
+        },
+        audio: false,
+      });
+    }
+
+    async function attachCamera(camPromise) {
+      try {
+        stream = await camPromise;
+      } catch {
+        setStatus("status", "Camera denied — allow in Settings", "warn");
+        return false;
+      }
+      video.srcObject = stream;
+      video.setAttribute("playsinline", "");
+      video.setAttribute("webkit-playsinline", "");
+      await video.play();
+      return true;
+    }
+
+    function stopAll() {
+      running = false;
+      if (ampRaf) cancelAnimationFrame(ampRaf);
+      ampRaf = 0;
+      if (ampGain && ctx) {
+        ampGain.gain.setTargetAtTime(GAIN_FLOOR, ctx.currentTime, 0.08);
+      }
+      clearTimeout(analyzeTimer);
+      clearTimeout(grainTimer);
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
+        stream = null;
+      }
+      video.srcObject = null;
+      document.getElementById("liveBadge").hidden = true;
+      document.getElementById("stopBtn").hidden = true;
+      consentGate.classList.remove("hidden");
+      setStatus("status", "", "");
+    }
+
+    async function bootAudio(c) {
+      if (ctx) return;
+      ctx = c;
+      ({ master: masterOut } = createMasterBus(c, 0.58));
+      ampGain = ctx.createGain();
+      ampGain.gain.value = 0;
+      ampGain.connect(masterOut);
+      dryGain = ctx.createGain();
+      dryGain.gain.value = 0.85;
+      dryGain.connect(ampGain);
+      reverb = ctx.createConvolver();
+      reverb.buffer = reverbImpulse(c, 1.6);
+      reverbWet = ctx.createGain();
+      reverbWet.gain.value = 0.32;
+      reverb.connect(reverbWet);
+      reverbWet.connect(ampGain);
+      buildPad(c);
+    }
+
+    registerAudioBoot(bootAudio);
+
+    async function onConsent() {
+      consentBtn.disabled = true;
+      primeSensors(SENSOR_OPTS);
+      setStatus("status", "Starting camera & audio…", "");
+      const camPromise = requestCameraStream();
+      if (!camPromise) {
+        setStatus("status", "Camera not supported", "warn");
+        consentBtn.disabled = false;
+        return;
+      }
+      await startAudio(bootAudio);
+      if (!(await attachCamera(camPromise))) {
+        consentBtn.disabled = false;
+        return;
+      }
+      consentGate.classList.add("hidden");
+      document.getElementById("liveBadge").hidden = false;
+      document.getElementById("stopBtn").hidden = false;
+      setStatus("status", "Hold still for sound · live on device", "ok");
+      running = true;
+      motionPrimed = false;
+      smoothStillness = 0;
+      smoothRootMidi = rootFromBrightness();
+      applyAmplitudeNow();
+      await initMotion();
+      scheduleGrain();
+      const loop = () => {
+        if (!running) return;
+        analyzeFrame();
+        analyzeTimer = setTimeout(loop, ANALYZE_MS);
+      };
+      loop();
+      new ResizeObserver(resizePreview).observe(preview.parentElement);
+    }
+
+    consentBtn.addEventListener("click", () => void onConsent());
+    document.getElementById("stopBtn").addEventListener("click", stopAll);
+    window.addEventListener("pagehide", stopAll);
+  </script>
+</body>
+</html>

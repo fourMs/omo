@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Scrub Tape — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell scrub-tape-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Scrub Tape</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Scrub tape</h2>
+    <p>Turn <strong>Audio on</strong>, allow the mic, then <strong>hold Record</strong> to capture a short clip. <strong>Drag</strong> the pad left/right to scrub through the tape forward or backward.</p>
+  </div>
+  <div class="app-toolbar">
+    <button type="button" class="btn-secondary btn btn-sm btn-rec" id="recBtn">Hold record</button>
+    <span class="scrub-buf-tag" id="bufTag">demo</span>
+  </div>
+  <p class="status-bar" id="status">Turn Audio on, then hold Record or scrub</p>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid">
+      <div class="touch-dot" id="dot"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus, getMicStream, primeMicStream } from "../../shared/audio.js";
+
+    bindLearn();
+
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const recBtn = document.getElementById("recBtn");
+    const bufTag = document.getElementById("bufTag");
+
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const MAX_RECORD_MS = 6000;
+    const MIN_RECORD_SAMPLES = 2048;
+
+    let ctx, master, buf, built = false;
+    let holding = false;
+    let scrubId = null;
+    let lastX = 0;
+    let phase = 0;
+
+    let micStream = null;
+    let recording = false;
+    let recPointer = null;
+    let recordTimer = null;
+    let mediaRecorder = null;
+    let recordChunks = [];
+    let recordSource, recordProcessor, recordSilent;
+    let spChunks, spLength;
+    let useMediaRecorder = typeof MediaRecorder !== "undefined";
+
+    function makeDemoBuffer(c) {
+      const len = Math.floor(c.sampleRate * 0.5);
+      const b = c.createBuffer(1, len, c.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.sin(i / 40) * Math.exp(-i / len * 2);
+      return b;
+    }
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      buf = makeDemoBuffer(c);
+      built = true;
+    }
+
+    registerAudioBoot(build, { mic: true });
+
+    function setBufTag(text) {
+      bufTag.textContent = text;
+    }
+
+    async function ensureMic() {
+      if (micStream) return true;
+      try {
+        micStream = await getMicStream();
+      } catch {
+        setStatus("status", "Mic blocked — allow microphone", "warn");
+        return false;
+      }
+      return true;
+    }
+
+    async function setBufferFromAudioData(audioBuf, label) {
+      buf = audioBuf;
+      phase = 0;
+      setBufTag(label);
+    }
+
+    async function setBufferFromBlob(blob) {
+      try {
+        const ab = await blob.arrayBuffer();
+        const audioBuf = await ctx.decodeAudioData(ab.slice(0));
+        await setBufferFromAudioData(audioBuf, `recorded ${audioBuf.duration.toFixed(1)}s`);
+        setStatus("status", "Sample recorded — scrub the pad", "ok");
+      } catch {
+        setStatus("status", "Could not use recording", "warn");
+      }
+    }
+
+    function teardownScriptCapture() {
+      if (recordProcessor) recordProcessor.onaudioprocess = null;
+      try {
+        recordProcessor?.disconnect();
+        recordSource?.disconnect();
+        recordSilent?.disconnect();
+      } catch {
+        /* noop */
+      }
+      recordProcessor = null;
+      recordSource = null;
+      recordSilent = null;
+    }
+
+    function bufferFromScriptCapture() {
+      if (spLength < MIN_RECORD_SAMPLES) return null;
+      const outBuf = ctx.createBuffer(1, spLength, ctx.sampleRate);
+      const out = outBuf.getChannelData(0);
+      let off = 0;
+      for (const chunk of spChunks) {
+        out.set(chunk, off);
+        off += chunk.length;
+      }
+      return outBuf;
+    }
+
+    function recorderMime() {
+      if (typeof MediaRecorder === "undefined") return "";
+      if (MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) return "audio/webm;codecs=opus";
+      if (MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+      return "";
+    }
+
+    function stopRecording() {
+      if (!recording) return;
+      recording = false;
+      recBtn.classList.remove("recording");
+      clearTimeout(recordTimer);
+      recordTimer = null;
+
+      if (useMediaRecorder && mediaRecorder?.state === "recording") {
+        mediaRecorder.stop();
+        return;
+      }
+
+      teardownScriptCapture();
+      const captured = bufferFromScriptCapture();
+      if (captured) {
+        void setBufferFromAudioData(captured, `recorded ${captured.duration.toFixed(1)}s`);
+        setStatus("status", "Sample recorded — scrub the pad", "ok");
+      } else {
+        setStatus("status", "Too short — hold longer", "warn");
+      }
+    }
+
+    function startRecording() {
+      if (recording || !micStream) return;
+      recording = true;
+      recBtn.classList.add("recording");
+      setStatus("status", "Recording…", "ok");
+
+      recordTimer = setTimeout(() => {
+        if (recPointer != null) stopRecording();
+      }, MAX_RECORD_MS);
+
+      if (useMediaRecorder) {
+        recordChunks = [];
+        const mime = recorderMime();
+        try {
+          mediaRecorder = mime
+            ? new MediaRecorder(micStream, { mimeType: mime })
+            : new MediaRecorder(micStream);
+        } catch {
+          useMediaRecorder = false;
+          startRecording();
+          return;
+        }
+        mediaRecorder.ondataavailable = (ev) => {
+          if (ev.data.size > 0) recordChunks.push(ev.data);
+        };
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+          void setBufferFromBlob(blob);
+        };
+        mediaRecorder.start(250);
+      } else {
+        spChunks = [];
+        spLength = 0;
+        recordSource = ctx.createMediaStreamSource(micStream);
+        recordProcessor = ctx.createScriptProcessor(4096, 1, 1);
+        recordSilent = ctx.createGain();
+        recordSilent.gain.value = 0;
+        recordProcessor.onaudioprocess = (e) => {
+          if (!recording) return;
+          const ch = e.inputBuffer.getChannelData(0);
+          spChunks.push(Float32Array.from(ch));
+          spLength += ch.length;
+          if (spLength >= ctx.sampleRate * (MAX_RECORD_MS / 1000)) stopRecording();
+        };
+        recordSource.connect(recordProcessor);
+        recordProcessor.connect(recordSilent);
+        recordSilent.connect(ctx.destination);
+      }
+    }
+
+    function scrub(v) {
+      if (!ctx || !buf) return;
+      const t = ctx.currentTime;
+      phase = clamp(phase + v * 0.02, 0, 1);
+      const s = ctx.createBufferSource();
+      s.buffer = buf;
+      s.playbackRate.value = clamp(0.5 + v * 2, 0.15, 4);
+      const lg = ctx.createGain();
+      lg.gain.setValueAtTime(0.28, t);
+      lg.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      s.connect(lg);
+      lg.connect(master);
+      const offset = phase * Math.max(0, buf.duration - 0.07);
+      s.start(t, offset, 0.07);
+    }
+
+    recBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      primeMicStream();
+      void startAudio(!built ? build : undefined).then(async () => {
+        if (!built || !ctx) return;
+        if (!(await ensureMic())) return;
+        recPointer = e.pointerId;
+        recBtn.setPointerCapture(e.pointerId);
+        startRecording();
+      });
+    });
+
+    const endRec = (e) => {
+      if (e.pointerId !== recPointer) return;
+      recPointer = null;
+      stopRecording();
+    };
+    recBtn.addEventListener("pointerup", endRec);
+    recBtn.addEventListener("pointercancel", endRec);
+    recBtn.addEventListener("lostpointercapture", endRec);
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await startAudio(!built ? build : undefined);
+      if (!built || !buf) return;
+      holding = true;
+      scrubId = e.pointerId;
+      lastX = e.clientX;
+      pad.setPointerCapture(scrubId);
+      pad.classList.add("active");
+      dot.style.opacity = "1";
+      dot.style.left = `${((e.clientX - pad.getBoundingClientRect().left) / pad.clientWidth) * 100}%`;
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!holding || e.pointerId !== scrubId) return;
+      const dx = (e.clientX - lastX) * 0.01;
+      scrub(dx);
+      lastX = e.clientX;
+      dot.style.left = `${((e.clientX - pad.getBoundingClientRect().left) / pad.clientWidth) * 100}%`;
+    });
+
+    const stopScrub = (e) => {
+      if (e.pointerId !== scrubId) return;
+      holding = false;
+      scrubId = null;
+      pad.classList.remove("active");
+      dot.style.opacity = "0";
+    };
+    pad.addEventListener("pointerup", stopScrub);
+    pad.addEventListener("pointercancel", stopScrub);
+    pad.addEventListener("lostpointercapture", stopScrub);
+  </script>
+</body>
+</html>

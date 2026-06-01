@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#050608" />
+  <title>Tap Bloom — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell tap-bloom-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Tap Bloom</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Generative blooms</h2>
+    <p>In the spirit of Brian Eno’s <em>Bloom</em>: turn <strong>Audio on</strong>, then <strong>tap</strong> anywhere. Each touch plants one pentatonic tone that <strong>pulses evenly</strong> — same pitch, steady rhythm.</p>
+    <p>Higher on the screen = higher notes. Each bloom pulses every four seconds with a long decay and reverb — tap again to layer more.</p>
+  </div>
+  <p class="status-bar" id="status">Turn Audio on, then tap the canvas</p>
+  <div class="main-stage tap-bloom-stage">
+    <canvas id="bloomCanvas" class="tap-bloom-canvas" aria-label="Tap to bloom"></canvas>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus, midiToFreq } from "../../shared/audio.js";
+
+    bindLearn();
+
+    const canvas = document.getElementById("bloomCanvas");
+    const g = canvas.getContext("2d");
+    const PENTA = [62, 64, 66, 69, 71, 74, 76, 78, 81, 83, 86];
+    const PULSE_SEC = 4;
+    const PULSES = 7;
+    const NOTE_DUR = 4.2;
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let ctx, master, inputBus, reverbIn, reverbSend, built = false;
+    let blooms = [];
+    let raf = 0;
+
+    function bloomReverb(c, dest, wet) {
+      const sec = 7.5;
+      const len = Math.floor(c.sampleRate * sec);
+      const buf = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 1.85;
+      }
+      const conv = c.createConvolver();
+      conv.buffer = buf;
+      const wetGain = c.createGain();
+      wetGain.gain.value = wet;
+      conv.connect(wetGain);
+      wetGain.connect(dest);
+      return conv;
+    }
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.44));
+      inputBus = ctx.createGain();
+      inputBus.gain.value = 0.58;
+      inputBus.connect(master);
+      reverbIn = bloomReverb(c, master, 0.72);
+      reverbSend = ctx.createGain();
+      reverbSend.gain.value = 0.92;
+      reverbSend.connect(reverbIn);
+      built = true;
+      resizeCanvas();
+    }
+
+    registerAudioBoot(build);
+
+    function resizeCanvas() {
+      const box = canvas.parentElement.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(box.width * dpr));
+      canvas.height = Math.max(1, Math.floor(box.height * dpr));
+    }
+
+    function playPulse(freq, when, peak) {
+      const o1 = ctx.createOscillator();
+      const o2 = ctx.createOscillator();
+      const tone = ctx.createGain();
+      const harm = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 3200;
+      filter.Q.value = 0.5;
+      o1.type = "sine";
+      o2.type = "sine";
+      o1.frequency.value = freq;
+      o2.frequency.value = freq * 2;
+      o2.detune.value = 4;
+      harm.gain.value = 0.08;
+      tone.gain.setValueAtTime(0.001, when);
+      tone.gain.exponentialRampToValueAtTime(Math.max(peak, 0.002), when + 0.1);
+      tone.gain.exponentialRampToValueAtTime(0.001, when + NOTE_DUR);
+      o1.connect(tone);
+      o2.connect(harm);
+      harm.connect(tone);
+      tone.connect(filter);
+      filter.connect(inputBus);
+      filter.connect(reverbSend);
+      o1.start(when);
+      o2.start(when);
+      o1.stop(when + NOTE_DUR + 2);
+      o2.stop(when + NOTE_DUR + 2);
+    }
+
+    function spawnBloom(nx, ny) {
+      if (!ctx || !built) return;
+      const idx = clamp(Math.round((1 - ny) * (PENTA.length - 1)), 0, PENTA.length - 1);
+      const freq = midiToFreq(PENTA[idx]);
+      const t = ctx.currentTime;
+      for (let i = 0; i < PULSES; i++) {
+        const peak = 0.22 * Math.pow(0.93, i);
+        playPulse(freq, t + i * PULSE_SEC, peak);
+      }
+      blooms.push({
+        nx,
+        ny,
+        born: performance.now(),
+        life: PULSES * PULSE_SEC * 1000 + 1200,
+        pulseMs: PULSE_SEC * 1000,
+        hue: 190 + (1 - ny) * 40,
+      });
+      setStatus("status", "Tap to add blooms", "ok");
+    }
+
+    function draw() {
+      const w = canvas.width;
+      const h = canvas.height;
+      const dpr = devicePixelRatio || 1;
+      g.fillStyle = "rgba(5, 6, 8, 0.22)";
+      g.fillRect(0, 0, w, h);
+      const now = performance.now();
+      blooms = blooms.filter((b) => now - b.born < b.life);
+      for (const b of blooms) {
+        const elapsed = now - b.born;
+        const pulseIdx = Math.floor(elapsed / b.pulseMs);
+        const pulsePhase = (elapsed % b.pulseMs) / b.pulseMs;
+        const fade = 1 - elapsed / b.life;
+        const r = pulsePhase * Math.min(w, h) * 0.42;
+        const alpha = (1 - pulsePhase) * 0.62 * fade;
+        g.strokeStyle = `hsla(${b.hue}, 55%, 88%, ${alpha})`;
+        g.lineWidth = 2 * dpr;
+        g.beginPath();
+        g.arc(b.nx * w, b.ny * h, r, 0, Math.PI * 2);
+        g.stroke();
+        if (pulsePhase < 0.12) {
+          g.fillStyle = `hsla(${b.hue}, 70%, 95%, ${(0.12 - pulsePhase) * 3 * fade})`;
+          g.beginPath();
+          g.arc(b.nx * w, b.ny * h, 8 * dpr, 0, Math.PI * 2);
+          g.fill();
+        }
+        if (pulseIdx >= PULSES) continue;
+      }
+      raf = requestAnimationFrame(draw);
+    }
+
+    function pointerNorm(e) {
+      const r = canvas.getBoundingClientRect();
+      return {
+        nx: clamp((e.clientX - r.left) / r.width, 0, 1),
+        ny: clamp((e.clientY - r.top) / r.height, 0, 1),
+      };
+    }
+
+    canvas.addEventListener(
+      "pointerdown",
+      async (e) => {
+        e.preventDefault();
+        await startAudio(!built ? build : undefined);
+        if (!built) return;
+        const { nx, ny } = pointerNorm(e);
+        spawnBloom(nx, ny);
+      },
+      { passive: false }
+    );
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+    draw();
+  </script>
+</body>
+</html>
