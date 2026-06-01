@@ -123,7 +123,6 @@ Different ways to generate sound beyond what the hub already demos. Pair with to
 
 | Idea | Approach | Music role | Control idea |
 |------|----------|------------|--------------|
-| ~~**Feedback Matrix**~~ | Small feedback delay network | [Delay Maze](../apps/feedback-matrix/) | Touch · gyro |
 | ~~**Shepard Glide**~~ | Continuous Shepard tone | [Endless Rise](../apps/shepard-glide/) | Touch · tilt |
 
 ### Already on hub (reference)

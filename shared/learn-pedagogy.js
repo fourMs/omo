@@ -215,11 +215,6 @@ export const LEARN_PEDAGOGY = {
     "Deterministic but unpredictable — sensitivity to initial conditions as a performance parameter.",
   ],
 
-  "feedback-matrix": [
-    "Several delay lines cross-feed; gyro or touch routes energy between paths, risking runaway or rich drones.",
-    "Delay as instrument — stability vs feedback howl is part of the performance.",
-  ],
-
   "shepard-glide": [
     "Overlapping glissandi in octave layers create an endless rising (or falling) pitch illusion.",
     "Psychoacoustic paradox — good for discussing pitch circularity and ensemble tuning.",

@@ -269,13 +269,6 @@ export const HUB_APPS = [
     sensors: "Touch · motion",
   },
   {
-    href: "apps/feedback-matrix/",
-    title: "Feedback Matrix",
-    section: "texture",
-    synth: "Feedback delays",
-    sensors: "Touch · gyro",
-  },
-  {
     href: "apps/shepard-glide/",
     title: "Shepard Glide",
     section: "drones",

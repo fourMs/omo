@@ -30,9 +30,8 @@
     const dot = document.getElementById("dot");
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-    let ctx, master, bp, fb, built = false;
+    let ctx, master, bp, loopFb, outGain, micIn, built = false;
     let micStream = null;
-    let micSrc = null;
     let analyser = null;
     let buf = null;
     let holding = false;
@@ -41,16 +40,22 @@
 
     function build(c) {
       ctx = c;
-      ({ master } = createMasterBus(c, 0.35));
+      ({ master } = createMasterBus(c, 0.52));
+      micIn = ctx.createGain();
+      micIn.gain.value = 1.6;
       bp = ctx.createBiquadFilter();
       bp.type = "bandpass";
       bp.frequency.value = 900;
-      bp.Q.value = 18;
-      fb = ctx.createGain();
-      fb.gain.value = 0;
-      bp.connect(fb);
-      fb.connect(bp);
-      fb.connect(master);
+      bp.Q.value = 11;
+      loopFb = ctx.createGain();
+      loopFb.gain.value = 0;
+      outGain = ctx.createGain();
+      outGain.gain.value = 0;
+      micIn.connect(bp);
+      bp.connect(loopFb);
+      loopFb.connect(bp);
+      bp.connect(outGain);
+      outGain.connect(master);
       built = true;
     }
 
@@ -64,17 +69,31 @@
         setStatus("status", "Mic blocked — allow microphone", "warn");
         return false;
       }
-      if (!micSrc) {
-        micSrc = ctx.createMediaStreamSource(micStream);
-        micSrc.connect(bp);
-      }
       if (!analyser) {
         analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
-        connectMicAnalyser(ctx, micStream, analyser, { inputGain: 1.3 });
+        connectMicAnalyser(ctx, micStream, analyser, { inputGain: 1.4 });
         buf = new Float32Array(analyser.fftSize);
+        const micSrc = ctx.createMediaStreamSource(micStream);
+        micSrc.connect(micIn);
       }
       return true;
+    }
+
+    function exciteResonator() {
+      if (!ctx || !bp) return;
+      const n = ctx.createBufferSource();
+      const len = Math.floor(ctx.sampleRate * 0.06);
+      const b = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const g = ctx.createGain();
+      g.gain.value = 0.35;
+      n.buffer = b;
+      n.connect(g);
+      g.connect(bp);
+      n.start();
+      n.stop(ctx.currentTime + 0.07);
     }
 
     function readRms() {
@@ -94,11 +113,19 @@
     }
 
     function tick() {
-      if (!ctx || !built || !fb) return;
+      if (!ctx || !built || !loopFb) return;
       const rms = readRms();
       const t = ctx.currentTime;
-      const target = holding ? clamp(0.1 + rms * 8, 0.1, 0.32) : 0;
-      fb.gain.setTargetAtTime(target, t, 0.05);
+      if (holding) {
+        const loud = rms > 0.12;
+        const loop = loud ? clamp(0.9 - rms * 1.5, 0.82, 0.94) : clamp(0.9 + rms * 3, 0.88, 0.97);
+        const out = clamp(0.38 + rms * 1.2, 0.32, 0.58);
+        loopFb.gain.setTargetAtTime(loop, t, 0.04);
+        outGain.gain.setTargetAtTime(out, t, 0.04);
+      } else {
+        loopFb.gain.setTargetAtTime(0, t, 0.06);
+        outGain.gain.setTargetAtTime(0, t, 0.04);
+      }
       requestAnimationFrame(tick);
     }
 
@@ -121,6 +148,7 @@
       pad.classList.add("active");
       dot.style.opacity = "1";
       setPitchFromY(e.clientY);
+      exciteResonator();
       setStatus("status", "Hold steady — slide for pitch", "ok");
     }
 
@@ -130,7 +158,10 @@
       activeId = null;
       pad.classList.remove("active");
       dot.style.opacity = "0";
-      if (ctx && fb) fb.gain.setTargetAtTime(0, ctx.currentTime, 0.04);
+      if (!ctx || !loopFb) return;
+      const t = ctx.currentTime;
+      loopFb.gain.setTargetAtTime(0, t, 0.05);
+      outGain.gain.setTargetAtTime(0, t, 0.04);
     }
 
     pad.addEventListener("pointerdown", (e) => void arm(e));
