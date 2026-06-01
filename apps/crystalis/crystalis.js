@@ -1,5 +1,4 @@
 import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
-import { createMasterBus } from "../../shared/audio.js";
 import { renderQrCanvas } from "../../shared/qr.js";
 import {
   CRYSTALIS_BASE,
@@ -9,6 +8,7 @@ import {
   R,
   U,
   createChannelPool,
+  createCrystalisMasterBus,
   degreeForCharCode,
   gridAt,
   pitchMidi,
@@ -25,7 +25,7 @@ let ctx = null;
 let master = null;
 let pool = null;
 let register = 3;
-let level = 1;
+let level = 0.85;
 let pluckMode = false;
 let lastCellIndex = -1;
 
@@ -96,14 +96,14 @@ function updateReadout() {
 }
 
 function applyMasterLevel() {
-  if (master) master.gain.value = level * 0.55;
+  if (master) master.gain.value = level * 0.32;
 }
 
 function ensureAudio() {
   void startAudio((c) => {
     if (ctx) return;
     ctx = c;
-    ({ master } = createMasterBus(c, level * 0.55));
+    ({ master } = createCrystalisMasterBus(c, level * 0.32));
     pool = createChannelPool(ctx, master);
     if (!syncStartMs) syncStartMs = Date.now() + 400;
     gridEl.hidden = !pluckMode;
@@ -173,8 +173,8 @@ let lastX = 0;
 let lastY = 0;
 let padActive = false;
 let lastPadBowAt = 0;
-const PAD_BOW_MIN_MS = 65;
-const PAD_DELTA_MIN = 6;
+const PAD_BOW_MIN_MS = 120;
+const PAD_DELTA_MIN = 10;
 
 bowPad.addEventListener("pointerdown", (e) => {
   e.preventDefault();
@@ -198,20 +198,23 @@ bowPad.addEventListener("pointermove", (e) => {
   const now = performance.now();
   if (now - lastPadBowAt < PAD_BOW_MIN_MS) return;
   lastPadBowAt = now;
-  const amt = (n) => Math.min(1, n * 0.045);
+  const amt = (n) => Math.min(0.65, n * 0.028);
+  const active = pool.active();
+  if (!active.length) return;
   let hit = false;
+  const target = active[0];
   if (dx < -PAD_DELTA_MIN) {
-    for (const b of pool.active()) b.bowImpulse(L, amt(-dx));
+    target.bowImpulse(L, amt(-dx));
     hit = true;
   } else if (dx > PAD_DELTA_MIN) {
-    for (const b of pool.active()) b.bowImpulse(R, amt(dx));
+    target.bowImpulse(R, amt(dx));
     hit = true;
   }
   if (dy < -PAD_DELTA_MIN) {
-    for (const b of pool.active()) b.bowImpulse(D, amt(-dy));
+    target.bowImpulse(D, amt(-dy));
     hit = true;
   } else if (dy > PAD_DELTA_MIN) {
-    for (const b of pool.active()) b.bowImpulse(U, amt(dy));
+    target.bowImpulse(U, amt(dy));
     hit = true;
   }
   if (hit) for (const code of held.keys()) flashKey(code);
@@ -243,7 +246,7 @@ function onPluckTick(x, y) {
   highlightGrid(x, y);
   if (!pool || !pluckMode || !held.size) return;
   const n = held.size;
-  const scale = 1 / Math.max(1, Math.sqrt(n));
+  const scale = 0.5 / Math.max(1, n);
   for (const band of pool.active()) band.pluck(g, scale);
   for (const code of held.keys()) flashKey(code);
 }

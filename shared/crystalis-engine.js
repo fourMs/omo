@@ -58,7 +58,7 @@ export function createCrystalisBand(ctx, dest, channelIndex) {
   pan.connect(dest);
 
   const dry = ctx.createGain();
-  dry.gain.value = 0.028;
+  dry.gain.value = 0.016;
   dry.connect(pan);
 
   const rev = ctx.createConvolver();
@@ -70,12 +70,12 @@ export function createCrystalisBand(ctx, dest, channelIndex) {
   }
   rev.buffer = impulse;
   const wet = ctx.createGain();
-  wet.gain.value = 0.12;
+  wet.gain.value = 0.06;
   rev.connect(wet);
   wet.connect(pan);
 
   const bow = createBowedString(ctx, dry);
-  const ksPool = createKSPool(2);
+  const ksPool = createKSPool(1);
 
   const impLp = ctx.createBiquadFilter();
   impLp.type = "lowpass";
@@ -93,6 +93,10 @@ export function createCrystalisBand(ctx, dest, channelIndex) {
   let hz = 220;
   let bowing = false;
   let lastImpulseAt = 0;
+  let lastPluckAt = 0;
+  let voiceScale = 1;
+  const dryBase = 0.016;
+  const wetBase = 0.06;
 
   function setPitchFromMidi(midi) {
     hz = midiToFreq(midi);
@@ -102,36 +106,44 @@ export function createCrystalisBand(ctx, dest, channelIndex) {
   return {
     channelIndex,
     setPitchFromMidi,
+    setVoiceScale(scale) {
+      voiceScale = Math.max(0.2, Math.min(1, scale));
+      dry.gain.value = dryBase * voiceScale;
+      wet.gain.value = wetBase * voiceScale;
+    },
     startBow() {
       bowing = true;
-      bow.setBow(0.18);
+      bow.setBow(0.09 * voiceScale);
     },
     stopBow() {
       bowing = false;
-      bow.release();
+      bow.stop();
     },
     pluck(gain, levelScale = 1) {
-      const g = Math.max(0.05, Math.min(1, gain)) * levelScale;
+      const now = performance.now();
+      if (now - lastPluckAt < 85) return;
+      lastPluckAt = now;
+      const g = Math.max(0.05, Math.min(1, gain)) * levelScale * voiceScale;
       karplusPluck(ctx, dry, ksPool, hz, {
-        strength: 0.22 + g * 0.32,
-        level: (0.14 + g * 0.22) * levelScale,
-        decaySec: 1.2 + g * 0.5,
+        strength: 0.12 + g * 0.22,
+        level: 0.06 + g * 0.12,
+        decaySec: 1.0 + g * 0.35,
         reverbBus: rev,
-        reverbSend: 0.22,
+        reverbSend: 0.1,
       });
     },
     /** dir: L=0 R=1 U=2 D=3 — only this band's direction is wired. */
     bowImpulse(dir, amount) {
-      if (dir !== channelIndex || amount < 0.012) return;
+      if (dir !== channelIndex || amount < 0.02) return;
       const now = performance.now();
-      if (now - lastImpulseAt < 70) return;
+      if (now - lastImpulseAt < 110) return;
       lastImpulseAt = now;
       const t = ctx.currentTime;
-      const a = Math.min(1, amount) * 0.035;
+      const a = Math.min(1, amount) * 0.018 * voiceScale;
       impGain.gain.cancelScheduledValues(t);
       impGain.gain.setValueAtTime(Math.max(0.0001, a), t);
-      impGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-      if (bowing) bow.setBow(0.14 + Math.min(0.38, amount * 0.08));
+      impGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+      if (bowing) bow.setBow(0.06 + Math.min(0.16, amount * 0.04) * voiceScale);
     },
     stop() {
       bowing = false;
@@ -146,18 +158,26 @@ export function createChannelPool(ctx, master) {
   const playing = new Map();
   let current = -1;
 
+  function refreshVoiceLevels() {
+    const n = playing.size;
+    const scale = n > 0 ? 1 / Math.sqrt(n) : 1;
+    for (const i of playing.keys()) bands[i].setVoiceScale(scale);
+  }
+
   function findNext(keyId) {
     current = (current + 1) % MAX_CHANNELS;
     for (let i = current; i < MAX_CHANNELS; i++) {
       if (!playing.has(i)) {
         playing.set(i, keyId);
         current = i;
+        refreshVoiceLevels();
         return bands[i];
       }
     }
     for (let i = 0; i < current; i++) {
       if (!playing.has(i)) {
         playing.set(i, keyId);
+        refreshVoiceLevels();
         return bands[i];
       }
     }
@@ -168,11 +188,33 @@ export function createChannelPool(ctx, master) {
     for (const [idx, kid] of playing.entries()) {
       if (kid === keyId) {
         playing.delete(idx);
+        refreshVoiceLevels();
         return bands[idx];
       }
     }
     return null;
   }
 
-  return { bands, findNext, freeByKey, active: () => [...playing.keys()].map((i) => bands[i]) };
+  return {
+    bands,
+    findNext,
+    freeByKey,
+    active: () => [...playing.keys()].map((i) => bands[i]),
+    refreshVoiceLevels,
+  };
+}
+
+/** Master bus tuned for dense bow/pluck layers. */
+export function createCrystalisMasterBus(ctx, volume = 0.32) {
+  const master = ctx.createGain();
+  master.gain.value = volume;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -30;
+  comp.knee.value = 8;
+  comp.ratio.value = 14;
+  comp.attack.value = 0.004;
+  comp.release.value = 0.12;
+  master.connect(comp);
+  comp.connect(ctx.destination);
+  return { master, comp };
 }
