@@ -16,7 +16,7 @@ export const SECTIONS = {
   melody: {
     name: "Melody",
     color: "#a78bfa",
-    apps: ["piano", "flute-blow", "mic-theremin", "tilt-harp", "bow-phone"],
+    apps: ["piano", "flute-blow", "mic-theremin", "tilt-harp", "bow-phone", "kaoss-pad"],
   },
   texture: {
     name: "Texture",

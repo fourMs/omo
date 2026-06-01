@@ -234,6 +234,13 @@ export const HUB_APPS = [
     sensors: "Touch · keyboard",
   },
   {
+    href: "apps/kaoss-pad/",
+    title: "Kaoss Pad",
+    section: "melody",
+    synth: "XY loop synth",
+    sensors: "Touch pad",
+  },
+  {
     href: "apps/euclidean-rings/",
     title: "Euclidean Rings",
     section: "rhythm",

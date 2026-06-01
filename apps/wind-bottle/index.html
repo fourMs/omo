@@ -6,33 +6,151 @@
   <meta name="theme-color" content="#0d0f14" />
   <title>Wind Bottle — OMO</title>
   <link rel="stylesheet" href="../../shared/ui.css" />
-  
 </head>
-<body class="app-shell">
+<body class="app-shell wind-bottle-app">
   <header class="app-header">
     <a class="back-link" href="../../">←</a>
     <h1>Wind Bottle</h1>
   </header>
-  <div class="learn-panel panel" id="learnPanel"><h2>Wind bottle</h2><p>Hold — tilt shapes embouchure (filter + feedback).</p></div>
-  <div class="main-stage">
-    <div id="pad" class="stage-fill play-grid"><div class="touch-dot" id="dot"></div></div>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Wind bottle</h2>
+    <p>Turn <strong>Audio on</strong>, allow <strong>motion</strong> if asked. <strong>Hold</strong> the centre button — noise resonates like blowing across a bottle.</p>
+    <p><strong>Tilt</strong> forward/back for pitch; sideways adds breath feedback.</p>
+  </div>
+  <div class="control-row wind-live" aria-live="polite" aria-label="Resonance">
+    <label>Peak</label>
+    <span><strong id="peakOut">—</strong> Hz</span>
+    <label>Breath</label>
+    <span><strong id="breathOut">—</strong></span>
+  </div>
+  <div class="main-stage wind-stage">
+    <button type="button" id="playBtn" class="wind-play-btn" aria-label="Hold to blow">
+      <span class="wind-play-icon" aria-hidden="true"></span>
+      <span class="wind-play-label">Hold to blow</span>
+    </button>
+    <p class="wind-hint-text" id="hint">Tilt shapes the bottle tone</p>
   </div>
   <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
 
-import { bindLearn, startAudio } from "../../shared/app.js";
-import { createMasterBus } from "../../shared/audio.js";
-bindLearn();
-const pad=document.getElementById("pad");
-const dot=document.getElementById("dot");
-const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
-let ctx,master,built=false,holding=false,activeId=null;
+    bindLearn();
 
-import { enableSensors, onOrientation } from "../../shared/sensors.js";
-let noise,bp,fb,g;
-function build(c){ctx=c;({master}=createMasterBus(c,0.4));noise=ctx.createBufferSource();const b=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);const d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;noise.buffer=b;noise.loop=true;bp=ctx.createBiquadFilter();bp.type="bandpass";fb=ctx.createGain();g=ctx.createGain();g.gain.value=0;noise.connect(bp);bp.connect(fb);fb.connect(bp);fb.connect(g);g.connect(master);noise.start();built=true;
-enableSensors({needMotion:false,needOrientation:true}).then(ok=>{if(!ok)return;onOrientation(o=>{if(!holding)return;bp.frequency.setTargetAtTime(300+Math.abs(o.beta||0)*15,ctx.currentTime,0.06);fb.gain.setTargetAtTime(0.15+Math.abs(o.gamma||0)*0.005,ctx.currentTime,0.08);});});}
-pad.addEventListener("pointerdown",async()=>{await startAudio(!built?build:undefined);holding=true;pad.classList.add("active");g.gain.setTargetAtTime(0.25,ctx.currentTime,0.04);});
-pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");g.gain.setTargetAtTime(0,ctx.currentTime,0.1);});
+    const playBtn = document.getElementById("playBtn");
+    const peakOut = document.getElementById("peakOut");
+    const breathOut = document.getElementById("breathOut");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let ctx, master, built = false;
+    let holding = false;
+    let activeId = null;
+    let endPointer = null;
+    let tiltReady = false;
+    let noise, bp, fb, outGain;
+
+    function applyTilt(beta, gamma) {
+      if (!holding || !ctx || !bp) return;
+      const peak = 300 + Math.abs(beta || 0) * 15;
+      const breath = 0.15 + Math.abs(gamma || 0) * 0.005;
+      const t = ctx.currentTime;
+      bp.frequency.setTargetAtTime(peak, t, 0.06);
+      fb.gain.setTargetAtTime(breath, t, 0.08);
+      peakOut.textContent = peak.toFixed(0);
+      breathOut.textContent = `${(breath * 100).toFixed(0)}%`;
+    }
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.4));
+      noise = ctx.createBufferSource();
+      const b = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      noise.buffer = b;
+      noise.loop = true;
+      bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 520;
+      bp.Q.value = 12;
+      fb = ctx.createGain();
+      fb.gain.value = 0.2;
+      outGain = ctx.createGain();
+      outGain.gain.value = 0;
+      noise.connect(bp);
+      bp.connect(fb);
+      fb.connect(bp);
+      fb.connect(outGain);
+      outGain.connect(master);
+      noise.start();
+      built = true;
+      void ensureTilt();
+    }
+
+    async function ensureTilt() {
+      if (tiltReady) return;
+      primeSensors({ needMotion: false, needOrientation: true });
+      if (await enableSensors({ needMotion: false, needOrientation: true })) {
+        tiltReady = true;
+        onOrientation((o) => applyTilt(o.beta, o.gamma));
+      }
+    }
+
+    function beginHold() {
+      playBtn.classList.add("active");
+      playBtn.querySelector(".wind-play-label").textContent = "Blowing…";
+      outGain.gain.setTargetAtTime(0.25, ctx.currentTime, 0.04);
+      applyTilt(12, 0);
+    }
+
+    function endHold() {
+      holding = false;
+      activeId = null;
+      playBtn.classList.remove("active");
+      playBtn.querySelector(".wind-play-label").textContent = "Hold to blow";
+      if (ctx && outGain) {
+        outGain.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+      }
+      peakOut.textContent = "—";
+      breathOut.textContent = "—";
+      if (endPointer) {
+        window.removeEventListener("pointerup", endPointer);
+        window.removeEventListener("pointercancel", endPointer);
+        endPointer = null;
+      }
+    }
+
+    primeSensors({ needMotion: false, needOrientation: true });
+
+    playBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (holding) return;
+      holding = true;
+      activeId = e.pointerId;
+      try {
+        playBtn.setPointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+
+      endPointer = (ev) => {
+        if (ev.pointerId !== activeId) return;
+        endHold();
+        try {
+          if (playBtn.hasPointerCapture(ev.pointerId)) playBtn.releasePointerCapture(ev.pointerId);
+        } catch {
+          /* noop */
+        }
+      };
+      window.addEventListener("pointerup", endPointer);
+      window.addEventListener("pointercancel", endPointer);
+
+      void (async () => {
+        await startAudio(!built ? build : undefined);
+        if (!holding || activeId !== e.pointerId || !built) return;
+        beginHold();
+      })();
+    });
   </script>
 </body>
 </html>

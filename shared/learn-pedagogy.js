@@ -185,6 +185,11 @@ export const LEARN_PEDAGOGY = {
     "Embodied ML: your movement vocabulary becomes the interface.",
   ],
 
+  "kaoss-pad": [
+    "Inspired by the Korg Kaossilator: an X–Y pad sets quantized pitch and filter colour while a short loop retriggers sixteenth notes.",
+    "Lead program plays scale tones; Beat program maps horizontal position to kick, snare, and hats — drag while holding to morph the phrase.",
+  ],
+
   "markov-melody": [
     "Each new note depends on the previous one or two (Markov chain); the keyboard trains probabilities, then auto-plays.",
     "Stochastic melody — structure without a fixed score; compare human vs machine choices.",
@@ -261,8 +266,8 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "wind-bottle": [
-    "Noise through a resonant peak with feedback suggests blowing across a bottle.",
-    "No mic needed — tilt controls “breath” and pitch of the resonance.",
+    "Hold the centre button — filtered noise with feedback sounds like blowing across a bottle.",
+    "Tilt controls peak frequency and breath amount; no microphone required.",
   ],
 
   "scrub-tape": [

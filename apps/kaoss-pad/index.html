@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Kaoss Pad — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell kaoss-pad-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Kaoss Pad</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Kaoss pad</h2>
+    <p>Turn <strong>Audio on</strong>. <strong>Hold</strong> the X–Y pad — your finger sets pitch (across) and tone (up/down). A short loop retriggers like a Kaossilator phrase.</p>
+    <p><strong>Lead</strong> = scaled synth · <strong>Beat</strong> = drum hits on the grid. Change BPM and scale below.</p>
+  </div>
+  <div class="app-toolbar kaoss-toolbar">
+    <label for="programPick">Program</label>
+    <select id="programPick">
+      <option value="lead">Lead</option>
+      <option value="beat">Beat</option>
+    </select>
+    <label for="scalePick">Scale</label>
+    <select id="scalePick">
+      <option value="pentatonic">Pentatonic</option>
+      <option value="minor" selected>Minor</option>
+      <option value="major">Major</option>
+    </select>
+    <label for="bpm">BPM</label>
+    <input type="range" id="bpm" min="60" max="180" value="112" />
+    <span id="bpmVal">112</span>
+  </div>
+  <div class="control-row kaoss-live" aria-live="polite" aria-label="Pad">
+    <label>Note</label>
+    <span><strong id="noteOut">—</strong></span>
+    <label>Filter</label>
+    <span><strong id="filtOut">—</strong> Hz</span>
+  </div>
+  <div class="main-stage kaoss-stage">
+    <div id="pad" class="stage-fill kaoss-pad play-grid" role="application" aria-label="X-Y performance pad">
+      <div class="kaoss-grid" aria-hidden="true"></div>
+      <div class="touch-dot" id="dot"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { createMasterBus, midiToFreq } from "../../shared/audio.js";
+    import { playHat, playKick, playSnare } from "../../shared/drum-sounds.js";
+
+    bindLearn();
+
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const programPick = document.getElementById("programPick");
+    const scalePick = document.getElementById("scalePick");
+    const bpmInput = document.getElementById("bpm");
+    const bpmVal = document.getElementById("bpmVal");
+    const noteOut = document.getElementById("noteOut");
+    const filtOut = document.getElementById("filtOut");
+
+    const SCALES = {
+      pentatonic: [0, 2, 4, 7, 9],
+      minor: [0, 2, 3, 5, 7, 8, 10],
+      major: [0, 2, 4, 5, 7, 9, 11],
+    };
+    const ROOT = 50;
+    const STEPS = 16;
+    const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let ctx, master, built = false;
+    let holding = false;
+    let activeId = null;
+    let endPointer = null;
+    let nx = 0.5;
+    let ny = 0.5;
+    let bpm = 112;
+    let nextTick = 0;
+    let schedulerTimer = null;
+    let currentMidi = 62;
+
+    function scaleName() {
+      return scalePick.value in SCALES ? scalePick.value : "minor";
+    }
+
+    function midiFromX(x) {
+      const scale = SCALES[scaleName()];
+      const idx = clamp(Math.round(x * (STEPS - 1)), 0, STEPS - 1);
+      const degree = idx % scale.length;
+      const octave = Math.floor(idx / scale.length);
+      return ROOT + octave * 12 + scale[degree];
+    }
+
+    function midiLabel(midi) {
+      const n = NOTE_NAMES[((midi % 12) + 12) % 12];
+      const o = Math.floor(midi / 12) - 1;
+      return `${n}${o}`;
+    }
+
+    function sixteenthSec() {
+      return 60 / bpm / 4;
+    }
+
+    function updateReadouts() {
+      currentMidi = midiFromX(nx);
+      const cut = 280 + (1 - ny) * 5200;
+      noteOut.textContent = programPick.value === "beat" ? `Step ${clamp(Math.round(nx * 3), 0, 3) + 1}` : midiLabel(currentMidi);
+      filtOut.textContent = cut.toFixed(0);
+    }
+
+    function placeDot(x, y) {
+      const r = pad.getBoundingClientRect();
+      nx = clamp((x - r.left) / r.width, 0, 1);
+      ny = clamp((y - r.top) / r.height, 0, 1);
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${ny * 100}%`;
+      updateReadouts();
+    }
+
+    function playLead(midi, when) {
+      const freq = midiToFreq(midi);
+      const cut = 280 + (1 - ny) * 5200;
+      const peak = 0.14 + ny * 0.12;
+      const dur = 0.06 + ny * 0.14;
+
+      const osc = ctx.createOscillator();
+      const filt = ctx.createBiquadFilter();
+      const g = ctx.createGain();
+      osc.type = ny > 0.55 ? "square" : "sawtooth";
+      osc.frequency.setValueAtTime(freq, when);
+      filt.type = "lowpass";
+      filt.frequency.setValueAtTime(cut, when);
+      filt.Q.setValueAtTime(2 + ny * 10, when);
+      g.gain.setValueAtTime(0.001, when);
+      g.gain.exponentialRampToValueAtTime(peak, when + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.001, when + dur);
+      osc.connect(filt);
+      filt.connect(g);
+      g.connect(master);
+      osc.start(when);
+      osc.stop(when + dur + 0.05);
+    }
+
+    function playBeat() {
+      const slot = clamp(Math.floor(nx * 4), 0, 3);
+      if (slot === 0) playKick(ctx, master);
+      else if (slot === 1) playSnare(ctx, master);
+      else if (slot === 2) playHat(ctx, master);
+      else playSnare(ctx, master);
+    }
+
+    function tickAt(when) {
+      if (!holding) return;
+      if (programPick.value === "beat") playBeat();
+      else playLead(currentMidi, when);
+    }
+
+    function scheduler() {
+      if (!ctx || !built) return;
+      const step = sixteenthSec();
+      const horizon = ctx.currentTime + 0.12;
+      while (nextTick < horizon) {
+        if (holding && nextTick >= ctx.currentTime - 0.001) tickAt(nextTick);
+        nextTick += step;
+      }
+      schedulerTimer = window.setTimeout(scheduler, 25);
+    }
+
+    function startScheduler() {
+      if (!ctx) return;
+      nextTick = ctx.currentTime + 0.02;
+      window.clearTimeout(schedulerTimer);
+      scheduler();
+    }
+
+    function stopScheduler() {
+      window.clearTimeout(schedulerTimer);
+      schedulerTimer = null;
+    }
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.52));
+      built = true;
+    }
+
+    registerAudioBoot(build);
+
+    bpmInput.addEventListener("input", () => {
+      bpm = +bpmInput.value;
+      bpmVal.textContent = String(bpm);
+    });
+
+    scalePick.addEventListener("change", updateReadouts);
+    programPick.addEventListener("change", updateReadouts);
+
+    function beginHold() {
+      pad.classList.add("active");
+      startScheduler();
+      tickAt(ctx.currentTime);
+    }
+
+    function endHold() {
+      holding = false;
+      activeId = null;
+      pad.classList.remove("active");
+      dot.style.opacity = "";
+      stopScheduler();
+      noteOut.textContent = "—";
+      filtOut.textContent = "—";
+      if (endPointer) {
+        window.removeEventListener("pointerup", endPointer);
+        window.removeEventListener("pointercancel", endPointer);
+        endPointer = null;
+      }
+    }
+
+    pad.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (holding) return;
+      holding = true;
+      activeId = e.pointerId;
+      placeDot(e.clientX, e.clientY);
+      dot.style.opacity = "1";
+      try {
+        pad.setPointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+
+      endPointer = (ev) => {
+        if (ev.pointerId !== activeId) return;
+        endHold();
+        try {
+          if (pad.hasPointerCapture(ev.pointerId)) pad.releasePointerCapture(ev.pointerId);
+        } catch {
+          /* noop */
+        }
+      };
+      window.addEventListener("pointerup", endPointer);
+      window.addEventListener("pointercancel", endPointer);
+
+      void (async () => {
+        await startAudio(!built ? build : undefined);
+        if (!holding || activeId !== e.pointerId || !built) return;
+        beginHold();
+      })();
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!holding || e.pointerId !== activeId) return;
+      placeDot(e.clientX, e.clientY);
+    });
+  </script>
+</body>
+</html>

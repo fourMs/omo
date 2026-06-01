@@ -8,6 +8,12 @@ Backlog of apps, features, and workshop concepts. Same stack as today: vanilla J
 
 Phones expose more than mic + tilt. Each row is a candidate **app** (or major upgrade) pairing a sensor with a clear musical gesture.
 
+### Touch performance
+
+| Idea | Sensor / API | Music role | Synthesis hook |
+|------|----------------|------------|----------------|
+| ~~**Kaoss Pad**~~ | X–Y pad + loop clock | Quantized lead / beat loops (Kaossilator-style) | [Kaoss Pad](../apps/kaoss-pad/) |
+
 ### Motion & orientation
 
 | Idea | Sensor / API | Music role | Synthesis hook |
