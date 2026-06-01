@@ -1,6 +1,6 @@
-# Workshop guide — Oslo Mobile Orchestra
+# Workshop guide
 
-> Extended version with scenarios and assessment: **[GitHub Wiki → Workshop guide](https://github.com/fourMs/omo/wiki/Workshop-Guide)**
+Facilitator notes for a **45-minute** OMO session with phones only. Shorter checklist in the repo: [`docs/WORKSHOP-GUIDE.md`](https://github.com/fourMs/omo/blob/main/docs/WORKSHOP-GUIDE.md).
 
 ## Goals
 
@@ -10,11 +10,11 @@
 
 ## Before the room (15 min)
 
-1. Test Wi‑Fi or mobile hotspot; everyone opens the same site URL.
+1. Test Wi‑Fi or mobile hotspot; everyone opens [fourms.github.io/omo/](https://fourms.github.io/omo/).
 2. **Browsers:** iPhone/iPad → **Safari**; Android → **Chrome**. Avoid in-app browsers — use “Open in browser”.
 3. Conductor phone: full volume, Do Not Disturb on.
 4. Optional: filter the hub by section (`?section=rhythm`, etc.) or pre-assign rows (drones / rhythm / melody).
-5. Run through **[Device support](../support.html)** on one phone; allow motion when **Test motion** is tapped.
+5. Run through **[Device support](https://fourms.github.io/omo/support.html)** on one phone; allow motion when **Test motion** is tapped.
 6. Demo flow: open an app → **Audio on** → touch the play surface → allow mic/motion if asked.
 
 ## Facilitator script (45 min)
@@ -25,15 +25,17 @@ Open hub → **Piano** (or **Kaoss Pad** on Lead program). Everyone finds one no
 
 ### Sensors (10 min)
 
-**Motion Trump** (`apps/motion-wah/`) — “Tilt = vowel.” Conductor points up/down; group sweeps together without looking at screens.
+**Motion Trump** ([motion-wah](https://fourms.github.io/omo/apps/motion-wah/)) — “Tilt = vowel.” Conductor points up/down; group sweeps together without looking at screens.
 
-**Shepard Glide** — hold the pad; tilt controls rise/fall speed. Discuss endless glide vs stepped melody.
+**Shepard Glide** — hold the pad; tilt controls rise/fall speed. Discuss endless glide vs stepped melody. If tone stops while held, reload (service worker update) and keep finger on the pad centre.
 
 ### Texture & sampling (5 min, optional)
 
 **Sampler** — hold centre **record** button, hum or speak, release to loop; tilt shifts colour and filter.
 
 **Scrub Tape** — record, then drag the **tape ribbon** at the bottom (DJ scrub).
+
+**Pinch Bass** — two-finger spread on the pad; watch the live readout for filter and pitch.
 
 ### AI (10 min)
 
@@ -54,6 +56,16 @@ Open hub → **Piano** (or **Kaoss Pad** on Lead program). Everyone finds one no
 
 One phone on **Shepard Glide** or **Just Equal**; others silent. Discuss what felt musical vs “tech demo.”
 
+## Extended scenarios
+
+| Duration | Focus | Apps | Notes |
+|----------|--------|------|--------|
+| 10 min | Pulse only | Conductor + Firefly | No melody; listen for entrainment |
+| 15 min | Camera room | Shadow Sequencer + Video Sonifier | Dim lights; discuss privacy |
+| 20 min | Synthesis tour | FM Touch → Filter Ladder → Pluck Bowl | Map oscillator → filter → resonator |
+| 25 min | Kaoss layer | Kaoss Pad Beat + drone row | Quantized pulse under free harmony |
+| 30 min | ML ethics | Train Shake + Hum Clap | Compare k-NN on motion vs audio features |
+
 ## Suggested role map (56 apps)
 
 | Role | Good starting apps |
@@ -67,7 +79,7 @@ One phone on **Shepard Glide** or **Just Equal**; others silent. Discuss what fe
 | Camera / room | Shadow Sequencer, Video Sonifier, Room Reverb Send |
 | ML showcase | Train Shake, Hum Clap, Evo Drumkit, Gesture Regression |
 
-Full list: [CATALOG.md](CATALOG.md).
+Full tables: [App catalog](App-Catalog).
 
 ## Accessibility
 
@@ -81,7 +93,7 @@ Full list: [CATALOG.md](CATALOG.md).
 |---------|-----|
 | Mic/camera/motion blocked | Safari (iOS) or Chrome (Android); not an in-app browser |
 | No sound | **Audio on**; tap play surface; check mute switch (iOS) |
-| Shepard stops while holding | Reload page (cache update); keep finger on pad, not edge |
+| Shepard stops while held | Reload page (cache update); keep finger on pad, not edge |
 | Motion flat | Reload; iOS Settings → Safari → Motion & Orientation |
 | Out of sync | Conductor shared link; expect ~50–100 ms spread without a server |
 | Harsh room | Lower volume; fewer distortion / shake players |

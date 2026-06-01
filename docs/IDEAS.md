@@ -125,16 +125,11 @@ Different ways to generate sound beyond what the hub already demos. Pair with to
 
 ### Already on hub (reference)
 
-| App | Synthesis |
-|-----|-----------|
-| [FM Touch](../apps/fm-touch/), [+ Tilt](../apps/fm-touch-tilt/), [Matrix](../apps/fm-matrix/) | FM |
-| [KS String](../apps/ks-string/), [Pluck](../apps/ks-pluck/) | Karplus–Strong |
-| [Additive Bells](../apps/additive-bells/) | Additive |
-| [Wavetable Scan](../apps/wavetable-scan/) | Wavetable |
-| [Filter Ladder](../apps/filter-ladder/) | Ladder LP |
-| [Sampler](../apps/sampler/), [Granular Tilt](../apps/granular-tilt/) | Sample / granular |
-| [Drumkit](../apps/drumkit/), sequencers | Drum models |
-| [Evo Drumkit](../apps/evo-drumkit/) | GA pattern match |
+See **[CATALOG.md](CATALOG.md)** for all **56** hub apps (Rhythm 10 · Drones 11 · Melody 8 · Synthesis 12 · Texture 11 · AI 4).
+
+Recent additions include [Kaoss Pad](../apps/kaoss-pad/) (X–Y loop synth), centre-record UX on [Sampler](../apps/sampler/) and [Scrub Tape](../apps/scrub-tape/), and continuous [Shepard Glide](../apps/shepard-glide/).
+
+Retired from the hub (folders may remain for redirects): Part, Pocket Metronome, Pitch Hive, One Shot Orchestra, Synth Pad, Tilt Doppler, Torch Pulse, Whisper Gate, and others — see git history.
 
 ---
 
@@ -262,4 +257,4 @@ Use when designing a new app: pick **one primary sensor** and **one synthesis fa
 4. **WebRTC room** — when acoustic sync isn’t enough  
 5. ~~**Feature detect page**~~ — [support.html](../support.html)
 
-Contributions welcome: pick an open item, open a PR, link it here and in the [wiki](https://github.com/alexarje/Oslo-Mobile-Orchestra/wiki).
+Contributions welcome: pick an open item, open a PR, link it here and in the [wiki](https://github.com/fourMs/omo/wiki).

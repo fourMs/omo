@@ -12,7 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export { slugToTitle };
 
-const SITE = "https://alexarje.github.io/Oslo-Mobile-Orchestra";
+const SITE = "https://fourms.github.io/omo";
 
 const WIKI_SECTIONS = [
   ["rhythm", "Rhythm"],
