@@ -25,7 +25,6 @@
   { href: "apps/phase-distortion/", title: "PD Lead", section: "synthesis", synth: "Phase distortion", sensors: "Touch" },
   { href: "apps/supersaw-stack/", title: "Blade Chorus", section: "synthesis", synth: "Detuned saws", sensors: "Gyro · touch" },
   { href: "apps/pwm-bass/", title: "Pulse Bass", section: "synthesis", synth: "Variable pulse", sensors: "Tilt · touch" },
-  { href: "apps/dual-ks-harp/", title: "Twin Wire", section: "synthesis", synth: "Dual KS", sensors: "Multi-touch" },
   { href: "apps/bowed-waveguide/", title: "Drag Bow", section: "melody", synth: "Continuous KS", sensors: "Touch drag" },
   { href: "apps/pluck-bowl/", title: "Bowl Splash", section: "synthesis", synth: "Resonant burst", sensors: "Touch position" },
   { href: "apps/wind-bottle/", title: "Bottle Breath", section: "texture", synth: "Noise resonator", sensors: "Tilt · touch" },

@@ -300,11 +300,6 @@ export const LEARN_PEDAGOGY = {
     "Spin timbre uses sine + vibrato for a smoother, rotating stereo image.",
   ],
 
-  "dual-ks-harp": [
-    "Two Karplus–Strong strings interact; multi-touch excites both — simple coupled resonators.",
-    "Polyphony and beating between two plucked paths.",
-  ],
-
   "bowed-waveguide": [
     "Karplus–Strong plucks at a steady rate give the pitch; a very quiet bow layer adds sustain without runaway feedback.",
     "Drag speed sets bow energy; vertical position chooses note — slow bowing sounds rounder, fast a little brighter.",

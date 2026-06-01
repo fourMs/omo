@@ -89,7 +89,6 @@ Different ways to generate sound beyond what the hub already demos. Pair with to
 
 | Idea | Approach | Music role | Control idea |
 |------|----------|------------|--------------|
-| ~~**Dual KS Harp**~~ | Two coupled delay lines | Hammered dulcimer | [Twin Wire](../apps/dual-ks-harp/) |
 | ~~**Bowed Waveguide**~~ | Continuous excitation + loop | Cello-like (simpler than Bow Phone) | [Drag Bow](../apps/bowed-waveguide/) |
 | ~~**Pluck Bowl**~~ | 2D wave mesh (lite) | Splashy percussion | [Bowl Splash](../apps/pluck-bowl/) |
 | ~~**Wind Bottle**~~ | Noise + resonant peak + feedback | Breath without mic | [Bottle Breath](../apps/wind-bottle/) |

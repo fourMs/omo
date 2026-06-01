@@ -300,7 +300,6 @@ export const HUB_APPS = [
   { href: "apps/am-radio/", title: "Am Radio", section: "synthesis", synth: "AM sidebands", sensors: "Mic · touch" },
   { href: "apps/phase-distortion/", title: "Phase Distortion", section: "synthesis", synth: "Phase distortion", sensors: "Multi-touch" },
   { href: "apps/supersaw-stack/", title: "Supersaw Stack", section: "synthesis", synth: "Saws or spin timbre", sensors: "Gyro · touch" },
-  { href: "apps/dual-ks-harp/", title: "Dual KS Harp", section: "synthesis", synth: "Dual KS", sensors: "Multi-touch" },
   { href: "apps/bowed-waveguide/", title: "Bowed Waveguide", section: "melody", synth: "Continuous KS", sensors: "Touch drag" },
   { href: "apps/pluck-bowl/", title: "Pluck Bowl", section: "synthesis", synth: "Resonant burst", sensors: "Touch position" },
   { href: "apps/wind-bottle/", title: "Wind Bottle", section: "texture", synth: "Noise resonator", sensors: "Tilt · touch" },

@@ -496,20 +496,6 @@ pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio
 pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");setPad(0.5,false);});`,
   },
   {
-    slug: "dual-ks-harp",
-    title: "Twin Wire",
-    section: "synthesis",
-    synth: "Dual KS",
-    sensors: "Multi-touch",
-    learn: "<h2>Dual KS harp</h2><p>Two-finger plucks — separate delay lines per touch.</p>",
-    script: `${padBase}
-import { createKSPool, karplusPluck } from "../../shared/ks.js";
-let pool;
-function build(c){ctx=c;({master}=createMasterBus(c,0.55));pool=createKSPool(8);built=true;}
-function pluckAt(e){const r=pad.getBoundingClientRect();const nx=clamp((e.clientX-r.left)/r.width,0,1);karplusPluck(ctx,master,pool,110*Math.pow(4,nx),{strength:0.5,level:0.3});}
-pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio(!built?build:undefined);pluckAt(e);pad.classList.add("active");});`,
-  },
-  {
     slug: "bowed-waveguide",
     title: "Drag Bow",
     section: "melody",
