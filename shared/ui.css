@@ -842,20 +842,28 @@ html.omo-a11y .hub-header .hub-section-select {
   touch-action: none;
 }
 
-/* Compass Wah — compass rose canvas */
-.compass-wah-app .main-stage {
+/* Compass Wah + Heading Choir — compass rose canvas */
+.compass-wah-app .main-stage,
+.heading-choir-app .main-stage {
   flex: 1 1 auto;
   min-height: min(52vh, var(--play-min));
   display: flex;
   flex-direction: column;
 }
 
-.compass-wah-app .canvas-fill {
+.compass-wah-app .canvas-fill,
+.heading-choir-app .canvas-fill {
   touch-action: manipulation;
   flex: 1 1 auto;
   min-height: 12rem;
   width: 100%;
   display: block;
+}
+
+.compass-wah-app .canvas-fill.active,
+.heading-choir-app .canvas-fill.active {
+  outline: 2px solid rgba(110, 231, 183, 0.35);
+  outline-offset: -2px;
 }
 
 /* Granular tilt — upload + record toolbar */
@@ -1175,16 +1183,12 @@ html.omo-a11y .hub-header .hub-section-select {
   box-shadow: 0 0 12px rgba(110, 231, 183, 0.45);
 }
 
-/* Heading choir — live compass readout */
-.heading-choir-app .hc-toolbar {
-  flex-shrink: 0;
-  padding: 0 0.65rem 0.3rem;
-}
-
+/* Heading choir — sector readout under status */
 .heading-choir-app .hc-live {
   justify-content: center;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
+  margin: 0 0.65rem 0.25rem;
 }
 
 .heading-choir-app .hc-live label {
@@ -1200,10 +1204,6 @@ html.omo-a11y .hub-header .hub-section-select {
 .heading-choir-app .hc-live strong {
   color: #e2e8f0;
   font-weight: 700;
-}
-
-.heading-choir-app #pad.play-grid {
-  touch-action: none;
 }
 
 /* Filter ladder — tappable pad while tilting */
@@ -1728,54 +1728,83 @@ html.omo-a11y .hub-header .hub-section-select {
   border-color: #5eead4;
 }
 
-/* L-system groove */
-.lsystem-groove-app .lsys-live {
-  justify-content: center;
+/* L-system groove — compact toolbar + grid fits viewport */
+.lsystem-groove-app .lsys-toolbar {
+  flex-shrink: 0;
+  padding: 0 0.45rem 0.25rem;
+  gap: 0.2rem;
+}
+
+.lsystem-groove-app .lsys-toolbar .control-row {
   flex-wrap: wrap;
-  gap: 0.35rem 0.75rem;
-  margin-top: 0.15rem;
+  gap: 0.25rem 0.4rem;
 }
 
-.lsystem-groove-app .lsys-live label {
-  font-size: 0.72rem;
+.lsystem-groove-app .lsys-toolbar input[type="range"] {
+  flex: 1 1 4.5rem;
+  max-width: 6.5rem;
+}
+
+.lsystem-groove-app .lsys-meta {
+  margin: 0;
+  text-align: center;
+  font-size: 0.68rem;
   color: var(--muted);
+  line-height: 1.3;
 }
 
-.lsystem-groove-app .lsys-live span {
-  font-size: 0.72rem;
+.lsystem-groove-app .lsys-meta strong {
   color: #cbd5e1;
+  font-weight: 600;
 }
 
-.lsystem-groove-app .lsys-live strong {
-  color: #e2e8f0;
-  font-weight: 700;
+.lsystem-groove-app #ruleOut {
+  display: inline-block;
+  max-width: min(14rem, 72vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
-.lsystem-stage {
-  padding: 0.35rem;
-  overflow: auto;
+.lsystem-groove-app .lsystem-stage {
+  flex: 1;
+  min-height: 0;
+  padding: 0.2rem 0.35rem calc(0.25rem + var(--safe-b));
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
 }
 
-.lsystem-grid {
+.lsystem-groove-app .lsystem-grid {
   display: grid;
-  grid-template-columns: 2rem repeat(16, 1fr);
-  gap: 2px;
-  min-width: min(100%, 22rem);
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  grid-template-columns: 1.2rem repeat(16, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  min-width: 0;
+  margin: 0;
 }
 
-.lsystem-row-label {
+.lsystem-groove-app .lsystem-row-label {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.9rem;
+  font-size: 0.75rem;
+  min-width: 0;
 }
 
-.lsystem-cell {
-  aspect-ratio: 1;
+.lsystem-groove-app .lsystem-cell {
   min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
   padding: 0;
-  border-radius: 4px;
+  border-radius: 3px;
   border: 1px solid #334155;
   background: #0f172a;
 }

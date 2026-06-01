@@ -14,29 +14,26 @@
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>L-system groove</h2>
-    <p>Turn <strong>Audio on</strong>, press ▶. Each bar the rule string <strong>rewrites</strong> and the read window <strong>slides</strong> so the 16-step grid keeps shifting. Rule sets rotate (A→AB, B→A and cousins) so it does not freeze after a few bars.</p>
+    <p>Turn <strong>Audio on</strong>, press ▶. Each bar the pattern <strong>rewrites</strong> and the read window slides so the grid keeps shifting.</p>
   </div>
-  <div class="app-toolbar">
+  <div class="app-toolbar lsys-toolbar">
     <div class="control-row">
       <label for="bpm">BPM</label>
       <input type="range" id="bpm" min="70" max="150" value="100" />
       <span id="bpmVal">100</span>
       <button type="button" class="btn btn-play" id="playBtn">▶</button>
-      <button type="button" class="btn-secondary btn btn-sm" id="resetBtn">Reset rule</button>
+      <button type="button" class="btn-secondary btn btn-sm" id="resetBtn">Reset</button>
     </div>
-    <div class="control-row lsys-live" aria-live="polite">
-      <label>Gen</label>
-      <span><strong id="genOut">0</strong></span>
-      <label>Rules</label>
-      <span><strong id="ruleOut">A→AB, B→A</strong></span>
-    </div>
+    <p class="lsys-meta" aria-live="polite">
+      Gen <strong id="genOut">0</strong>
+      · <strong id="ruleOut" title="">A→AB, B→A</strong>
+    </p>
   </div>
-  <p class="status-bar" id="status">Rewrites every bar · rules rotate</p>
   <div class="main-stage lsystem-stage">
     <div id="grid" class="lsystem-grid" aria-label="Drum pattern"></div>
   </div>
   <script type="module">
-    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
     import { createLSystemGroove } from "../../shared/lsystem-groove.js";
     import { DRUM_SEQ_ROWS } from "../../shared/drum-sounds.js";
@@ -50,6 +47,7 @@
     let stepIndex = 0;
     let nextTime = 0;
     let barCount = 0;
+    let schedRaf = 0;
 
     const grid = document.getElementById("grid");
     DRUM_SEQ_ROWS.forEach((row, ri) => {
@@ -78,8 +76,12 @@
           pattern[ri][ci] = rowPat[ci];
         }
       }
-      document.getElementById("genOut").textContent = String(lsys.getGeneration());
-      document.getElementById("ruleOut").textContent = lsys.getRuleLabel();
+      const genEl = document.getElementById("genOut");
+      const ruleEl = document.getElementById("ruleOut");
+      const label = lsys.getRuleLabel();
+      genEl.textContent = String(lsys.getGeneration());
+      ruleEl.textContent = label;
+      ruleEl.title = label;
       redraw();
     }
 
@@ -87,8 +89,7 @@
       grid.querySelectorAll(".lsystem-cell").forEach((el) => {
         const ri = +el.dataset.r;
         const ci = +el.dataset.c;
-        const on = pattern[ri][ci];
-        el.classList.toggle("on", on);
+        el.classList.toggle("on", pattern[ri][ci]);
         el.classList.toggle("play", playing && ci === stepIndex);
       });
     }
@@ -112,17 +113,28 @@
     function evolveBar() {
       lsys.rewrite();
       applyLSystemToPattern();
-      document.getElementById("status").textContent = `Gen ${lsys.getGeneration()} · ${lsys.getRuleLabel()}`;
+    }
+
+    function stopScheduler() {
+      if (schedRaf) cancelAnimationFrame(schedRaf);
+      schedRaf = 0;
     }
 
     function scheduler() {
-      if (!playing || !ctx) return;
+      if (!playing || !ctx) {
+        stopScheduler();
+        return;
+      }
       const now = ctx.currentTime;
       const base = 60 / +document.getElementById("bpm").value / 4;
-      while (nextTime <= now + 0.05) {
+
+      if (nextTime < now - base * 4) {
+        nextTime = now + 0.02;
+      }
+
+      if (nextTime <= now + 0.05) {
         const col = stepIndex;
         if (col === 0 && barCount > 0) evolveBar();
-        if (col === 8 && barCount > 0) evolveBar();
         for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
           if (pattern[ri][col]) DRUM_SEQ_ROWS[ri].play(ctx, master);
         }
@@ -131,7 +143,8 @@
         redraw();
         nextTime += base;
       }
-      requestAnimationFrame(scheduler);
+
+      schedRaf = requestAnimationFrame(scheduler);
     }
 
     document.getElementById("bpm").oninput = (e) => {
@@ -141,8 +154,8 @@
     document.getElementById("resetBtn").onclick = () => {
       lsys.reset("A");
       barCount = 0;
+      stepIndex = 0;
       applyLSystemToPattern();
-      setStatus("status", "Reset to A", "");
     };
 
     document.getElementById("playBtn").onclick = async () => {
@@ -150,17 +163,20 @@
       if (!ctx) return;
       if (playing) {
         playing = false;
+        stopScheduler();
         document.getElementById("playBtn").textContent = "▶";
         document.getElementById("playBtn").classList.remove("active");
         redraw();
         return;
       }
+      if (ctx.state === "suspended") await ctx.resume();
       playing = true;
       stepIndex = 0;
       barCount = 0;
       nextTime = ctx.currentTime + 0.05;
       document.getElementById("playBtn").textContent = "■";
       document.getElementById("playBtn").classList.add("active");
+      stopScheduler();
       scheduler();
     };
   </script>

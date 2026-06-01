@@ -36,17 +36,17 @@ export function createLSystemGroove(axiom = "A", rules = RULE_SETS[0]) {
 
   function rewrite() {
     generation++;
+    const src = state.length > 192 ? state.slice(-192) : state;
     let next = "";
-    for (const ch of state) {
+    for (const ch of src) {
       next += activeRules[ch] ?? ch;
     }
-    // Keep the growing tail — the start stabilizes fastest on short windows.
-    state = next.length > 768 ? next.slice(-768) : next;
+    state = next.length > 384 ? next.slice(-384) : next;
     const bits = bitsFromState();
     const len = Math.max(1, bits.length);
     readOffset = (readOffset + 1 + (generation % 7)) % len;
 
-    if (generation % 2 === 0) {
+    if (generation % 4 === 0) {
       ruleIndex = (ruleIndex + 1) % RULE_SETS.length;
       activeRules = { ...RULE_SETS[ruleIndex] };
     }

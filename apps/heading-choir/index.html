@@ -14,32 +14,28 @@
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>Compass choir</h2>
-    <p>Turn <strong>Audio on</strong> and allow <strong>orientation</strong> (compass) on iPhone. <strong>Hold</strong> the pad and <strong>turn your body</strong> — five voices sit around the compass; the section you face sings loudest.</p>
-    <p>Works best standing, phone upright, turning in place. Panning alone is hard to hear on a single speaker — this app mixes levels so rotation is obvious.</p>
+    <p>Turn <strong>Audio on</strong> and allow <strong>orientation</strong> (compass) on iPhone. <strong>Hold</strong> the compass and <strong>turn your body</strong> — five voices sit around the rose; the section you face sings loudest.</p>
+    <p>The needle and degree readout match <strong>Compass Wah</strong>. Level mixing (not pan only) keeps rotation audible on phone speakers.</p>
   </div>
-  <div class="hc-toolbar">
-    <div class="control-row hc-live" aria-live="polite">
-      <label>Heading</label>
-      <span><strong id="headOut">—</strong>°</span>
-      <label>Front</label>
-      <span><strong id="frontOut">—</strong></span>
-    </div>
-    <p class="status-bar" id="status">Hold pad · allow compass</p>
+  <p class="status-bar" id="status">Hold compass to play · allow orientation</p>
+  <div class="control-row hc-live" aria-live="polite">
+    <label>Front</label>
+    <span><strong id="frontOut">—</strong></span>
   </div>
   <div class="main-stage">
-    <div id="pad" class="stage-fill play-grid">
-      <div class="touch-dot" id="dot"></div>
-    </div>
+    <canvas id="compass" class="canvas-fill play-grid" aria-label="Compass"></canvas>
   </div>
   <script type="module">
     import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
+    import { drawCompassRose, sizeCompassCanvas } from "../../shared/compass-rose.js";
+    import { wireScreenHold } from "../../shared/hold-play.js";
     import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
 
     bindLearn();
 
-    const pad = document.getElementById("pad");
-    const dot = document.getElementById("dot");
+    const canvas = document.getElementById("compass");
+    const g = canvas.getContext("2d");
     const SENSOR_OPTS = { needMotion: false, needOrientation: true };
     const VOICE_COUNT = 5;
     const SECTOR_LABELS = ["N", "NE", "E", "SE", "S"];
@@ -49,9 +45,9 @@
 
     let ctx, master, built = false;
     let holding = false;
-    let activeId = null;
     let sensorsReady = false;
     let headingDeg = 0;
+    let beta = 90;
     let voices = [];
 
     function headingFromOrientation(o) {
@@ -74,10 +70,12 @@
       return t * t;
     }
 
-    function applyHeading(heading) {
-      headingDeg = ((heading % 360) + 360) % 360;
-      document.getElementById("headOut").textContent = String(Math.round(headingDeg));
+    function draw() {
+      const { w, h, dpr } = sizeCompassCanvas(canvas);
+      drawCompassRose(g, w, h, dpr, { heading: headingDeg, beta });
+    }
 
+    function applyVoices() {
       let best = 0;
       let bestG = -1;
       const weights = [];
@@ -98,8 +96,8 @@
       const sum = weights.reduce((a, b) => a + b, 0) || 1;
       voices.forEach((v, i) => {
         const norm = weights[i] / sum;
-        const g = 0.025 + norm * 0.38;
-        v.g.gain.setTargetAtTime(g, t, 0.06);
+        const gn = 0.025 + norm * 0.38;
+        v.g.gain.setTargetAtTime(gn, t, 0.06);
         const pan = Math.sin(((headingDeg / 360) + i / VOICE_COUNT) * Math.PI * 2) * 0.95;
         v.p.pan.setTargetAtTime(pan, t, 0.08);
         const bright = 0.35 + norm * 0.65;
@@ -108,16 +106,22 @@
       });
     }
 
+    function applyHeading(heading) {
+      headingDeg = ((heading % 360) + 360) % 360;
+      draw();
+      applyVoices();
+    }
+
     function build(c) {
       ctx = c;
       ({ master } = createMasterBus(c, 0.48));
       voices = [];
       for (let i = 0; i < VOICE_COUNT; i++) {
         const o = ctx.createOscillator();
-        const g = ctx.createGain();
+        const gn = ctx.createGain();
         const f = ctx.createBiquadFilter();
         const p = ctx.createStereoPanner();
-        g.gain.value = 0;
+        gn.gain.value = 0;
         f.type = "lowpass";
         f.frequency.value = 900;
         f.Q.value = 1;
@@ -125,13 +129,14 @@
         o.frequency.value = 110 * Math.pow(2, (i * 7) / 12);
         o.detune.value = (i - 2) * 6;
         o.connect(f);
-        f.connect(g);
-        g.connect(p);
+        f.connect(gn);
+        gn.connect(p);
         p.connect(master);
         o.start();
-        voices.push({ o, g, f, p });
+        voices.push({ o, g: gn, f, p });
       }
       built = true;
+      draw();
     }
 
     registerAudioBoot(build);
@@ -141,46 +146,43 @@
       const ok = await enableSensors(SENSOR_OPTS);
       if (!ok) {
         setStatus("status", "Compass blocked — allow orientation", "warn");
+        draw();
         return false;
       }
-      onOrientation((o) => applyHeading(headingFromOrientation(o)));
+      onOrientation((o) => {
+        headingDeg = headingFromOrientation(o);
+        const b = o.beta;
+        if (typeof b === "number" && Number.isFinite(b) && b !== 0) beta = b;
+        applyHeading(headingDeg);
+      });
       sensorsReady = true;
-      setStatus("status", "Hold pad and turn your body", "ok");
+      setStatus("status", "Hold compass and turn your body", "ok");
       return true;
     }
 
-    async function arm(e) {
-      e.preventDefault();
-      primeSensors(SENSOR_OPTS);
-      await startAudio(!built ? build : undefined);
-      if (!built || !ctx) return;
-      if (!(await ensureSensors())) return;
-      holding = true;
-      activeId = e.pointerId;
-      pad.setPointerCapture(activeId);
-      pad.classList.add("active");
-      dot.style.opacity = "1";
-      applyHeading(headingDeg);
-    }
+    wireScreenHold(document.body, {
+      async onStart() {
+        primeSensors(SENSOR_OPTS);
+        await startAudio(!built ? build : undefined);
+        await ensureSensors();
+        holding = true;
+        canvas.classList.add("active");
+        applyVoices();
+      },
+      onEnd() {
+        holding = false;
+        canvas.classList.remove("active");
+        if (!ctx) return;
+        const t = ctx.currentTime;
+        voices.forEach((v) => v.g.gain.setTargetAtTime(0, t, 0.1));
+        draw();
+      },
+    });
 
-    function release(e) {
-      if (e.pointerId !== activeId) return;
-      holding = false;
-      activeId = null;
-      pad.classList.remove("active");
-      dot.style.opacity = "0";
-      if (!ctx) return;
-      const t = ctx.currentTime;
-      voices.forEach((v) => v.g.gain.setTargetAtTime(0, t, 0.1));
-    }
-
-    pad.addEventListener("pointerdown", (e) => void arm(e));
-    pad.addEventListener("pointerup", release);
-    pad.addEventListener("pointercancel", release);
-    pad.addEventListener("lostpointercapture", release);
-
+    new ResizeObserver(() => draw()).observe(canvas.parentElement);
     primeSensors(SENSOR_OPTS);
     void ensureSensors();
+    requestAnimationFrame(() => draw());
   </script>
 </body>
 </html>
