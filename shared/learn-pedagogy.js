@@ -215,11 +215,6 @@ export const LEARN_PEDAGOGY = {
     "Psychoacoustic paradox — good for discussing pitch circularity and ensemble tuning.",
   ],
 
-  "pocket-metronome": [
-    "Walking or tapping creates peaks in acceleration; those peaks duck or pulse the mix.",
-    "Body rhythm drives electronics — sidechain-like breathing in the ensemble.",
-  ],
-
   "tilt-doppler": [
     "Fast tilt change shifts pitch briefly, mimicking Doppler shift when source or listener moves.",
     "Links physical motion to pitch metaphor — expressive sweeps without a pitch wheel.",
@@ -291,8 +286,8 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "scrub-tape": [
-    "Drag scrubs through a recorded buffer forward and backward — tape-head metaphor.",
-    "Time manipulation as performance: hear the past under your finger.",
+    "Record a short clip, then move the scrub slider to hear grains from different moments — speed and direction change the pitch.",
+    "Tape-head metaphor: the slider is your finger on the reel, not a transport control.",
   ],
 
   "vocoder-choir": [

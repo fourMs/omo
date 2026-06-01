@@ -82,25 +82,6 @@ const off=e=>{if(e.pointerId!==activeId)return;holding=false;pad.classList.remov
 pad.addEventListener("pointerup",off);pad.addEventListener("pointercancel",off);`,
   },
   {
-    slug: "pocket-metronome",
-    title: "Pocket Pulse",
-    section: "rhythm",
-    synth: "Pulse + duck",
-    sensors: "Accel · touch",
-    learn: "<h2>Pocket metronome</h2><p>Walking or tapping ducks a steady pulse. <strong>Hold</strong> the pad to hear the beat.</p>",
-    script: `import { bindLearn, startAudio } from "../../shared/app.js";
-import { createMasterBus } from "../../shared/audio.js";
-import { enableSensors, onMotion } from "../../shared/sensors.js";
-bindLearn();
-let ctx,master,toneGain,built=false,lastStep=0;
-const pad=document.getElementById("pad");
-function build(c){ctx=c;({master}=createMasterBus(c,0.55));toneGain=ctx.createGain();toneGain.gain.value=0;toneGain.connect(master);built=true;
-setInterval(()=>{if(!ctx)return;const t=ctx.currentTime;const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=1000;g.gain.setValueAtTime(0.18,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.05);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);},500);
-enableSensors({needMotion:true,needOrientation:false}).then(ok=>{if(!ok)return;onMotion(({x,y,z})=>{const m=Math.sqrt(x*x+y*y+z*z);if(m>11&&performance.now()-lastStep>280){lastStep=performance.now();toneGain.gain.setTargetAtTime(0.04,ctx.currentTime,0.01);toneGain.gain.setTargetAtTime(0.22,ctx.currentTime+0.1,0.06);}});});}
-pad.addEventListener("pointerdown",async()=>{await startAudio(!built?build:undefined);toneGain.gain.value=0.2;pad.classList.add("active");});
-pad.addEventListener("pointerup",()=>{toneGain.gain.value=0;pad.classList.remove("active");});`,
-  },
-  {
     slug: "flat-edge",
     title: "Table Drone",
     section: "drones",

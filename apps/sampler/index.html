@@ -6,66 +6,31 @@
   <meta name="theme-color" content="#0d0f14" />
   <title>Sampler — OMO</title>
   <link rel="stylesheet" href="../../shared/ui.css" />
-  <style>
-    #pad.recording {
-      background: linear-gradient(160deg, #7f1d1d 0%, #1a1f2e 45%);
-      box-shadow: inset 0 0 0 2px #f87171;
-    }
-    #pad.looping {
-      box-shadow: inset 0 0 0 2px var(--accent-dim);
-    }
-    .sampler-hint {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 0.35rem;
-      pointer-events: none;
-      color: var(--muted);
-      font-size: 0.85rem;
-      text-align: center;
-      padding: 1rem;
-    }
-    .rec-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #ef4444;
-      opacity: 0;
-    }
-    #pad.recording .rec-dot {
-      opacity: 1;
-      animation: rec-pulse 0.8s ease-in-out infinite;
-    }
-    @keyframes rec-pulse {
-      50% { opacity: 0.35; transform: scale(0.85); }
-    }
-  </style>
 </head>
-<body class="app-shell">
+<body class="app-shell sampler-app">
   <header class="app-header">
     <a class="back-link" href="../../">←</a>
     <h1>Sampler</h1>
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>Loop sampler</h2>
-    <p>Turn <strong>Audio on</strong>, then <strong>Hold</strong> the pad to record from the mic. <strong>Release</strong> to loop the sample. <strong>Tilt</strong> = filter + delay FX.</p>
+    <p>Turn <strong>Audio on</strong>, then <strong>hold</strong> the big record button to capture from the mic. <strong>Release</strong> to loop. <strong>Tilt</strong> = filter, delay, and pitch.</p>
   </div>
   <p class="status-bar" id="status"></p>
-  <div class="readout-row">
-    <p class="value-chip">Filter <strong id="filterOut">—</strong> Hz</p>
-    <p class="value-chip">Delay <strong id="delayOut">—</strong></p>
-    <p class="value-chip">Pitch <strong id="pitchOut">—</strong>×</p>
+  <div class="control-row sampler-live" aria-live="polite" aria-label="Effects">
+    <label>Filter</label>
+    <span><strong id="filterOut">—</strong> Hz</span>
+    <label>Delay</label>
+    <span><strong id="delayOut">—</strong></span>
+    <label>Pitch</label>
+    <span><strong id="pitchOut">—</strong>×</span>
   </div>
-  <div class="main-stage">
-    <div id="pad" class="stage-fill play-grid">
-      <div class="sampler-hint">
-        <span class="rec-dot" id="recDot"></span>
-        <span id="padHint"></span>
-      </div>
-    </div>
+  <div class="main-stage sampler-stage">
+    <button type="button" id="recordBtn" class="sampler-rec-btn" aria-label="Hold to record">
+      <span class="rec-icon" aria-hidden="true"></span>
+      <span class="sampler-rec-label">Hold to record</span>
+    </button>
+    <p class="sampler-hint-text" id="padHint"></p>
   </div>
   <script type="module">
     import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
@@ -73,7 +38,7 @@
     import { enableSensors, onOrientation } from "../../shared/sensors.js";
 
     bindLearn();
-    const pad = document.getElementById("pad");
+    const recordBtn = document.getElementById("recordBtn");
     const padHint = document.getElementById("padHint");
     const MAX_RECORD_MS = 8000;
 
@@ -195,7 +160,7 @@
         /* noop */
       }
       loopSource = null;
-      pad.classList.remove("looping");
+      recordBtn.classList.remove("looping");
     }
 
     function startLoop() {
@@ -207,8 +172,9 @@
       loopSource.playbackRate.value = playbackRate;
       loopSource.connect(filter);
       loopSource.start();
-      pad.classList.add("looping");
-      padHint.textContent = "Looping · hold again to re-record";
+      recordBtn.classList.add("looping");
+      recordBtn.querySelector(".sampler-rec-label").textContent = "Looping";
+      padHint.textContent = "Hold again to re-record";
     }
 
     function teardownScriptCapture() {
@@ -278,12 +244,17 @@
       return "";
     }
 
+    function setRecordingUi(on) {
+      recordBtn.classList.toggle("recording", on);
+      recordBtn.querySelector(".sampler-rec-label").textContent = on ? "Recording…" : "Hold to record";
+    }
+
     function startRecording() {
       if (!stream || recording) return;
       stopLoop();
       recording = true;
-      pad.classList.add("recording");
-      padHint.textContent = "Recording…";
+      setRecordingUi(true);
+      padHint.textContent = "";
       setStatus("status", "Recording…", "ok");
 
       if (useMediaRecorder) {
@@ -333,7 +304,7 @@
       if (!recording) return;
       clearTimeout(recordTimer);
       recording = false;
-      pad.classList.remove("recording");
+      setRecordingUi(false);
 
       if (useMediaRecorder && mediaRecorder?.state === "recording") {
         mediaRecorder.stop();
@@ -344,26 +315,26 @@
       await commitLoopFromScript();
     }
 
-    pad.addEventListener("pointerdown", async (e) => {
+    recordBtn.addEventListener("pointerdown", async (e) => {
       e.preventDefault();
       await startAudio(!built ? (c) => { buildAudio(c); void enableTilt(); } : undefined);
       if (!(await ensureMic())) return;
       activePointer = e.pointerId;
-      pad.setPointerCapture(e.pointerId);
+      recordBtn.setPointerCapture(e.pointerId);
       startRecording();
     });
 
     const release = async (e) => {
       if (e.pointerId !== activePointer) return;
       activePointer = null;
-      if (pad.hasPointerCapture(e.pointerId)) pad.releasePointerCapture(e.pointerId);
+      if (recordBtn.hasPointerCapture(e.pointerId)) recordBtn.releasePointerCapture(e.pointerId);
       await startAudio();
       await endRecording();
     };
 
-    pad.addEventListener("pointerup", release);
-    pad.addEventListener("pointercancel", release);
-    pad.addEventListener("lostpointercapture", () => {
+    recordBtn.addEventListener("pointerup", release);
+    recordBtn.addEventListener("pointercancel", release);
+    recordBtn.addEventListener("lostpointercapture", () => {
       if (recording) void startAudio().then(() => endRecording());
       activePointer = null;
     });

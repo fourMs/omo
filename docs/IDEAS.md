@@ -14,7 +14,6 @@ Phones expose more than mic + tilt. Each row is a candidate **app** (or major up
 |------|----------------|------------|----------------|
 | ~~**Gyro Whirl**~~ | `rotationRate` (αβγ) | Spin phone → vibrato speed & stereo wobble | [Spin Chorus](../apps/gyro-whirl/) |
 | ~~**Shake Filter**~~ | High-pass jerk on accel | Sudden shakes open a filter | [Jerk Wah](../apps/shake-filter/) |
-| ~~**Pocket Metronome**~~ | Step-like peaks in linear accel | Walk / tap pocket → sidechain duck | [Pocket Pulse](../apps/pocket-metronome/) |
 | ~~**Flat / Edge**~~ | `beta` / `gamma` thresholds | Only sound when held flat vs upright | [Table Drone](../apps/flat-edge/) |
 | ~~**Compass Choir**~~ | `webkitCompassHeading` / `alpha` | Section pans by where you face in room | [Heading Choir](../apps/heading-choir/) |
 | ~~**Tilt Doppler**~~ | Rapid β change | Tilt speed → pitch sweep (Doppler-ish) | [Doppler Tilt](../apps/tilt-doppler/) |

@@ -14,38 +14,49 @@
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>Scrub tape</h2>
-    <p>Turn <strong>Audio on</strong>, allow the mic, then <strong>hold Record</strong> to capture a short clip. <strong>Drag</strong> the pad left/right to scrub through the tape forward or backward.</p>
+    <p>Turn <strong>Audio on</strong>, allow the mic, then <strong>hold</strong> the record button to capture a clip (up to 6 s).</p>
+    <p>Drag the <strong>scrub slider</strong> to move through the tape — faster moves sound more pitched, like rewinding or fast-forwarding.</p>
   </div>
-  <div class="app-toolbar">
-    <button type="button" class="btn-secondary btn btn-sm btn-rec" id="recBtn">Hold record</button>
-    <span class="scrub-buf-tag" id="bufTag">demo</span>
+  <p class="status-bar" id="status">Turn Audio on, then hold Record</p>
+  <div class="control-row scrub-live" aria-live="polite" aria-label="Tape position">
+    <label>Position</label>
+    <span><strong id="posOut">0</strong>%</span>
+    <label>Clip</label>
+    <span><strong id="lenOut">—</strong></span>
   </div>
-  <p class="status-bar" id="status">Turn Audio on, then hold Record or scrub</p>
-  <div class="main-stage">
-    <div id="pad" class="stage-fill play-grid">
-      <div class="touch-dot" id="dot"></div>
+  <div class="main-stage scrub-stage">
+    <button type="button" id="recordBtn" class="scrub-rec-btn" aria-label="Hold to record">
+      <span class="rec-icon" aria-hidden="true"></span>
+      <span class="scrub-rec-label">Hold to record</span>
+    </button>
+    <div class="scrub-slider-wrap">
+      <label for="scrubSlider">Scrub</label>
+      <input type="range" id="scrubSlider" min="0" max="1000" value="0" step="1" disabled />
     </div>
+    <p class="scrub-hint-text" id="hint">Record a clip, then scrub with the slider</p>
   </div>
   <script type="module">
-    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
-    import { createMasterBus, getMicStream, primeMicStream } from "../../shared/audio.js";
+    import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus, primeMicStream } from "../../shared/audio.js";
 
     bindLearn();
 
-    const pad = document.getElementById("pad");
-    const dot = document.getElementById("dot");
-    const recBtn = document.getElementById("recBtn");
-    const bufTag = document.getElementById("bufTag");
+    const recordBtn = document.getElementById("recordBtn");
+    const scrubSlider = document.getElementById("scrubSlider");
+    const posOut = document.getElementById("posOut");
+    const lenOut = document.getElementById("lenOut");
+    const hint = document.getElementById("hint");
 
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
     const MAX_RECORD_MS = 6000;
     const MIN_RECORD_SAMPLES = 2048;
+    const GRAIN_SEC = 0.16;
+    const SCRUB_THROTTLE_MS = 28;
 
-    let ctx, master, buf, built = false;
-    let holding = false;
-    let scrubId = null;
-    let lastX = 0;
+    let ctx, master, buf = null, built = false;
     let phase = 0;
+    let lastPhase = 0;
+    let lastScrubAt = 0;
 
     let micStream = null;
     let recording = false;
@@ -58,49 +69,82 @@
     let useMediaRecorder = typeof MediaRecorder !== "undefined";
 
     function makeDemoBuffer(c) {
-      const len = Math.floor(c.sampleRate * 0.5);
+      const dur = 2.4;
+      const len = Math.floor(c.sampleRate * dur);
       const b = c.createBuffer(1, len, c.sampleRate);
       const d = b.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.sin(i / 40) * Math.exp(-i / len * 2);
+      for (let i = 0; i < len; i++) {
+        const t = i / c.sampleRate;
+        d[i] =
+          Math.sin(t * 220 * Math.PI * 2) * 0.45 * Math.exp(-t * 0.35) +
+          Math.sin(t * 330 * Math.PI * 2) * 0.25 * (0.6 + 0.4 * Math.sin(t * 5.5));
+      }
       return b;
     }
 
     function build(c) {
       ctx = c;
-      ({ master } = createMasterBus(c, 0.5));
+      ({ master } = createMasterBus(c, 0.55));
       buf = makeDemoBuffer(c);
       built = true;
+      scrubSlider.disabled = false;
+      updateLenTag();
+      hint.textContent = "Demo loaded — hold record to replace, or scrub now";
     }
 
-    registerAudioBoot(build, { mic: true });
+    function phaseFromSlider() {
+      return +scrubSlider.value / 1000;
+    }
 
-    function setBufTag(text) {
-      bufTag.textContent = text;
+    function setPhase(p) {
+      phase = clamp(p, 0, 1);
+      lastPhase = phase;
+      scrubSlider.value = String(Math.round(phase * 1000));
+      posOut.textContent = String(Math.round(phase * 100));
+    }
+
+    function updateLenTag() {
+      if (!buf) {
+        lenOut.textContent = "—";
+        return;
+      }
+      lenOut.textContent = `${buf.duration.toFixed(1)}s`;
     }
 
     async function ensureMic() {
       if (micStream) return true;
-      try {
-        micStream = await getMicStream();
-      } catch {
-        setStatus("status", "Mic blocked — allow microphone", "warn");
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("status", "Mic not supported", "warn");
         return false;
       }
-      return true;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+          video: false,
+        });
+        return true;
+      } catch {
+        setStatus("status", "Mic denied — allow microphone", "warn");
+        return false;
+      }
     }
 
-    async function setBufferFromAudioData(audioBuf, label) {
+    async function setBufferFromAudioData(audioBuf) {
       buf = audioBuf;
-      phase = 0;
-      setBufTag(label);
+      setPhase(0);
+      scrubSlider.disabled = false;
+      updateLenTag();
+      hint.textContent = "Drag the scrub slider through your clip";
+      playGrain(0, 1);
     }
 
     async function setBufferFromBlob(blob) {
+      await startAudio();
       try {
         const ab = await blob.arrayBuffer();
         const audioBuf = await ctx.decodeAudioData(ab.slice(0));
-        await setBufferFromAudioData(audioBuf, `recorded ${audioBuf.duration.toFixed(1)}s`);
-        setStatus("status", "Sample recorded — scrub the pad", "ok");
+        await setBufferFromAudioData(audioBuf);
+        setStatus("status", "Recorded — scrub with the slider", "ok");
       } catch {
         setStatus("status", "Could not use recording", "warn");
       }
@@ -140,10 +184,15 @@
       return "";
     }
 
+    function setRecordingUi(on) {
+      recordBtn.classList.toggle("recording", on);
+      recordBtn.querySelector(".scrub-rec-label").textContent = on ? "Recording…" : "Hold to record";
+    }
+
     function stopRecording() {
       if (!recording) return;
       recording = false;
-      recBtn.classList.remove("recording");
+      setRecordingUi(false);
       clearTimeout(recordTimer);
       recordTimer = null;
 
@@ -155,18 +204,19 @@
       teardownScriptCapture();
       const captured = bufferFromScriptCapture();
       if (captured) {
-        void setBufferFromAudioData(captured, `recorded ${captured.duration.toFixed(1)}s`);
-        setStatus("status", "Sample recorded — scrub the pad", "ok");
+        void setBufferFromAudioData(captured);
+        setStatus("status", "Recorded — scrub with the slider", "ok");
       } else {
         setStatus("status", "Too short — hold longer", "warn");
       }
     }
 
     function startRecording() {
-      if (recording || !micStream) return;
+      if (recording || !micStream || !ctx) return;
       recording = true;
-      recBtn.classList.add("recording");
+      setRecordingUi(true);
       setStatus("status", "Recording…", "ok");
+      hint.textContent = "";
 
       recordTimer = setTimeout(() => {
         if (recPointer != null) stopRecording();
@@ -212,74 +262,85 @@
       }
     }
 
-    function scrub(v) {
-      if (!ctx || !buf) return;
+    function playGrain(p, rate) {
+      if (!ctx || !buf || buf.duration < 0.04) return;
+      const grain = Math.min(GRAIN_SEC, buf.duration * 0.45);
+      const offset = clamp(p, 0, 1) * Math.max(0, buf.duration - grain - 0.001);
       const t = ctx.currentTime;
-      phase = clamp(phase + v * 0.02, 0, 1);
-      const s = ctx.createBufferSource();
-      s.buffer = buf;
-      s.playbackRate.value = clamp(0.5 + v * 2, 0.15, 4);
-      const lg = ctx.createGain();
-      lg.gain.setValueAtTime(0.28, t);
-      lg.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-      s.connect(lg);
-      lg.connect(master);
-      const offset = phase * Math.max(0, buf.duration - 0.07);
-      s.start(t, offset, 0.07);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = clamp(rate, -4, 4);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.4, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, t + grain);
+      src.connect(g);
+      g.connect(master);
+      try {
+        src.start(t, offset, grain);
+        src.stop(t + grain + 0.02);
+      } catch {
+        /* offset out of range */
+      }
     }
 
-    recBtn.addEventListener("pointerdown", (e) => {
+    function scrubFromSlider() {
+      const now = performance.now();
+      if (now - lastScrubAt < SCRUB_THROTTLE_MS) return;
+      lastScrubAt = now;
+
+      const p = phaseFromSlider();
+      const delta = p - lastPhase;
+      phase = p;
+      posOut.textContent = String(Math.round(p * 100));
+
+      let rate = 1;
+      if (Math.abs(delta) > 0.0008) {
+        rate = clamp(delta * 120, -3.5, 3.5);
+        if (Math.abs(rate) < 0.4) rate = rate >= 0 ? 0.4 : -0.4;
+      }
+      playGrain(p, rate);
+      lastPhase = p;
+    }
+
+    recordBtn.addEventListener("pointerdown", async (e) => {
       e.preventDefault();
       primeMicStream();
-      void startAudio(!built ? build : undefined).then(async () => {
-        if (!built || !ctx) return;
-        if (!(await ensureMic())) return;
-        recPointer = e.pointerId;
-        recBtn.setPointerCapture(e.pointerId);
-        startRecording();
-      });
+      await startAudio(!built ? build : undefined);
+      if (!built || !ctx) return;
+      if (!(await ensureMic())) return;
+      recPointer = e.pointerId;
+      recordBtn.setPointerCapture(e.pointerId);
+      startRecording();
     });
 
     const endRec = (e) => {
       if (e.pointerId !== recPointer) return;
       recPointer = null;
+      if (recordBtn.hasPointerCapture(e.pointerId)) recordBtn.releasePointerCapture(e.pointerId);
       stopRecording();
     };
-    recBtn.addEventListener("pointerup", endRec);
-    recBtn.addEventListener("pointercancel", endRec);
-    recBtn.addEventListener("lostpointercapture", endRec);
+    recordBtn.addEventListener("pointerup", endRec);
+    recordBtn.addEventListener("pointercancel", endRec);
+    recordBtn.addEventListener("lostpointercapture", () => {
+      if (recording) stopRecording();
+      recPointer = null;
+    });
 
-    pad.addEventListener("pointerdown", async (e) => {
-      e.preventDefault();
+    scrubSlider.addEventListener("input", async () => {
       await startAudio(!built ? build : undefined);
-      if (!built || !buf) return;
-      holding = true;
-      scrubId = e.pointerId;
-      lastX = e.clientX;
-      pad.setPointerCapture(scrubId);
-      pad.classList.add("active");
-      dot.style.opacity = "1";
-      dot.style.left = `${((e.clientX - pad.getBoundingClientRect().left) / pad.clientWidth) * 100}%`;
+      if (!buf) return;
+      scrubFromSlider();
     });
 
-    pad.addEventListener("pointermove", (e) => {
-      if (!holding || e.pointerId !== scrubId) return;
-      const dx = (e.clientX - lastX) * 0.01;
-      scrub(dx);
-      lastX = e.clientX;
-      dot.style.left = `${((e.clientX - pad.getBoundingClientRect().left) / pad.clientWidth) * 100}%`;
+    scrubSlider.addEventListener("change", async () => {
+      await startAudio(!built ? build : undefined);
+      if (!buf) return;
+      lastScrubAt = 0;
+      const p = phaseFromSlider();
+      setPhase(p);
+      playGrain(p, 1);
     });
-
-    const stopScrub = (e) => {
-      if (e.pointerId !== scrubId) return;
-      holding = false;
-      scrubId = null;
-      pad.classList.remove("active");
-      dot.style.opacity = "0";
-    };
-    pad.addEventListener("pointerup", stopScrub);
-    pad.addEventListener("pointercancel", stopScrub);
-    pad.addEventListener("lostpointercapture", stopScrub);
   </script>
 </body>
 </html>

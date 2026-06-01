@@ -1,6 +1,5 @@
   { href: "apps/gyro-whirl/", title: "Spin Chorus", section: "synthesis", synth: "FM vibrato stack", sensors: "Gyro · touch" },
   { href: "apps/shake-filter/", title: "Jerk Wah", section: "drones", synth: "Subtractive", sensors: "Motion · touch" },
-  { href: "apps/pocket-metronome/", title: "Pocket Pulse", section: "rhythm", synth: "Pulse + duck", sensors: "Accel · touch" },
   { href: "apps/flat-edge/", title: "Table Drone", section: "drones", synth: "Gated drone", sensors: "Tilt · touch" },
   { href: "apps/heading-choir/", title: "Heading Choir", section: "drones", synth: "Detuned pans", sensors: "Compass · touch" },
   { href: "apps/tilt-doppler/", title: "Doppler Tilt", section: "melody", synth: "Pitch glide", sensors: "Tilt · touch" },

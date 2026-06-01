@@ -268,7 +268,6 @@ export const HUB_APPS = [
     synth: "Shepard tone",
     sensors: "Touch · tilt",
   },
-  { href: "apps/pocket-metronome/", title: "Pocket Metronome", section: "rhythm", synth: "Pulse + duck", sensors: "Accel · touch" },
   { href: "apps/tilt-doppler/", title: "Tilt Doppler", section: "melody", synth: "Pitch glide", sensors: "Tilt · touch" },
   { href: "apps/room-reverb-send/", title: "Room Reverb Send", section: "texture", synth: "Convolver wet", sensors: "Mic · touch" },
   { href: "apps/whisper-gate/", title: "Whisper Gate", section: "texture", synth: "Formant noise", sensors: "Mic · touch" },
@@ -286,7 +285,7 @@ export const HUB_APPS = [
   { href: "apps/bowed-waveguide/", title: "Bowed Waveguide", section: "melody", synth: "Continuous KS", sensors: "Touch drag" },
   { href: "apps/pluck-bowl/", title: "Pluck Bowl", section: "synthesis", synth: "KS + LFO layers", sensors: "Touch position" },
   { href: "apps/wind-bottle/", title: "Wind Bottle", section: "texture", synth: "Noise resonator", sensors: "Tilt · touch" },
-  { href: "apps/scrub-tape/", title: "Scrub Tape", section: "texture", synth: "Buffer scrub", sensors: "Touch drag" },
+  { href: "apps/scrub-tape/", title: "Scrub Tape", section: "texture", synth: "Buffer scrub", sensors: "Mic · slider" },
   { href: "apps/vocoder-choir/", title: "Vocoder Choir", section: "texture", synth: "Band vocoder", sensors: "Mic · tilt" },
   { href: "apps/gesture-regression/", title: "Gesture Regression", section: "ai", synth: "ML → filter", sensors: "Motion · touch" },
   {
