@@ -14,7 +14,7 @@
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>Euclidean pulse</h2>
-    <p>Turn <strong>Audio on</strong>, press ▶. Each ring is a Euclidean rhythm (evenly spaced hits). Tap <strong>Phase − / +</strong> to rotate all rings — polyrhythms against each other.</p>
+    <p>Turn <strong>Audio on</strong>, press ▶. Each ring is a Euclidean rhythm (evenly spaced hits). <strong>Tap a ring</strong> (or its voice button), then <strong>Phase − / +</strong> to rotate that ring only — polyrhythms against each other.</p>
   </div>
   <div class="seq-toolbar">
     <div class="control-row">
@@ -23,8 +23,10 @@
       <span id="bpmVal">108</span>
       <button type="button" class="btn btn-play" id="playBtn">▶</button>
     </div>
+    <div class="control-row" id="ringPick" aria-label="Select ring"></div>
     <div class="control-row">
       <label>Phase</label>
+      <span id="ringLabel">Kick</span>
       <button type="button" class="btn btn-secondary btn-sm" id="phaseDown" aria-label="Phase back">−</button>
       <span id="phaseVal">0</span>
       <button type="button" class="btn btn-secondary btn-sm" id="phaseUp" aria-label="Phase forward">+</button>
@@ -37,7 +39,7 @@
   <script type="module">
     import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
-    import { drawCircularSeq } from "../../shared/circular-seq.js";
+    import { drawCircularSeq, hitCircularSeq } from "../../shared/circular-seq.js";
     import { euclideanRhythm } from "../../shared/euclidean.js";
     import { DRUM_SEQ_ROWS } from "../../shared/drum-sounds.js";
 
@@ -53,18 +55,34 @@
     const g = canvas.getContext("2d");
     let ctx, master, playing = false, stepIndex = 0, nextTime = 0, playStep = -1;
     let built = false;
-    let phase = 0;
+    const phases = RINGS.map(() => 0);
+    let selectedRing = 0;
     let pattern = [];
 
-    function setPhase(next) {
-      phase = ((next % STEPS) + STEPS) % STEPS;
-      document.getElementById("phaseVal").textContent = String(phase);
-      pattern = RINGS.map((r) => euclideanRhythm(r.pulses, STEPS, phase));
+    function rebuildPattern() {
+      pattern = RINGS.map((r, ri) => euclideanRhythm(r.pulses, STEPS, phases[ri]));
       redraw();
     }
 
-    function rebuildPattern() {
-      setPhase(phase);
+    function updatePhaseUI() {
+      document.getElementById("phaseVal").textContent = String(phases[selectedRing]);
+      document.getElementById("ringLabel").textContent = DRUM_SEQ_ROWS[selectedRing].name;
+      document.querySelectorAll("#ringPick button").forEach((btn, i) => {
+        btn.classList.toggle("active", i === selectedRing);
+        btn.setAttribute("aria-pressed", i === selectedRing ? "true" : "false");
+      });
+    }
+
+    function selectRing(ri) {
+      selectedRing = clamp(ri, 0, RINGS.length - 1);
+      updatePhaseUI();
+      redraw();
+    }
+
+    function setRingPhase(ri, next) {
+      phases[ri] = ((next % STEPS) + STEPS) % STEPS;
+      if (ri === selectedRing) updatePhaseUI();
+      rebuildPattern();
     }
 
     function sizeCanvas() {
@@ -85,7 +103,18 @@
         pattern,
         rows: DRUM_SEQ_ROWS,
         playStep: playing ? playStep : -1,
+        selectedRing,
       });
+    }
+
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    function pointerToCanvas(e) {
+      const r = canvas.getBoundingClientRect();
+      return {
+        px: ((e.clientX - r.left) / r.width) * canvas.width,
+        py: ((e.clientY - r.top) / r.height) * canvas.height,
+      };
     }
 
     async function boot(c) {
@@ -97,7 +126,27 @@
     }
 
     registerAudioBoot(boot);
+
+    const ringPick = document.getElementById("ringPick");
+    DRUM_SEQ_ROWS.forEach((row, ri) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-secondary btn-sm";
+      btn.textContent = `${row.icon} ${row.name}`;
+      btn.setAttribute("aria-label", `Select ${row.name} ring`);
+      btn.setAttribute("aria-pressed", ri === 0 ? "true" : "false");
+      btn.addEventListener("click", () => selectRing(ri));
+      ringPick.appendChild(btn);
+    });
+
+    canvas.addEventListener("pointerdown", (e) => {
+      const { px, py } = pointerToCanvas(e);
+      const hit = hitCircularSeq(px, py, canvas.width, canvas.height, DRUM_SEQ_ROWS.length, STEPS);
+      if (hit) selectRing(hit.ring);
+    });
+
     rebuildPattern();
+    updatePhaseUI();
 
     function scheduler() {
       if (!playing || !ctx) return;
@@ -116,8 +165,8 @@
       requestAnimationFrame(scheduler);
     }
 
-    document.getElementById("phaseDown").onclick = () => setPhase(phase - 1);
-    document.getElementById("phaseUp").onclick = () => setPhase(phase + 1);
+    document.getElementById("phaseDown").onclick = () => setRingPhase(selectedRing, phases[selectedRing] - 1);
+    document.getElementById("phaseUp").onclick = () => setRingPhase(selectedRing, phases[selectedRing] + 1);
 
     document.getElementById("bpm").oninput = (e) => {
       document.getElementById("bpmVal").textContent = e.target.value;

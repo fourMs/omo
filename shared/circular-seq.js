@@ -27,10 +27,10 @@ export function circSeqLayout(w, h, rings, steps) {
  * @param {number} w
  * @param {number} h
  * @param {number} dpr
- * @param {{ pattern: boolean[][], rows: { icon: string, name: string }[], playStep?: number }} opts
+ * @param {{ pattern: boolean[][], rows: { icon: string, name: string }[], playStep?: number, selectedRing?: number }} opts
  */
 export function drawCircularSeq(g, w, h, dpr, opts) {
-  const { pattern, rows, playStep = -1 } = opts;
+  const { pattern, rows, playStep = -1, selectedRing = -1 } = opts;
   const rings = rows.length;
   const steps = pattern[0]?.length ?? 16;
   const L = circSeqLayout(w, h, rings, steps);
@@ -122,9 +122,22 @@ export function drawCircularSeq(g, w, h, dpr, opts) {
     const pal = CIRC_SEQ_RING_COLORS[ri];
     g.fillStyle = pal.on;
     g.fillRect(8 * dpr, ly, 8 * dpr, 8 * dpr);
-    g.fillStyle = "#cbd5e1";
+    g.fillStyle = ri === selectedRing ? "#6ee7b7" : "#cbd5e1";
     g.fillText(`${rows[ri]?.icon ?? ""} ${rows[ri]?.name ?? ""}`, 20 * dpr, ly - 1 * dpr);
     ly += 14 * dpr;
+  }
+
+  if (selectedRing >= 0 && selectedRing < rings) {
+    const rOut = outer - selectedRing * ringWidth;
+    const rIn = rOut - ringWidth + 1 * dpr;
+    g.strokeStyle = "#6ee7b7";
+    g.lineWidth = 2.5 * dpr;
+    g.beginPath();
+    g.arc(cx, cy, rOut, 0, TAU);
+    g.stroke();
+    g.beginPath();
+    g.arc(cx, cy, rIn, 0, TAU);
+    g.stroke();
   }
 
   return L;

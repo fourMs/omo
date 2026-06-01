@@ -1277,6 +1277,16 @@ html.omo-a11y .hub-header .hub-section-select {
   max-width: 8rem;
 }
 
+.circular-drum-app #ringPick {
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.circular-drum-app #ringPick .btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .circular-drum-app .main-stage.circular-drum-stage {
   flex: 1;
   min-height: 0;
