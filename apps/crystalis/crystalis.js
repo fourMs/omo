@@ -1,4 +1,5 @@
 import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
+import { createMasterBus } from "../../shared/audio.js";
 import { renderQrCanvas } from "../../shared/qr.js";
 import {
   CRYSTALIS_BASE,
@@ -73,17 +74,36 @@ function buildKeys() {
   }
 }
 
+function keyEl(code) {
+  return keysEl.querySelector(`[data-ch="${String.fromCharCode(code)}"]`);
+}
+
+function setKeyHeld(code, on) {
+  keyEl(code)?.classList.toggle("down", on);
+}
+
+/** Brief highlight when a note fires (pluck pulse or bow hit). */
+function flashKey(code) {
+  const el = keyEl(code);
+  if (!el) return;
+  el.classList.add("playing");
+  clearTimeout(el._flashT);
+  el._flashT = setTimeout(() => el.classList.remove("playing"), 100);
+}
+
 function updateReadout() {
   readout.textContent = `${pluckMode ? "Pluck" : "Bow"} · reg ${register} · vol ${level.toFixed(2)} · held ${held.size}`;
+}
+
+function applyMasterLevel() {
+  if (master) master.gain.value = level * 0.55;
 }
 
 function ensureAudio() {
   void startAudio((c) => {
     if (ctx) return;
     ctx = c;
-    master = ctx.createGain();
-    master.gain.value = level * 0.04;
-    master.connect(ctx.destination);
+    ({ master } = createMasterBus(c, level * 0.55));
     pool = createChannelPool(ctx, master);
     if (!syncStartMs) syncStartMs = Date.now() + 400;
     gridEl.hidden = !pluckMode;
@@ -102,7 +122,8 @@ function noteOn(code) {
   if (!pluckMode) band.startBow();
   held.set(code, band);
   keyDown.add(code);
-  keysEl.querySelector(`[data-ch="${String.fromCharCode(code)}"]`)?.classList.add("down");
+  setKeyHeld(code, true);
+  flashKey(code);
   updateReadout();
 }
 
@@ -115,13 +136,14 @@ function noteOff(code) {
   held.delete(code);
   if (pool) pool.freeByKey(code);
   keyDown.delete(code);
-  keysEl.querySelector(`[data-ch="${String.fromCharCode(code)}"]`)?.classList.remove("down");
+  setKeyHeld(code, false);
+  keyEl(code)?.classList.remove("playing");
   updateReadout();
 }
 
 function setLevel(val) {
   level = Math.max(0.2, Math.min(2, val));
-  if (master) master.gain.value = level * 0.04;
+  applyMasterLevel();
   updateReadout();
 }
 
@@ -150,6 +172,9 @@ document.getElementById("volUp").onclick = () => setLevel(level * 1.05);
 let lastX = 0;
 let lastY = 0;
 let padActive = false;
+let lastPadBowAt = 0;
+const PAD_BOW_MIN_MS = 65;
+const PAD_DELTA_MIN = 6;
 
 bowPad.addEventListener("pointerdown", (e) => {
   e.preventDefault();
@@ -167,12 +192,29 @@ bowPad.addEventListener("pointermove", (e) => {
   const dy = e.clientY - lastY;
   lastX = e.clientX;
   lastY = e.clientY;
-  if (!pool) return;
-  const amt = (n) => Math.min(1, n * 0.08);
-  if (dx < 0) for (const b of pool.active()) b.bowImpulse(L, amt(-dx));
-  else if (dx > 0) for (const b of pool.active()) b.bowImpulse(R, amt(dx));
-  if (dy < 0) for (const b of pool.active()) b.bowImpulse(D, amt(-dy));
-  else if (dy > 0) for (const b of pool.active()) b.bowImpulse(U, amt(dy));
+  if (!pool || !held.size) return;
+  const mag = Math.abs(dx) + Math.abs(dy);
+  if (mag < PAD_DELTA_MIN) return;
+  const now = performance.now();
+  if (now - lastPadBowAt < PAD_BOW_MIN_MS) return;
+  lastPadBowAt = now;
+  const amt = (n) => Math.min(1, n * 0.045);
+  let hit = false;
+  if (dx < -PAD_DELTA_MIN) {
+    for (const b of pool.active()) b.bowImpulse(L, amt(-dx));
+    hit = true;
+  } else if (dx > PAD_DELTA_MIN) {
+    for (const b of pool.active()) b.bowImpulse(R, amt(dx));
+    hit = true;
+  }
+  if (dy < -PAD_DELTA_MIN) {
+    for (const b of pool.active()) b.bowImpulse(D, amt(-dy));
+    hit = true;
+  } else if (dy > PAD_DELTA_MIN) {
+    for (const b of pool.active()) b.bowImpulse(U, amt(dy));
+    hit = true;
+  }
+  if (hit) for (const code of held.keys()) flashKey(code);
 });
 
 const endPad = (e) => {
@@ -199,8 +241,11 @@ function highlightGrid(x, y) {
 function onPluckTick(x, y) {
   const g = pluckGainAt(x, y);
   highlightGrid(x, y);
-  if (!pool || !pluckMode) return;
-  for (const band of pool.active()) band.pluck(g);
+  if (!pool || !pluckMode || !held.size) return;
+  const n = held.size;
+  const scale = 1 / Math.max(1, Math.sqrt(n));
+  for (const band of pool.active()) band.pluck(g, scale);
+  for (const code of held.keys()) flashKey(code);
 }
 
 function loop() {

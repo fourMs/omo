@@ -58,7 +58,7 @@ export function createCrystalisBand(ctx, dest, channelIndex) {
   pan.connect(dest);
 
   const dry = ctx.createGain();
-  dry.gain.value = 0.04;
+  dry.gain.value = 0.028;
   dry.connect(pan);
 
   const rev = ctx.createConvolver();
@@ -70,7 +70,7 @@ export function createCrystalisBand(ctx, dest, channelIndex) {
   }
   rev.buffer = impulse;
   const wet = ctx.createGain();
-  wet.gain.value = 0.2;
+  wet.gain.value = 0.12;
   rev.connect(wet);
   wet.connect(pan);
 
@@ -92,6 +92,7 @@ export function createCrystalisBand(ctx, dest, channelIndex) {
 
   let hz = 220;
   let bowing = false;
+  let lastImpulseAt = 0;
 
   function setPitchFromMidi(midi) {
     hz = midiToFreq(midi);
@@ -103,31 +104,34 @@ export function createCrystalisBand(ctx, dest, channelIndex) {
     setPitchFromMidi,
     startBow() {
       bowing = true;
-      bow.setBow(0.35);
+      bow.setBow(0.18);
     },
     stopBow() {
       bowing = false;
       bow.release();
     },
-    pluck(gain) {
-      const g = Math.max(0.05, Math.min(1, gain));
+    pluck(gain, levelScale = 1) {
+      const g = Math.max(0.05, Math.min(1, gain)) * levelScale;
       karplusPluck(ctx, dry, ksPool, hz, {
-        strength: 0.35 + g * 0.45,
-        level: 0.22 + g * 0.35,
-        decaySec: 1.4 + g * 0.6,
+        strength: 0.22 + g * 0.32,
+        level: (0.14 + g * 0.22) * levelScale,
+        decaySec: 1.2 + g * 0.5,
         reverbBus: rev,
-        reverbSend: 0.35,
+        reverbSend: 0.22,
       });
     },
     /** dir: L=0 R=1 U=2 D=3 — only this band's direction is wired. */
     bowImpulse(dir, amount) {
-      if (dir !== channelIndex || amount < 0.001) return;
+      if (dir !== channelIndex || amount < 0.012) return;
+      const now = performance.now();
+      if (now - lastImpulseAt < 70) return;
+      lastImpulseAt = now;
       const t = ctx.currentTime;
-      const a = Math.min(1, amount) * 0.08;
+      const a = Math.min(1, amount) * 0.035;
       impGain.gain.cancelScheduledValues(t);
-      impGain.gain.setValueAtTime(a, t);
-      impGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
-      if (bowing) bow.setBow(0.25 + Math.min(0.7, amount * 0.15));
+      impGain.gain.setValueAtTime(Math.max(0.0001, a), t);
+      impGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+      if (bowing) bow.setBow(0.14 + Math.min(0.38, amount * 0.08));
     },
     stop() {
       bowing = false;
