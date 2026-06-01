@@ -1020,21 +1020,84 @@ html.omo-a11y .hub-header .hub-section-select {
   box-shadow: 0 0 12px rgba(110, 231, 183, 0.35);
 }
 
-/* Filter ladder — tappable pad while tilting */
-.filter-ladder-app .ladder-filter-name {
-  flex-shrink: 0;
-  margin: 0;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--accent);
-  text-align: center;
-  background: #111827;
-  border-bottom: 1px solid #2d3548;
+/* Feedback flute — vertical pitch strip */
+.feedback-flute-app .feedback-flute-stage {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0.5rem 1.25rem calc(0.5rem + var(--safe-b));
 }
 
+.feedback-flute-app .pitch-slider-1d {
+  position: relative;
+  flex: 1 1 auto;
+  max-width: 5.5rem;
+  min-height: 12rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  touch-action: none;
+  user-select: none;
+}
+
+.feedback-flute-app .pitch-slider-track {
+  position: absolute;
+  left: 50%;
+  top: 1.6rem;
+  bottom: 1.6rem;
+  width: 0.55rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+  border: 1px solid #475569;
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, 0.08);
+}
+
+.feedback-flute-app .pitch-slider-thumb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-left: -1.2rem;
+  margin-top: -1.2rem;
+  border-radius: 50%;
+  background: rgba(110, 231, 183, 0.25);
+  border: 2px solid #6ee7b7;
+  box-shadow: 0 0 12px rgba(110, 231, 183, 0.35);
+  pointer-events: none;
+  transition: transform 0.05s linear, box-shadow 0.08s;
+}
+
+.feedback-flute-app .pitch-slider-1d.active .pitch-slider-thumb,
+.feedback-flute-app .pitch-slider-thumb.active {
+  background: rgba(110, 231, 183, 0.45);
+  box-shadow: 0 0 18px rgba(110, 231, 183, 0.55);
+  transform: scale(1.06);
+}
+
+.feedback-flute-app .pitch-slider-label {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  z-index: 1;
+}
+
+.feedback-flute-app .pitch-slider-label--high {
+  margin-bottom: 0.35rem;
+}
+
+.feedback-flute-app .pitch-slider-label--low {
+  margin-top: auto;
+  padding-top: 0.35rem;
+}
+
+/* Filter ladder — tappable pad while tilting */
 .filter-ladder-app .stage-fill.play-grid {
-  touch-action: manipulation;
+  touch-action: none;
 }
 
 /* Mic theremin — pitch keyboard + hold-to-play circle */

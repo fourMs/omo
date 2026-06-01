@@ -7,18 +7,31 @@
   <title>Feedback Flute — OMO</title>
   <link rel="stylesheet" href="../../shared/ui.css" />
 </head>
-<body class="app-shell">
+<body class="app-shell feedback-flute-app">
   <header class="app-header">
     <a class="back-link" href="../../">←</a>
     <h1>Feedback Flute</h1>
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>Feedback flute</h2>
-    <p>Turn <strong>Audio on</strong> and allow the mic. <strong>Hold</strong> the pad — mic and speaker form a resonant whistle loop. Slide <strong>up/down</strong> for pitch; release to silence.</p>
+    <p>Turn <strong>Audio on</strong> and allow the mic. <strong>Hold</strong> the pitch strip — mic and speaker form a resonant whistle loop. Slide <strong>up/down</strong> for pitch; release to silence.</p>
   </div>
-  <p class="status-bar" id="status">Turn Audio on, then hold pad</p>
-  <div class="main-stage">
-    <div id="pad" class="stage-fill play-grid"><div class="touch-dot" id="dot"></div></div>
+  <p class="status-bar" id="status">Turn Audio on, then hold pitch strip</p>
+  <div class="main-stage feedback-flute-stage">
+    <div
+      id="pitchSlider"
+      class="pitch-slider-1d"
+      role="slider"
+      aria-label="Pitch"
+      aria-valuemin="400"
+      aria-valuemax="1600"
+      tabindex="0"
+    >
+      <span class="pitch-slider-label pitch-slider-label--high" aria-hidden="true">High</span>
+      <div class="pitch-slider-track" aria-hidden="true"></div>
+      <div class="pitch-slider-thumb" id="thumb" aria-hidden="true"></div>
+      <span class="pitch-slider-label pitch-slider-label--low" aria-hidden="true">Low</span>
+    </div>
   </div>
   <script type="module">
     import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
@@ -26,8 +39,8 @@
 
     bindLearn();
 
-    const pad = document.getElementById("pad");
-    const dot = document.getElementById("dot");
+    const slider = document.getElementById("pitchSlider");
+    const thumb = document.getElementById("thumb");
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
     let ctx, master, bp, loopFb, outGain, micIn, built = false;
@@ -106,10 +119,12 @@
 
     function setPitchFromY(clientY) {
       if (!ctx || !bp) return;
-      const r = pad.getBoundingClientRect();
+      const r = slider.getBoundingClientRect();
       const ny = clamp((clientY - r.top) / r.height, 0, 1);
-      bp.frequency.setTargetAtTime(400 + 1200 * (1 - ny), ctx.currentTime, 0.03);
-      dot.style.top = `${ny * 100}%`;
+      const hz = 400 + 1200 * (1 - ny);
+      bp.frequency.setTargetAtTime(hz, ctx.currentTime, 0.03);
+      thumb.style.top = `${ny * 100}%`;
+      slider.setAttribute("aria-valuenow", String(Math.round(hz)));
     }
 
     function tick() {
@@ -144,9 +159,9 @@
       startLoop();
       holding = true;
       activeId = e.pointerId;
-      pad.setPointerCapture(activeId);
-      pad.classList.add("active");
-      dot.style.opacity = "1";
+      slider.setPointerCapture(activeId);
+      slider.classList.add("active");
+      thumb.classList.add("active");
       setPitchFromY(e.clientY);
       exciteResonator();
       setStatus("status", "Hold steady — slide for pitch", "ok");
@@ -156,22 +171,24 @@
       if (e.pointerId !== activeId) return;
       holding = false;
       activeId = null;
-      pad.classList.remove("active");
-      dot.style.opacity = "0";
+      slider.classList.remove("active");
+      thumb.classList.remove("active");
       if (!ctx || !loopFb) return;
       const t = ctx.currentTime;
       loopFb.gain.setTargetAtTime(0, t, 0.05);
       outGain.gain.setTargetAtTime(0, t, 0.04);
     }
 
-    pad.addEventListener("pointerdown", (e) => void arm(e));
-    pad.addEventListener("pointermove", (e) => {
+    slider.addEventListener("pointerdown", (e) => void arm(e));
+    slider.addEventListener("pointermove", (e) => {
       if (!holding || e.pointerId !== activeId) return;
       setPitchFromY(e.clientY);
     });
-    pad.addEventListener("pointerup", release);
-    pad.addEventListener("pointercancel", release);
-    pad.addEventListener("lostpointercapture", release);
+    slider.addEventListener("pointerup", release);
+    slider.addEventListener("pointercancel", release);
+    slider.addEventListener("lostpointercapture", release);
+    thumb.style.top = "50%";
+    slider.setAttribute("aria-valuenow", "1000");
   </script>
 </body>
 </html>
