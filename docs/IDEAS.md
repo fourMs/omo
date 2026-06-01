@@ -22,7 +22,6 @@ Phones expose more than mic + tilt. Each row is a candidate **app** (or major up
 | Idea | Sensor / API | Music role | Synthesis hook |
 |------|----------------|------------|----------------|
 | ~~**Room Reverb Send**~~ | Mic RMS + optional loopback | Loudness in room → wet/dry | [Room Wash](../apps/room-reverb-send/) |
-| ~~**Whisper Gate**~~ | Mic + noise floor tracking | Only soft sounds pass | [Soft Vowel](../apps/whisper-gate/) |
 | ~~**Clap Architect**~~ | Onset times from mic | Clap spacing builds a rhythm grid | [Clap Grid](../apps/clap-architect/) |
 
 ### Camera & light

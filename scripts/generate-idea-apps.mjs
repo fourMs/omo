@@ -131,21 +131,6 @@ pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio
 pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");setPad(0.5,false);wetGain.gain.setTargetAtTime(0,ctx.currentTime,0.1);});`,
   },
   {
-    slug: "whisper-gate",
-    title: "Soft Vowel",
-    section: "texture",
-    synth: "Formant noise",
-    sensors: "Mic · touch",
-    learn: "<h2>Whisper gate</h2><p>Only <strong>soft</strong> sounds pass — loud noise is gated out. Hold pad for vowel tone.</p>",
-    script: `${padBase}
-import { registerAudioBoot, primeMicStream } from "../../shared/app.js";
-let noise,filter,analyser,micSrc;
-function build(c){ctx=c;({master}=createMasterBus(c,0.45));noise=ctx.createBufferSource();const b=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);const d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;noise.buffer=b;noise.loop=true;filter=ctx.createBiquadFilter();filter.type="bandpass";filter.frequency.value=600;filter.Q.value=8;const g=ctx.createGain();g.gain.value=0;noise.connect(filter);filter.connect(g);g.connect(master);noise.start();built=true;}
-registerAudioBoot(async c=>{build(c);const stream=await primeMicStream();micSrc=ctx.createMediaStreamSource(stream);analyser=ctx.createAnalyser();analyser.fftSize=256;micSrc.connect(analyser);const buf=new Float32Array(analyser.fftSize);let floor=0.01;function tick(){analyser.getFloatTimeDomainData(buf);let s=0;for(let i=0;i<buf.length;i++)s+=buf[i]*buf[i];const rms=Math.sqrt(s/buf.length);floor=floor*0.995+rms*0.005;const pass=rms>floor*1.1&&rms<floor*4;filter.frequency.setTargetAtTime(pass?400+holding*400:200,ctx.currentTime,0.06);requestAnimationFrame(tick);}tick();},{mic:true});
-pad.addEventListener("pointerdown",async()=>{await startAudio();holding=true;pad.classList.add("active");});
-pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");});`,
-  },
-  {
     slug: "clap-architect",
     title: "Clap Grid",
     section: "rhythm",

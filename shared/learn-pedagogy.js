@@ -215,11 +215,6 @@ export const LEARN_PEDAGOGY = {
     "Acoustic feedback loop: the space you are in changes the processed signal.",
   ],
 
-  "whisper-gate": [
-    "Only quiet input passes a gate; loud sounds are suppressed — intimate, close-mic texture.",
-    "Dynamics as filter: who can be heard depends on how softly they play or speak.",
-  ],
-
   "clap-architect": [
     "Onset times of claps are detected and placed on a grid; spacing defines tempo and pattern.",
     "Rhythm from the body — the architecture of claps becomes a score.",
