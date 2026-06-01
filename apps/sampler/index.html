@@ -14,7 +14,8 @@
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>Loop sampler</h2>
-    <p>Turn <strong>Audio on</strong>, then <strong>hold</strong> the big record button to capture from the mic. <strong>Release</strong> to loop. <strong>Tilt</strong> = filter, delay, and pitch.</p>
+    <p>Turn <strong>Audio on</strong>, then <strong>hold</strong> the round record button in the centre to capture from the mic. <strong>Release</strong> to loop.</p>
+    <p><strong>Tilt</strong> shifts the button colour and shapes filter, delay, and pitch on the loop.</p>
   </div>
   <p class="status-bar" id="status"></p>
   <div class="control-row sampler-live" aria-live="polite" aria-label="Effects">
@@ -26,16 +27,18 @@
     <span><strong id="pitchOut">—</strong>×</span>
   </div>
   <div class="main-stage sampler-stage">
-    <button type="button" id="recordBtn" class="sampler-rec-btn" aria-label="Hold to record">
-      <span class="rec-icon" aria-hidden="true"></span>
-      <span class="sampler-rec-label">Hold to record</span>
-    </button>
-    <p class="sampler-hint-text" id="padHint"></p>
+    <div class="sampler-center">
+      <button type="button" id="recordBtn" class="sampler-rec-btn" aria-label="Hold to record">
+        <span class="rec-icon" aria-hidden="true"></span>
+        <span class="sampler-rec-label">Hold to record</span>
+      </button>
+    </div>
+    <p class="sampler-hint-text" id="padHint">Tilt changes colour · hold to record</p>
   </div>
   <script type="module">
     import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
-    import { enableSensors, onOrientation } from "../../shared/sensors.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
 
     bindLearn();
     const recordBtn = document.getElementById("recordBtn");
@@ -56,8 +59,21 @@
     let recording = false;
     let activePointer = null;
     let playbackRate = 1;
+    let lastTilt = 0;
 
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    function updateTiltVisual(tilt) {
+      lastTilt = tilt;
+      if (recording) return;
+      const hue = Math.round(205 - tilt * 145);
+      const sat = 42 + tilt * 32;
+      const light = 40 + tilt * 20;
+      recordBtn.style.setProperty("--tilt-h", String(hue));
+      recordBtn.style.setProperty("--tilt-s", `${sat}%`);
+      recordBtn.style.setProperty("--tilt-l", `${light}%`);
+      recordBtn.style.setProperty("--tilt-glow", String(0.14 + tilt * 0.38));
+    }
 
     function reverbBuf(c, sec) {
       const len = Math.floor(c.sampleRate * sec);
@@ -103,7 +119,10 @@
       ({ master } = createMasterBus(ctx, 0.75));
       buildFxChain();
       built = true;
+      updateTiltVisual(lastTilt);
     }
+
+    primeSensors({ needMotion: false, needOrientation: true });
 
     async function ensureMic() {
       if (micReady) return true;
@@ -130,6 +149,8 @@
         tiltReady = true;
         onOrientation(({ beta, gamma }) => {
           const tilt = clamp(Math.sqrt((beta || 0) ** 2 + (gamma || 0) ** 2) / 90, 0, 1);
+          updateTiltVisual(tilt);
+          if (!ctx || !filter) return;
           const t = ctx.currentTime;
           const cutoff = 350 + tilt * 7800;
           const fb = 0.05 + tilt * 0.62;
@@ -174,7 +195,8 @@
       loopSource.start();
       recordBtn.classList.add("looping");
       recordBtn.querySelector(".sampler-rec-label").textContent = "Looping";
-      padHint.textContent = "Hold again to re-record";
+      padHint.textContent = "Tilt for FX · hold again to re-record";
+      updateTiltVisual(lastTilt);
     }
 
     function teardownScriptCapture() {
@@ -247,6 +269,7 @@
     function setRecordingUi(on) {
       recordBtn.classList.toggle("recording", on);
       recordBtn.querySelector(".sampler-rec-label").textContent = on ? "Recording…" : "Hold to record";
+      if (!on) updateTiltVisual(lastTilt);
     }
 
     function startRecording() {

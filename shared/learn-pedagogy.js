@@ -146,7 +146,7 @@ export const LEARN_PEDAGOGY = {
   ],
 
   sampler: [
-    "Sound is recorded into a buffer, then played back at variable rate or position; tilt may shift playback.",
+    "Hold the centre record button to capture audio, then release to loop. Tilt shifts filter, delay, pitch — and the button colour (cool when upright, warmer as you lean).",
     "Links everyday sound (field recording) to musical time-stretching and collage.",
   ],
 
