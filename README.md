@@ -14,7 +14,7 @@ The apps should (in theory) work in all modern browsers, but we have found they 
 
 ## Quick start
 
-1. Open the hub and pick an instrument — each card lists **synthesis** and **sensors** (56 apps in six sections).
+1. Open the hub and pick an instrument — each card lists **synthesis** and **sensors** (58 apps in six sections).
 2. Turn **Audio on** (top right) if sound does not start on first touch.
 3. Tap **Learn** for how to play; **QR** shares a link to the same app for the group.
 4. Allow **microphone**, **motion**, or **camera** when prompted (browser and OS settings).
@@ -40,9 +40,9 @@ Compact list — full tables with folder names: **[docs/CATALOG.md](docs/CATALOG
 
 | | |
 |---|---|
-| **Rhythm** (10) | [Conductor](apps/conductor/) · [Drumkit](apps/drumkit/) · [Drum Sequencer](apps/drum-sequencer/) · [Circular Drum](apps/circular-drum/) · [Firefly](apps/firefly/) · [Delay Throw](apps/delay-throw/) · [Euclidean Rings](apps/euclidean-rings/) · [L-System Groove](apps/lsystem-groove/) · [Clap Architect](apps/clap-architect/) · [Shadow Sequencer](apps/shadow-sequencer/) |
+| **Rhythm** (11) | [CliX](apps/clix/) · [Conductor](apps/conductor/) · [Drumkit](apps/drumkit/) · [Drum Sequencer](apps/drum-sequencer/) · [Circular Drum](apps/circular-drum/) · [Firefly](apps/firefly/) · [Delay Throw](apps/delay-throw/) · [Euclidean Rings](apps/euclidean-rings/) · [L-System Groove](apps/lsystem-groove/) · [Clap Architect](apps/clap-architect/) · [Shadow Sequencer](apps/shadow-sequencer/) |
 | **Drones** (11) | [Green Button](apps/green-button/) · [Just Equal](apps/just-equal/) · [Sound Saber](apps/sound-saber/) · [Motion Trump](apps/motion-wah/) · [Compass Wah](apps/compass-wah/) · [Harmonizer](apps/harmonizer/) · [Shepard Glide](apps/shepard-glide/) · [Shake Filter](apps/shake-filter/) · [Flat Edge](apps/flat-edge/) · [Heading Choir](apps/heading-choir/) · [Swarm Bloom](apps/swarm-bloom/) |
-| **Melody** (8) | [Piano](apps/piano/) · [Mic Theremin](apps/mic-theremin/) · [Flute Blow](apps/flute-blow/) · [Tilt Harp](apps/tilt-harp/) · [Bow Phone](apps/bow-phone/) · [Markov Melody](apps/markov-melody/) · [Kaoss Pad](apps/kaoss-pad/) · [Bowed Waveguide](apps/bowed-waveguide/) |
+| **Melody** (9) | [Piano](apps/piano/) · [Mic Theremin](apps/mic-theremin/) · [Flute Blow](apps/flute-blow/) · [Tilt Harp](apps/tilt-harp/) · [Bow Phone](apps/bow-phone/) · [Markov Melody](apps/markov-melody/) · [Kaoss Pad](apps/kaoss-pad/) · [Bowed Waveguide](apps/bowed-waveguide/) · [Crystalis](apps/crystalis/) |
 | **Synthesis** (12) | [FM Touch](apps/fm-touch/) · [FM Matrix](apps/fm-matrix/) · [KS String](apps/ks-string/) · [Additive Bells](apps/additive-bells/) · [Filter Ladder](apps/filter-ladder/) · [Ring Mod Gong](apps/ring-mod-gong/) · [Pinch Bass](apps/pinch-bass/) · [Edge Strum](apps/edge-strum/) · [Am Radio](apps/am-radio/) · [Phase Distortion](apps/phase-distortion/) · [Supersaw Stack](apps/supersaw-stack/) · [Pluck Bowl](apps/pluck-bowl/) |
 | **Texture** (11) | [Sampler](apps/sampler/) · [Granular Tilt](apps/granular-tilt/) · [Spectral Freeze](apps/spectral-freeze/) · [Tap Bloom](apps/tap-bloom/) · [Wavetable Scan](apps/wavetable-scan/) · [Video Sonifier](apps/video-sonifier/) · [Chaos Attractor](apps/chaos-attractor/) · [Room Reverb Send](apps/room-reverb-send/) · [Wind Bottle](apps/wind-bottle/) · [Scrub Tape](apps/scrub-tape/) · [Vocoder Choir](apps/vocoder-choir/) |
 | **AI** (4) | [Evo Drumkit](apps/evo-drumkit/) · [Hum Clap](apps/hum-clap/) · [Train Shake](apps/train-shake/) · [Gesture Regression](apps/gesture-regression/) |

@@ -1,20 +1,21 @@
 # App catalog
 
-Complete list of instruments on the [hub](https://fourms.github.io/omo/). The live source of truth is `shared/hub-catalog.js` (56 apps). Folder names under `apps/` use kebab-case; hub titles use Title Case.
+Complete list of instruments on the [hub](https://fourms.github.io/omo/). The live source of truth is `shared/hub-catalog.js` (58 apps). Folder names under `apps/` use kebab-case; hub titles use Title Case.
 
 | Section | Count |
 |---------|------:|
-| Rhythm | 10 |
+| Rhythm | 11 |
 | Drones | 11 |
-| Melody | 8 |
+| Melody | 9 |
 | Synthesis | 12 |
 | Texture | 11 |
 | AI | 4 |
 
-## Rhythm (10)
+## Rhythm (11)
 
 | App | Folder | Synthesis | Sensors |
 |-----|--------|-----------|---------|
+| [CliX](../apps/clix/) | `clix` | Typed impulse · grid velocity | Keyboard · touch |
 | [Circular Drum](../apps/circular-drum/) | `circular-drum` | Ring sequencer | Touch |
 | [Clap Architect](../apps/clap-architect/) | `clap-architect` | Learned kit | Mic · touch |
 | [Conductor](../apps/conductor/) | `conductor` | Ensemble click | Touch · shared URL |
@@ -42,12 +43,13 @@ Complete list of instruments on the [hub](https://fourms.github.io/omo/). The li
 | [Sound Saber](../apps/sound-saber/) | `sound-saber` | Pulse · delay · ring | Touch · motion |
 | [Swarm Bloom](../apps/swarm-bloom/) | `swarm-bloom` | Evo drones + rhythm | Mic · ensemble |
 
-## Melody (8)
+## Melody (9)
 
 | App | Folder | Synthesis | Sensors |
 |-----|--------|-----------|---------|
 | [Bow Phone](../apps/bow-phone/) | `bow-phone` | Bowed string | Touch · camera |
 | [Bowed Waveguide](../apps/bowed-waveguide/) | `bowed-waveguide` | Continuous KS | Touch drag |
+| [Crystalis](../apps/crystalis/) | `crystalis` | Bowed band · grid pluck | Keyboard · touch pad |
 | [Flute Blow](../apps/flute-blow/) | `flute-blow` | Breath tone | Mic · touch |
 | [Kaoss Pad](../apps/kaoss-pad/) | `kaoss-pad` | XY loop synth | Touch pad |
 | [Markov Melody](../apps/markov-melody/) | `markov-melody` | 2nd-order Markov | Touch · keyboard |

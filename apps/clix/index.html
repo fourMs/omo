@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>CliX — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .clix-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 3px;
+      max-width: 100%;
+      margin: 0 auto 0.5rem;
+      padding: 0 0.35rem;
+    }
+    .clix-cell {
+      aspect-ratio: 1.2;
+      border-radius: 4px;
+      background: var(--panel, #1a1f2a);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background 0.05s, box-shadow 0.05s;
+    }
+    .clix-cell.on {
+      background: #fb923c;
+      box-shadow: 0 0 12px rgba(251, 146, 60, 0.55);
+    }
+    .clix-keys {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      justify-content: center;
+      padding: 0.35rem;
+      touch-action: manipulation;
+    }
+    .clix-key {
+      min-width: 2rem;
+      min-height: 2.6rem;
+      padding: 0.35rem 0.45rem;
+      font: 600 0.85rem/1 system-ui, sans-serif;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #252b38;
+      color: var(--text, #e8eaef);
+    }
+    .clix-key:active { background: #3d4658; }
+    .clix-readout {
+      font-size: 0.72rem;
+      color: var(--muted, #8b93a7);
+      text-align: center;
+      margin: 0.25rem 0.5rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .clix-host-panel { padding: 0 0.5rem 0.5rem; font-size: 0.75rem; }
+    .clix-host-panel .btn { width: 100%; margin-top: 0.35rem; }
+    .role-tabs { margin-bottom: 0.25rem; }
+  </style>
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>CliX</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>CliX</h2>
+    <p>Turn <strong>Audio on</strong>. Type on the keys or a Bluetooth keyboard — each note waits for the <strong>orange grid</strong> pulse, then rings at a pitch from the character and loudness from the grid cell (like the original laptop ensemble patch).</p>
+    <p><strong>Host</strong> — share the sync link so every phone scans the same grid phase. <strong>Clear</strong> drops queued keys.</p>
+  </div>
+
+  <div class="role-tabs">
+    <button type="button" id="tabPlay" class="active">Play</button>
+    <button type="button" id="tabHost">Host</button>
+  </div>
+
+  <div id="playView">
+    <div class="clix-grid" id="grid" aria-label="Sync grid 8 by 4"></div>
+    <p class="clix-readout" id="readout">grid — · queue 0</p>
+    <div class="clix-keys" id="keys"></div>
+    <div class="app-toolbar">
+      <button type="button" class="btn-secondary btn" id="clearBtn">Clear queue</button>
+    </div>
+  </div>
+
+  <div id="hostView" class="hidden">
+    <div class="clix-host-panel">
+      <p>One host shares timing (replaces the ChucK <code>server-multi.ck</code> clock). Everyone opens the musician link before playing.</p>
+      <div class="scroll-panel hidden" id="sharePanel">
+        <div class="qr-share">
+          <canvas id="shareQr" role="img" aria-label="QR code — scan to join sync"></canvas>
+        </div>
+        <p style="margin:0 0 0.35rem;color:var(--muted);">Musician link</p>
+        <div class="link-box" id="musicianLink"></div>
+      </div>
+      <button type="button" class="btn" id="hostStart">Start sync (5s)</button>
+      <button type="button" class="btn-secondary btn btn-sm hidden" id="copyBtn">Copy link</button>
+      <p class="status-bar" id="hostStatus"></p>
+    </div>
+  </div>
+
+  <script type="module" src="clix.js"></script>
+</body>
+</html>

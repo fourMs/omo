@@ -11,12 +11,12 @@ export const SECTIONS = {
   rhythm: {
     name: "Rhythm",
     color: "#fb923c",
-    apps: ["drumkit", "drum-sequencer", "delay-throw"],
+    apps: ["drumkit", "drum-sequencer", "delay-throw", "clix"],
   },
   melody: {
     name: "Melody",
     color: "#a78bfa",
-    apps: ["piano", "flute-blow", "mic-theremin", "tilt-harp", "bow-phone", "kaoss-pad"],
+    apps: ["piano", "flute-blow", "mic-theremin", "tilt-harp", "bow-phone", "kaoss-pad", "crystalis"],
   },
   texture: {
     name: "Texture",

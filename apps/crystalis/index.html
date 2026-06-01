@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Crystalis — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .cry-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      justify-content: center;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+    }
+    .cry-controls button {
+      padding: 0.35rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #252b38;
+      color: var(--text, #e8eaef);
+    }
+    .cry-controls button.active { background: #a78bfa; color: #0d0f14; }
+    .cry-pad {
+      flex: 1;
+      min-height: 42vh;
+      margin: 0.25rem 0.5rem;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: radial-gradient(ellipse at 50% 40%, #2a3348 0%, #141820 70%);
+      touch-action: none;
+    }
+    .cry-pad.active { border-color: rgba(167, 139, 250, 0.45); }
+    .cry-keys {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      justify-content: center;
+      padding: 0.35rem;
+    }
+    .cry-key {
+      min-width: 1.85rem;
+      min-height: 2.4rem;
+      font: 600 0.8rem/1 system-ui, sans-serif;
+      border-radius: 5px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #252b38;
+      color: var(--text, #e8eaef);
+    }
+    .cry-key.down { background: #a78bfa; color: #0d0f14; }
+    .cry-readout {
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--muted, #8b93a7);
+      margin: 0.15rem 0.5rem;
+    }
+    .cry-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 2px;
+      max-width: 100%;
+      margin: 0 auto 0.35rem;
+      padding: 0 0.5rem;
+    }
+    .cry-cell {
+      aspect-ratio: 1.4;
+      border-radius: 3px;
+      background: #1a1f2a;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .cry-cell.on { background: #a78bfa; }
+  </style>
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Crystalis</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Crystalis</h2>
+    <p>Turn <strong>Audio on</strong>. Hold letter keys for bowed tones; <strong>drag the pad</strong> to bow (left/right/up/down maps to four channels, like the laptop trackpad).</p>
+    <p><strong>Bow / Pluck</strong> toggles mode. In <strong>Pluck</strong>, the grid pulse strikes all held voices — use <strong>Host</strong> to share sync.</p>
+    <p><strong>Reg ±</strong> octave register · <strong>Vol ±</strong> level.</p>
+  </div>
+
+  <div class="role-tabs">
+    <button type="button" id="tabPlay" class="active">Play</button>
+    <button type="button" id="tabHost">Host</button>
+  </div>
+
+  <div id="playView">
+    <div class="cry-controls">
+      <button type="button" id="modeBtn" class="active">Bow</button>
+      <button type="button" id="regDown">Reg −</button>
+      <span id="regVal">3</span>
+      <button type="button" id="regUp">Reg +</button>
+      <button type="button" id="volDown">Vol −</button>
+      <button type="button" id="volUp">Vol +</button>
+    </div>
+    <p class="cry-readout" id="readout">Bow · reg 3 · vol 1.00</p>
+    <div class="cry-grid" id="grid" hidden></div>
+    <div id="bowPad" class="cry-pad" aria-label="Bow pad — drag to excite strings"></div>
+    <div class="cry-keys" id="keys"></div>
+  </div>
+
+  <div id="hostView" class="hidden">
+    <div class="clix-host-panel" style="padding:0.5rem;font-size:0.75rem">
+      <p>Host broadcasts pluck grid (Crystalis <code>server-local.ck</code>). Musicians open the link in <strong>Pluck</strong> mode.</p>
+      <div class="scroll-panel hidden" id="sharePanel">
+        <div class="qr-share"><canvas id="shareQr" aria-label="Sync QR"></canvas></div>
+        <div class="link-box" id="musicianLink"></div>
+      </div>
+      <button type="button" class="btn" id="hostStart">Start pluck sync (5s)</button>
+      <button type="button" class="btn-secondary btn btn-sm hidden" id="copyBtn">Copy link</button>
+      <p class="status-bar" id="hostStatus"></p>
+    </div>
+  </div>
+
+  <script type="module" src="crystalis.js"></script>
+</body>
+</html>

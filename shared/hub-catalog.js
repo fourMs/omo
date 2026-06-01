@@ -10,6 +10,13 @@ export const HUB_APPS = [
     sensors: "Touch · shared URL",
   },
   {
+    href: "apps/clix/",
+    title: "CliX",
+    section: "rhythm",
+    synth: "Typed impulse · grid velocity",
+    sensors: "Keyboard · touch",
+  },
+  {
     href: "apps/drumkit/",
     title: "Drumkit",
     section: "rhythm",
@@ -280,6 +287,13 @@ export const HUB_APPS = [
   { href: "apps/phase-distortion/", title: "Phase Distortion", section: "synthesis", synth: "Phase distortion", sensors: "Multi-touch" },
   { href: "apps/supersaw-stack/", title: "Supersaw Stack", section: "synthesis", synth: "Saws or spin timbre", sensors: "Gyro · touch" },
   { href: "apps/bowed-waveguide/", title: "Bowed Waveguide", section: "melody", synth: "Continuous KS", sensors: "Touch drag" },
+  {
+    href: "apps/crystalis/",
+    title: "Crystalis",
+    section: "melody",
+    synth: "Bowed band · grid pluck",
+    sensors: "Keyboard · touch pad",
+  },
   { href: "apps/pluck-bowl/", title: "Pluck Bowl", section: "synthesis", synth: "KS + LFO layers", sensors: "Touch position" },
   { href: "apps/wind-bottle/", title: "Wind Bottle", section: "texture", synth: "Noise resonator", sensors: "Tilt · touch" },
   { href: "apps/scrub-tape/", title: "Scrub Tape", section: "texture", synth: "Buffer scrub", sensors: "Mic · tape ribbon" },

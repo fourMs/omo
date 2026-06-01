@@ -15,6 +15,11 @@ export const LEARN_PEDAGOGY = {
     "Pedagogically this trains ensemble listening: lock to the group pulse instead of your internal clock.",
   ],
 
+  clix: [
+    "After Ge Wang’s CliX (SMELT / PLOrk): each key is a pitch from its ASCII code; a shared 8×4 grid scan sets how loud the next note is when the clock arrives.",
+    "Teaches quantized ensemble typing — listen for the grid phase, don’t rush ahead of the pulse — and how the same letter can whisper or shout depending on when it lands.",
+  ],
+
   drumkit: [
     "Each pad triggers a synthesized drum: oscillators and noise bursts shaped by envelopes to mimic kick, snare, and hats.",
     "Teaches discrete rhythm — short attacks, clear onsets — and how timbre identifies drum type even at low volume.",
@@ -253,6 +258,11 @@ export const LEARN_PEDAGOGY = {
   "supersaw-stack": [
     "Several detuned sawtooth oscillators stack for a wide chorus; gyro widens detune further.",
     "Spin timbre uses sine + vibrato for a smoother, rotating stereo image.",
+  ],
+
+  crystalis: [
+    "After Ge Wang’s Crystalis: up to four bowed bands; drag on the pad bows by direction (like a trackpad); letter keys pick pitch in a register.",
+    "Pluck mode fires the whole ensemble on a shared grid pulse — velocity comes from the 8×4 pattern, like the original OSC server.",
   ],
 
   "bowed-waveguide": [
