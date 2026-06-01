@@ -43,7 +43,7 @@
     const pool = createKSPool(1);
     const MIN_PLUCK_MS = 105;
 
-    let ctx, master, sustain, built = false;
+    let ctx, master, voice, sustain, built = false;
     let holding = false;
     let activeId = null;
     let lastX = 0;
@@ -54,8 +54,11 @@
 
     function buildAudio(c) {
       ctx = c;
-      ({ master } = createMasterBus(c, 0.48));
-      sustain = createBowedString(ctx, master, 220);
+      ({ master } = createMasterBus(c, 0.55));
+      voice = ctx.createGain();
+      voice.gain.value = 1.85;
+      voice.connect(master);
+      sustain = createBowedString(ctx, voice, 220);
       built = true;
     }
 
@@ -65,13 +68,13 @@
       const now = performance.now();
       if (now - lastPluckAt < MIN_PLUCK_MS) return;
       lastPluckAt = now;
-      const strength = 0.14 + bow * 0.28;
+      const strength = 0.22 + bow * 0.38;
       const dampHz = clamp(hz * 3.2, 450, 4800);
-      karplusPluck(ctx, master, pool, hz, {
+      karplusPluck(ctx, voice, pool, hz, {
         strength,
         dampHz,
         feedback: 0.79 + bow * 0.05,
-        level: 0.14 + bow * 0.1,
+        level: 0.24 + bow * 0.18,
         decaySec: 1.6,
       });
     }
@@ -92,7 +95,7 @@
       smoothBow = smoothBow * 0.88 + targetBow * 0.12;
 
       sustain.setPitch(hz);
-      sustain.setBow(smoothBow * 0.35);
+      sustain.setBow(smoothBow * 0.72);
 
       if (smoothBow > 0.06) {
         const pitchMoved = Math.abs(hz - lastHz) / Math.max(lastHz, 1) > 0.04;

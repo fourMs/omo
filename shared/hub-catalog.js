@@ -269,13 +269,6 @@ export const HUB_APPS = [
     sensors: "Touch · motion",
   },
   {
-    href: "apps/bit-crush-pad/",
-    title: "Bit Crush Pad",
-    section: "texture",
-    synth: "Bit crush",
-    sensors: "Touch · motion · network",
-  },
-  {
     href: "apps/feedback-matrix/",
     title: "Feedback Matrix",
     section: "texture",
@@ -304,7 +297,6 @@ export const HUB_APPS = [
   { href: "apps/torch-pulse/", title: "Torch Pulse", section: "rhythm", synth: "Click + flash", sensors: "Camera · touch" },
   { href: "apps/pinch-bass/", title: "Pinch Bass", section: "synthesis", synth: "Subtractive bass", sensors: "Pinch · XY" },
   { href: "apps/edge-strum/", title: "Edge Strum", section: "synthesis", synth: "KS harmonics", sensors: "Touch position" },
-  { href: "apps/altitude-wind/", title: "Altitude Wind", section: "drones", synth: "Filtered noise", sensors: "Barometer · touch" },
   { href: "apps/am-radio/", title: "Am Radio", section: "synthesis", synth: "AM sidebands", sensors: "Mic · touch" },
   { href: "apps/phase-distortion/", title: "Phase Distortion", section: "synthesis", synth: "Phase distortion", sensors: "Multi-touch" },
   { href: "apps/supersaw-stack/", title: "Supersaw Stack", section: "synthesis", synth: "Saws or spin timbre", sensors: "Gyro · touch" },

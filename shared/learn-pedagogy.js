@@ -215,11 +215,6 @@ export const LEARN_PEDAGOGY = {
     "Deterministic but unpredictable — sensitivity to initial conditions as a performance parameter.",
   ],
 
-  "bit-crush-pad": [
-    "Sample rate and bit depth are lowered digitally, adding grain and aliasing — “retro” degradation.",
-    "Network or motion may push crush amount — teaches digital audio limits as aesthetic.",
-  ],
-
   "feedback-matrix": [
     "Several delay lines cross-feed; gyro or touch routes energy between paths, risking runaway or rich drones.",
     "Delay as instrument — stability vs feedback howl is part of the performance.",
@@ -288,11 +283,6 @@ export const LEARN_PEDAGOGY = {
   "edge-strum": [
     "Touch position near the edge emphasizes higher harmonics in a string model; centre is more fundamental.",
     "Spatial playing on one surface — same as picking near the bridge on a guitar.",
-  ],
-
-  "altitude-wind": [
-    "Barometer pressure (rare on phones) or a manual slider maps to filtered noise — “thinner air” = brighter hiss.",
-    "Environmental sensor as timbre; works as concept even when only the slider is available.",
   ],
 
   "am-radio": [

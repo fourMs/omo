@@ -54,9 +54,7 @@ Phones expose more than mic + tilt. Each row is a candidate **app** (or major up
 
 | Idea | Sensor / API | Music role | Synthesis hook |
 |------|----------------|------------|----------------|
-| ~~**Altitude Wind**~~ | `PressureSensor` (barometer, rare) | Higher elevation → brighter noise mix | [Baro Wind](../apps/altitude-wind/) |
 | ~~**Geo Drone**~~ | `geolocation` speed / heading | Walk around space → slow panorama | [Walk Pan](../apps/geo-drone/) |
-| ~~**Network Static**~~ | `connection.effectiveType` | 3G vs Wi‑Fi → bit-crush amount | [Arcade Static](../apps/bit-crush-pad/) (network crush) |
 
 ### Already explored (reference)
 
@@ -126,7 +124,6 @@ Different ways to generate sound beyond what the hub already demos. Pair with to
 
 | Idea | Approach | Music role | Control idea |
 |------|----------|------------|--------------|
-| ~~**Bit Crush Pad**~~ | Reduce sample rate / bit depth | [Arcade Static](../apps/bit-crush-pad/) | Touch · motion · network |
 | ~~**Feedback Matrix**~~ | Small feedback delay network | [Delay Maze](../apps/feedback-matrix/) | Touch · gyro |
 | ~~**Shepard Glide**~~ | Continuous Shepard tone | [Endless Rise](../apps/shepard-glide/) | Touch · tilt |
 

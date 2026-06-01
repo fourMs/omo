@@ -397,21 +397,6 @@ pad.addEventListener("pointerdown",async e=>{e.preventDefault();await startAudio
 pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");amp.gain.setTargetAtTime(0,ctx.currentTime,0.1);});`,
   },
   {
-    slug: "altitude-wind",
-    title: "Baro Wind",
-    section: "drones",
-    synth: "Filtered noise",
-    sensors: "Barometer · touch",
-    learn: "<h2>Altitude wind</h2><p>Barometer (or slider fallback) brightens wind noise.</p>",
-    script: `${padBase}
-let noise,filt,windGain,press=1013;
-function build(c){ctx=c;({master}=createMasterBus(c,0.42));noise=ctx.createBufferSource();const b=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);const d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;noise.buffer=b;noise.loop=true;filt=ctx.createBiquadFilter();windGain=ctx.createGain();windGain.gain.value=0;noise.connect(filt);filt.connect(windGain);windGain.connect(master);noise.start();built=true;
-if("PressureSensor" in window){try{const s=new PressureSensor();s.addEventListener("reading",()=>{press=s.pressure||1013;});s.start();}catch{}}}
-function updateWind(on){const t=ctx.currentTime;const bright=clamp((press-980)/60,0,1);filt.frequency.setTargetAtTime(200+bright*6000,t,0.08);windGain.gain.setTargetAtTime(on?0.22:0,t,on?0.04:0.08);}
-pad.addEventListener("pointerdown",async()=>{await startAudio(!built?build:undefined);holding=true;pad.classList.add("active");updateWind(true);});
-pad.addEventListener("pointerup",()=>{holding=false;pad.classList.remove("active");updateWind(false);});`,
-  },
-  {
     slug: "geo-drone",
     title: "Walk Pan",
     section: "drones",

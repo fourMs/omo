@@ -47,6 +47,7 @@
   <script type="module">
     import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
     import { createMasterBus, unlockAudio } from "../../shared/audio.js";
+    import { createBowedString } from "../../shared/bowed-string.js";
     import { bowFromHandSpeed, bowFromZoneMotion, createHandBowState, trackHandInBowZone } from "../../shared/hand-bow.js";
     import { enableSensors, onMotion, primeSensors } from "../../shared/sensors.js";
 
@@ -72,7 +73,7 @@
     sample.width = CAM_W;
     sample.height = CAM_H;
 
-    let ctx, master, osc, noise, noiseGain, toneGain, built = false;
+    let ctx, master, bowed, built = false;
     let stream = null;
     let camReady = false;
     let useCameraBow = false;
@@ -98,27 +99,8 @@
 
     function buildAudio(c) {
       ctx = c;
-      ({ master } = createMasterBus(c, 0.55));
-      osc = ctx.createOscillator();
-      osc.type = "sawtooth";
-      osc.frequency.value = pitchHz;
-      toneGain = ctx.createGain();
-      toneGain.gain.value = 0;
-      osc.connect(toneGain);
-      toneGain.connect(master);
-      osc.start();
-      const len = ctx.sampleRate * 2;
-      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-      noise = ctx.createBufferSource();
-      noise.buffer = buf;
-      noise.loop = true;
-      noiseGain = ctx.createGain();
-      noiseGain.gain.value = 0;
-      noise.connect(noiseGain);
-      noiseGain.connect(master);
-      noise.start();
+      ({ master } = createMasterBus(c, 0.5));
+      bowed = createBowedString(ctx, master, pitchHz);
       built = true;
       tick();
     }
@@ -332,12 +314,10 @@
     }
 
     function applyBow() {
-      if (!built || !ctx) return;
+      if (!built || !bowed) return;
       const amp = bowLevel();
-      const t = ctx.currentTime;
-      toneGain.gain.setTargetAtTime(amp * 0.4, t, 0.025);
-      noiseGain.gain.setTargetAtTime(amp * 0.48, t, 0.025);
-      osc.frequency.setTargetAtTime(pitchHz, t, 0.04);
+      bowed.setPitch(pitchHz);
+      bowed.setBow(amp * 0.45);
       document.getElementById("bOut").textContent = amp.toFixed(2);
       document.getElementById("bowMeter").style.width = `${amp * 100}%`;
       document.getElementById("bowMeter").classList.toggle("blowing", amp > 0.05);
@@ -426,12 +406,8 @@
       motionPrimed = false;
       pad.classList.remove("active");
       dot.style.opacity = "0";
-      if (built && ctx) {
-        const t = ctx.currentTime;
-        toneGain.gain.setTargetAtTime(0, t, 0.06);
-        noiseGain.gain.setTargetAtTime(0, t, 0.06);
-        applyBow();
-      }
+      if (bowed) bowed.release();
+      applyBow();
     };
 
     pad.addEventListener("pointerup", stop);
