@@ -27,8 +27,8 @@ export function createShepardTone(ctx, dest) {
   }
 
   let phase = 0;
-  let rate = 0.12;
-  let direction = 1;
+  /** Signed glide speed; 0 = hold (pass through zero when reversing). */
+  let glide = 0.12;
   let running = false;
   let raf = 0;
   let lastFrame = 0;
@@ -50,7 +50,7 @@ export function createShepardTone(ctx, dest) {
     if (!lastFrame) lastFrame = now;
     const dt = Math.min(0.05, (now - lastFrame) / 1000);
     lastFrame = now;
-    phase += rate * direction * dt * 2.8;
+    phase += glide * dt * 2.8;
     update();
     raf = requestAnimationFrame(loop);
   }
@@ -77,11 +77,17 @@ export function createShepardTone(ctx, dest) {
       bus.gain.cancelScheduledValues(t);
       bus.gain.setTargetAtTime(0, t, 0.12);
     },
+    /** @param {number} signed - negative = down, 0 = pause glide, positive = up */
+    setGlide(signed) {
+      glide = Math.max(-0.55, Math.min(0.55, signed));
+    },
     setRate(r) {
-      rate = Math.max(0.02, Math.min(0.55, r));
+      const s = Number(r);
+      glide = s >= 0 ? Math.min(0.55, s) : Math.max(-0.55, s);
     },
     setDirection(d) {
-      direction = d >= 0 ? 1 : -1;
+      const mag = Math.abs(glide) || 0.12;
+      glide = (d >= 0 ? 1 : -1) * mag;
     },
     setLevel(level, when = ctx.currentTime) {
       if (!running) return;

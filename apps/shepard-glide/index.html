@@ -43,11 +43,12 @@
     function applyTilt(beta, gamma) {
       if (!shepard || holdCount < 1) return;
       const forward = clamp((beta ?? 0) / 55, -1, 1);
-      const rate = 0.06 + Math.abs(forward) * 0.35;
-      shepard.setRate(rate);
-      shepard.setDirection(forward >= 0 ? 1 : -1);
-      document.getElementById("rateOut").textContent = rate.toFixed(2);
-      document.getElementById("dirOut").textContent = forward >= 0 ? "up" : "down";
+      const glide = forward * 0.42;
+      shepard.setGlide(glide);
+      document.getElementById("rateOut").textContent = Math.abs(glide).toFixed(2);
+      const dirEl = document.getElementById("dirOut");
+      if (Math.abs(forward) < 0.06) dirEl.textContent = "0";
+      else dirEl.textContent = forward > 0 ? "up" : "down";
     }
 
     function buildAudio(c) {
