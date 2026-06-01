@@ -271,8 +271,8 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "scrub-tape": [
-    "Record a short clip, then move the scrub slider to hear grains from different moments — speed and direction change the pitch.",
-    "Tape-head metaphor: the slider is your finger on the reel, not a transport control.",
+    "Hold the centre record button to capture audio, then drag the full-width tape ribbon to scrub through the buffer.",
+    "Faster scrubbing shifts pitch like a tape head — position is horizontal along the ribbon.",
   ],
 
   "vocoder-choir": [

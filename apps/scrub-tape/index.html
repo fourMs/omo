@@ -14,8 +14,8 @@
   </header>
   <div class="learn-panel panel" id="learnPanel">
     <h2>Scrub tape</h2>
-    <p>Turn <strong>Audio on</strong>, allow the mic, then <strong>hold</strong> the record button to capture a clip (up to 6 s).</p>
-    <p>Drag the <strong>scrub slider</strong> to move through the tape — faster moves sound more pitched, like rewinding or fast-forwarding.</p>
+    <p>Turn <strong>Audio on</strong>, allow the mic, then <strong>hold</strong> the round record button to capture a clip (up to 6 s).</p>
+    <p>Drag along the <strong>tape ribbon</strong> below to scrub — faster moves sound more pitched, like rewinding or fast-forwarding.</p>
   </div>
   <p class="status-bar" id="status">Turn Audio on, then hold Record</p>
   <div class="control-row scrub-live" aria-live="polite" aria-label="Tape position">
@@ -25,15 +25,28 @@
     <span><strong id="lenOut">—</strong></span>
   </div>
   <div class="main-stage scrub-stage">
-    <button type="button" id="recordBtn" class="scrub-rec-btn" aria-label="Hold to record">
-      <span class="rec-icon" aria-hidden="true"></span>
-      <span class="scrub-rec-label">Hold to record</span>
-    </button>
-    <div class="scrub-slider-wrap">
-      <label for="scrubSlider">Scrub</label>
-      <input type="range" id="scrubSlider" min="0" max="1000" value="0" step="1" disabled />
+    <div class="scrub-center">
+      <button type="button" id="recordBtn" class="scrub-rec-btn" aria-label="Hold to record">
+        <span class="rec-icon" aria-hidden="true"></span>
+        <span class="scrub-rec-label">Hold to record</span>
+      </button>
     </div>
-    <p class="scrub-hint-text" id="hint">Record a clip, then scrub with the slider</p>
+    <div class="scrub-ribbon-wrap">
+      <div
+        id="tapeRibbon"
+        class="scrub-ribbon is-disabled"
+        role="slider"
+        aria-label="Scrub tape"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+        tabindex="0"
+      >
+        <div class="tape-strip" aria-hidden="true"></div>
+        <div class="tape-head" id="tapeHead"></div>
+      </div>
+    </div>
+    <p class="scrub-hint-text" id="hint">Record a clip, then drag the tape ribbon</p>
   </div>
   <script type="module">
     import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
@@ -42,7 +55,8 @@
     bindLearn();
 
     const recordBtn = document.getElementById("recordBtn");
-    const scrubSlider = document.getElementById("scrubSlider");
+    const tapeRibbon = document.getElementById("tapeRibbon");
+    const tapeHead = document.getElementById("tapeHead");
     const posOut = document.getElementById("posOut");
     const lenOut = document.getElementById("lenOut");
     const hint = document.getElementById("hint");
@@ -57,10 +71,13 @@
     let phase = 0;
     let lastPhase = 0;
     let lastScrubAt = 0;
+    let scrubbing = false;
+    let scrubPointer = null;
 
     let micStream = null;
     let recording = false;
     let recPointer = null;
+    let recEndPointer = null;
     let recordTimer = null;
     let mediaRecorder = null;
     let recordChunks = [];
@@ -87,19 +104,30 @@
       ({ master } = createMasterBus(c, 0.55));
       buf = makeDemoBuffer(c);
       built = true;
-      scrubSlider.disabled = false;
+      setRibbonEnabled(true);
       updateLenTag();
-      hint.textContent = "Demo loaded — hold record to replace, or scrub now";
+      hint.textContent = "Demo loaded — hold record to replace, or scrub the ribbon";
     }
 
-    function phaseFromSlider() {
-      return +scrubSlider.value / 1000;
+    function phaseFromClientX(x) {
+      const r = tapeRibbon.getBoundingClientRect();
+      return clamp((x - r.left) / r.width, 0, 1);
+    }
+
+    function updateTapeHead(p) {
+      tapeHead.style.left = `${p * 100}%`;
+      tapeRibbon.setAttribute("aria-valuenow", String(Math.round(p * 100)));
+    }
+
+    function setRibbonEnabled(on) {
+      tapeRibbon.classList.toggle("is-disabled", !on);
+      tapeRibbon.tabIndex = on ? 0 : -1;
     }
 
     function setPhase(p) {
       phase = clamp(p, 0, 1);
       lastPhase = phase;
-      scrubSlider.value = String(Math.round(phase * 1000));
+      updateTapeHead(phase);
       posOut.textContent = String(Math.round(phase * 100));
     }
 
@@ -132,9 +160,9 @@
     async function setBufferFromAudioData(audioBuf) {
       buf = audioBuf;
       setPhase(0);
-      scrubSlider.disabled = false;
+      setRibbonEnabled(true);
       updateLenTag();
-      hint.textContent = "Drag the scrub slider through your clip";
+      hint.textContent = "Drag the tape ribbon through your clip";
       playGrain(0, 1);
     }
 
@@ -144,7 +172,7 @@
         const ab = await blob.arrayBuffer();
         const audioBuf = await ctx.decodeAudioData(ab.slice(0));
         await setBufferFromAudioData(audioBuf);
-        setStatus("status", "Recorded — scrub with the slider", "ok");
+        setStatus("status", "Recorded — scrub the ribbon", "ok");
       } catch {
         setStatus("status", "Could not use recording", "warn");
       }
@@ -205,7 +233,7 @@
       const captured = bufferFromScriptCapture();
       if (captured) {
         void setBufferFromAudioData(captured);
-        setStatus("status", "Recorded — scrub with the slider", "ok");
+        setStatus("status", "Recorded — scrub the ribbon", "ok");
       } else {
         setStatus("status", "Too short — hold longer", "warn");
       }
@@ -284,14 +312,18 @@
       }
     }
 
-    function scrubFromSlider() {
+    function scrubAt(p, { force = false } = {}) {
       const now = performance.now();
-      if (now - lastScrubAt < SCRUB_THROTTLE_MS) return;
+      if (!force && now - lastScrubAt < SCRUB_THROTTLE_MS) {
+        updateTapeHead(p);
+        posOut.textContent = String(Math.round(p * 100));
+        return;
+      }
       lastScrubAt = now;
 
-      const p = phaseFromSlider();
       const delta = p - lastPhase;
       phase = p;
+      updateTapeHead(p);
       posOut.textContent = String(Math.round(p * 100));
 
       let rate = 1;
@@ -303,44 +335,83 @@
       lastPhase = p;
     }
 
-    recordBtn.addEventListener("pointerdown", async (e) => {
-      e.preventDefault();
-      primeMicStream();
-      await startAudio(!built ? build : undefined);
-      if (!built || !ctx) return;
-      if (!(await ensureMic())) return;
-      recPointer = e.pointerId;
-      recordBtn.setPointerCapture(e.pointerId);
-      startRecording();
-    });
-
-    const endRec = (e) => {
-      if (e.pointerId !== recPointer) return;
+    function endRecordHold() {
       recPointer = null;
-      if (recordBtn.hasPointerCapture(e.pointerId)) recordBtn.releasePointerCapture(e.pointerId);
       stopRecording();
-    };
-    recordBtn.addEventListener("pointerup", endRec);
-    recordBtn.addEventListener("pointercancel", endRec);
-    recordBtn.addEventListener("lostpointercapture", () => {
-      if (recording) stopRecording();
-      recPointer = null;
+      if (recEndPointer) {
+        window.removeEventListener("pointerup", recEndPointer);
+        window.removeEventListener("pointercancel", recEndPointer);
+        recEndPointer = null;
+      }
+    }
+
+    recordBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (recording) return;
+      void (async () => {
+        primeMicStream();
+        await startAudio(!built ? build : undefined);
+        if (!built || !ctx) return;
+        if (!(await ensureMic())) return;
+        recPointer = e.pointerId;
+        try {
+          recordBtn.setPointerCapture(e.pointerId);
+        } catch {
+          /* noop */
+        }
+        recEndPointer = (ev) => {
+          if (ev.pointerId !== recPointer) return;
+          endRecordHold();
+          try {
+            if (recordBtn.hasPointerCapture(ev.pointerId)) recordBtn.releasePointerCapture(ev.pointerId);
+          } catch {
+            /* noop */
+          }
+        };
+        window.addEventListener("pointerup", recEndPointer);
+        window.addEventListener("pointercancel", recEndPointer);
+        startRecording();
+      })();
     });
 
-    scrubSlider.addEventListener("input", async () => {
-      await startAudio(!built ? build : undefined);
-      if (!buf) return;
-      scrubFromSlider();
-    });
+    function endScrub() {
+      scrubbing = false;
+      scrubPointer = null;
+      tapeRibbon.classList.remove("active");
+    }
 
-    scrubSlider.addEventListener("change", async () => {
+    tapeRibbon.addEventListener("pointerdown", async (e) => {
+      if (tapeRibbon.classList.contains("is-disabled") || !buf) return;
+      e.preventDefault();
       await startAudio(!built ? build : undefined);
       if (!buf) return;
-      lastScrubAt = 0;
-      const p = phaseFromSlider();
+      scrubbing = true;
+      scrubPointer = e.pointerId;
+      tapeRibbon.classList.add("active");
+      try {
+        tapeRibbon.setPointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+      const p = phaseFromClientX(e.clientX);
       setPhase(p);
-      playGrain(p, 1);
+      lastScrubAt = 0;
+      scrubAt(p, { force: true });
     });
+
+    tapeRibbon.addEventListener("pointermove", (e) => {
+      if (!scrubbing || e.pointerId !== scrubPointer) return;
+      scrubAt(phaseFromClientX(e.clientX));
+    });
+
+    tapeRibbon.addEventListener("pointerup", (e) => {
+      if (e.pointerId !== scrubPointer) return;
+      scrubAt(phaseFromClientX(e.clientX), { force: true });
+      endScrub();
+    });
+
+    tapeRibbon.addEventListener("pointercancel", endScrub);
+    tapeRibbon.addEventListener("lostpointercapture", endScrub);
   </script>
 </body>
 </html>
