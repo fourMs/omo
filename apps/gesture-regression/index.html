@@ -49,7 +49,7 @@
 
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-    let ctx, master, osc, amp, filt, built = false;
+    let ctx, master, osc, osc2, amp, pre, shaper, filt, built = false;
     let holding = false;
     let activeId = null;
     let mode = "train";
@@ -58,7 +58,39 @@
     let lastBeta = 0;
 
     function betaToCut(b) {
-      return clamp(400 + Math.abs(b) * 40, 200, 6000);
+      // Wider range so training poses sound more distinct.
+      return clamp(260 + Math.abs(b) * 85, 120, 12000);
+    }
+
+    function shaperCurve(amount = 0.6, n = 2048) {
+      const k = clamp(amount, 0, 1) * 45 + 1;
+      const curve = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const x = (i * 2) / (n - 1) - 1;
+        curve[i] = Math.tanh(k * x) / Math.tanh(k);
+      }
+      return curve;
+    }
+
+    function applySynthFromCut(cut, when = ctx?.currentTime ?? 0) {
+      if (!built || !ctx) return;
+      const cutHz = clamp(cut, 120, 12000);
+      // Normalize for dramatic timbre shifts.
+      const n = clamp((Math.log(cutHz) - Math.log(120)) / (Math.log(12000) - Math.log(120)), 0, 1);
+
+      // Stronger filter movement + resonance + distortion = clearly audible differences.
+      filt.frequency.setTargetAtTime(cutHz, when, 0.05);
+      filt.Q.setTargetAtTime(3 + n * 14, when, 0.08);
+      pre.gain.setTargetAtTime(1.2 + n * 6.5, when, 0.05);
+      shaper.curve = shaperCurve(0.35 + n * 0.6);
+
+      // Small pitch shift so gestures sound different even on tiny speakers.
+      const baseHz = 95 + n * 190;
+      osc.frequency.setTargetAtTime(baseHz, when, 0.06);
+      osc2.frequency.setTargetAtTime(baseHz * 2, when, 0.06);
+      osc2.detune.setTargetAtTime(-18 + n * 36, when, 0.08);
+
+      document.getElementById("cutOut").textContent = `${cutHz | 0}`;
     }
 
     function predict(b) {
@@ -101,17 +133,30 @@
       ctx = c;
       ({ master } = createMasterBus(c, 0.5));
       osc = ctx.createOscillator();
+      osc2 = ctx.createOscillator();
       amp = ctx.createGain();
+      pre = ctx.createGain();
+      shaper = ctx.createWaveShaper();
       filt = ctx.createBiquadFilter();
       filt.type = "lowpass";
-      filt.Q.value = 6;
+      filt.Q.value = 8;
       osc.type = "sawtooth";
-      osc.frequency.value = 120;
+      osc.frequency.value = 140;
+      osc2.type = "square";
+      osc2.frequency.value = 280;
+      osc2.detune.value = 0;
       amp.gain.value = 0;
-      osc.connect(filt);
+      pre.gain.value = 2.2;
+      shaper.oversample = "4x";
+      shaper.curve = shaperCurve(0.55);
+      osc.connect(pre);
+      osc2.connect(pre);
+      pre.connect(shaper);
+      shaper.connect(filt);
       filt.connect(amp);
       amp.connect(master);
       osc.start();
+      osc2.start();
       built = true;
     }
 
@@ -128,8 +173,7 @@
         lastBeta = beta;
         if (!holding || !built || !ctx) return;
         const cut = mode === "train" ? betaToCut(beta) : predict(beta);
-        filt.frequency.setTargetAtTime(cut, ctx.currentTime, 0.06);
-        document.getElementById("cutOut").textContent = `${cut | 0}`;
+        applySynthFromCut(cut, ctx.currentTime);
         if (mode === "train") {
           const last = train[train.length - 1];
           if (!last || Math.abs(last.b - beta) > 2) {
@@ -154,10 +198,10 @@
       pad.classList.add("active");
       dot.style.opacity = "1";
       osc.frequency.setTargetAtTime(120, ctx.currentTime, 0.02);
+      osc2.frequency.setTargetAtTime(240, ctx.currentTime, 0.02);
       amp.gain.setTargetAtTime(0.22, ctx.currentTime, 0.02);
       const cut = mode === "train" ? betaToCut(lastBeta) : predict(lastBeta);
-      filt.frequency.setTargetAtTime(cut, ctx.currentTime, 0.02);
-      document.getElementById("cutOut").textContent = `${cut | 0}`;
+      applySynthFromCut(cut, ctx.currentTime);
     }
 
     function release(e) {

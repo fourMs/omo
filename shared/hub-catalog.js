@@ -144,14 +144,14 @@ export const HUB_APPS = [
   },
   {
     href: "apps/fm-touch/",
-    title: "Fm Touch",
+    title: "FM Touch",
     section: "synthesis",
     synth: "2-op FM · finger or tilt",
     sensors: "Touch · tilt",
   },
   {
     href: "apps/fm-matrix/",
-    title: "Fm Matrix",
+    title: "FM Matrix",
     section: "synthesis",
     synth: "FM matrix",
     sensors: "Touch",
