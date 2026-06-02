@@ -2,7 +2,7 @@
  * Crystalis-style bowed bands + trackpad bowing (Ge Wang / SMELT crystalis.ck).
  */
 
-import { midiToFreq } from "./audio.js";
+import { getAppOutput, midiToFreq } from "./audio.js";
 import { createBowedString } from "./bowed-string.js";
 import { createKSPool, karplusPluck } from "./ks.js";
 import {
@@ -215,6 +215,6 @@ export function createCrystalisMasterBus(ctx, volume = 0.32) {
   comp.attack.value = 0.004;
   comp.release.value = 0.12;
   master.connect(comp);
-  comp.connect(ctx.destination);
+  comp.connect(getAppOutput(ctx));
   return { master, comp };
 }

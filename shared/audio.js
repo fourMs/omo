@@ -9,6 +9,65 @@ export function createAudioContext() {
 
 let sharedCtx = null;
 
+/** App-wide output boost after per-instrument gain (1 = default, 1.5 = +50%). */
+const APP_VOL_MIN = 1;
+const APP_VOL_MAX = 1.5;
+const APP_VOL_STORAGE = "omo-app-volume-boost";
+
+let appOutputGain = null;
+let appVolumeBoost = APP_VOL_MIN;
+
+function readStoredVolumeBoost() {
+  try {
+    const v = parseFloat(localStorage.getItem(APP_VOL_STORAGE));
+    if (Number.isFinite(v) && v >= APP_VOL_MIN && v <= APP_VOL_MAX) return v;
+  } catch {
+    /* noop */
+  }
+  return APP_VOL_MIN;
+}
+
+appVolumeBoost = readStoredVolumeBoost();
+
+/** Current output multiplier (1…1.5). */
+export function getAppVolumeBoost() {
+  return appVolumeBoost;
+}
+
+/** @param {number} boost 1 = 100% (default), 1.5 = +50% */
+export function setAppVolumeBoost(boost) {
+  appVolumeBoost = Math.max(APP_VOL_MIN, Math.min(APP_VOL_MAX, boost));
+  try {
+    localStorage.setItem(APP_VOL_STORAGE, String(appVolumeBoost));
+  } catch {
+    /* noop */
+  }
+  if (appOutputGain) appOutputGain.gain.value = appVolumeBoost;
+}
+
+/** Slider percent 100…150 ↔ boost 1…1.5. */
+export function appVolumePercentToBoost(percent) {
+  const p = Math.max(100, Math.min(150, percent));
+  return APP_VOL_MIN + ((p - 100) / 50) * (APP_VOL_MAX - APP_VOL_MIN);
+}
+
+export function appVolumeBoostToPercent(boost = appVolumeBoost) {
+  return Math.round(100 + ((boost - APP_VOL_MIN) / (APP_VOL_MAX - APP_VOL_MIN)) * 50);
+}
+
+/**
+ * Final stage before device output — all instrument audio should route here.
+ * @param {AudioContext} ctx
+ */
+export function getAppOutput(ctx) {
+  if (!appOutputGain || appOutputGain.context !== ctx) {
+    appOutputGain = ctx.createGain();
+    appOutputGain.gain.value = appVolumeBoost;
+    appOutputGain.connect(ctx.destination);
+  }
+  return appOutputGain;
+}
+
 export function getAudioContext() {
   if (!sharedCtx) sharedCtx = createAudioContext();
   return sharedCtx;
@@ -117,6 +176,6 @@ export function createMasterBus(ctx, volume = 0.7) {
   comp.threshold.value = -18;
   comp.ratio.value = 3;
   master.connect(comp);
-  comp.connect(ctx.destination);
+  comp.connect(getAppOutput(ctx));
   return { master, comp };
 }

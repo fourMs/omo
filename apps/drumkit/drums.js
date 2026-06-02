@@ -1,6 +1,7 @@
 /* drums.js – Web Audio drum machine */
 
 import { bindLearn, startAudio } from '../../shared/app.js';
+import { getAppOutput } from '../../shared/audio.js';
 
 bindLearn();
 
@@ -17,7 +18,7 @@ bindLearn();
       ctx = c;
       masterGain = ctx.createGain();
       masterGain.gain.value = parseFloat(volumeSlider.value);
-      masterGain.connect(ctx.destination);
+      masterGain.connect(getAppOutput(ctx));
     } : undefined);
   }
 

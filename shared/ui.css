@@ -147,6 +147,41 @@ body.app-shell .readout-row:has(button) {
   z-index: 2;
 }
 
+.app-volume-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.22rem 0.55rem;
+  padding-left: max(0.55rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.55rem, env(safe-area-inset-right, 0px));
+  background: #111827;
+  border-bottom: 1px solid #2d3548;
+  font-size: 0.72rem;
+  z-index: 9;
+}
+
+.app-volume-bar label {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.app-volume-bar input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  max-width: 14rem;
+  margin: 0 auto;
+  min-height: 28px;
+}
+
+.app-volume-val {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
 .hub-header > p,
 .hub-tips,
 .axis-hint,

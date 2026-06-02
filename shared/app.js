@@ -1,7 +1,15 @@
 /**
  * Shared UI helpers — learn panel, status, iOS-safe audio unlock.
  */
-import { getAudioContext, primeMicStream, unlockAudio } from "./audio.js";
+import {
+  appVolumeBoostToPercent,
+  appVolumePercentToBoost,
+  getAppVolumeBoost,
+  getAudioContext,
+  primeMicStream,
+  setAppVolumeBoost,
+  unlockAudio,
+} from "./audio.js";
 import { renderQrCanvas } from "./qr.js";
 import { injectLearnPedagogy } from "./learn-pedagogy.js";
 import { loadA11yPreference } from "./workshop.js";
@@ -10,6 +18,8 @@ loadA11yPreference();
 
 const AUDIO_TOGGLE_ID = "audioToggle";
 const HEADER_CONTROLS_ID = "headerControls";
+const APP_VOLUME_BAR_ID = "appVolumeBar";
+const APP_VOLUME_ID = "appVolume";
 const QR_BTN_ID = "qrBtn";
 const QR_PANEL_ID = "qrPanel";
 let audioOn = false;
@@ -17,8 +27,37 @@ let qrBound = false;
 let optionalBootFn = null;
 let bootNeedsMic = false;
 
+/** Volume bar under header (instrument apps only): 100% default, up to +50%. */
+export function initAppVolumeBar() {
+  if (document.body.classList.contains("hub")) return;
+  if (document.getElementById(APP_VOLUME_BAR_ID)) return;
+  const header = document.querySelector(".app-header");
+  if (!header) return;
+
+  const bar = document.createElement("div");
+  bar.className = "app-volume-bar";
+  bar.id = APP_VOLUME_BAR_ID;
+  const pct = appVolumeBoostToPercent(getAppVolumeBoost());
+  bar.innerHTML = `
+    <label for="${APP_VOLUME_ID}">Volume</label>
+    <input type="range" id="${APP_VOLUME_ID}" min="100" max="150" step="1" value="${pct}" aria-valuemin="100" aria-valuemax="150" aria-valuenow="${pct}" />
+    <span class="app-volume-val" id="appVolumeVal">${pct}%</span>
+  `;
+  header.insertAdjacentElement("afterend", bar);
+
+  const slider = document.getElementById(APP_VOLUME_ID);
+  const valEl = document.getElementById("appVolumeVal");
+  slider?.addEventListener("input", () => {
+    const p = parseInt(slider.value, 10);
+    setAppVolumeBoost(appVolumePercentToBoost(p));
+    if (valEl) valEl.textContent = `${p}%`;
+    slider.setAttribute("aria-valuenow", String(p));
+  });
+}
+
 /** Group Learn + Audio on/off in the header (upper right). Safe to call more than once. */
 export function initHeaderControls() {
+  initAppVolumeBar();
   const header = document.querySelector(".app-header, .hub-header");
   if (!header) return;
 
@@ -252,6 +291,7 @@ export async function startAudio(initFn) {
   const ctx = getAudioContext();
   pingIOSUnlock(ctx);
   await unlockAudio(ctx);
+  setAppVolumeBoost(getAppVolumeBoost());
   if (initFn) await initFn(ctx);
   setAudioActive(true);
   return ctx;

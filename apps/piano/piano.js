@@ -1,6 +1,7 @@
 /* piano.js – Web Audio piano (three octaves, mobile touch) */
 
 import { bindLearn, startAudio } from '../../shared/app.js';
+import { getAppOutput } from '../../shared/audio.js';
 
 bindLearn();
 
@@ -42,7 +43,7 @@ bindLearn();
   function buildReverb() {
     masterGain = ctx.createGain();
     masterGain.gain.value = parseFloat(volumeSlider.value);
-    masterGain.connect(ctx.destination);
+    masterGain.connect(getAppOutput(ctx));
 
     const rate = ctx.sampleRate;
     const length = rate * 2.5;
