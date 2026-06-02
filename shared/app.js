@@ -27,7 +27,7 @@ let qrBound = false;
 let optionalBootFn = null;
 let bootNeedsMic = false;
 
-/** Volume bar under header (instrument apps only): 100% default, up to +50%. */
+/** Volume bar under header (instrument apps only): 50%–150%, default 100%. */
 export function initAppVolumeBar() {
   if (document.body.classList.contains("hub")) return;
   if (document.getElementById(APP_VOLUME_BAR_ID)) return;
@@ -40,7 +40,7 @@ export function initAppVolumeBar() {
   const pct = appVolumeBoostToPercent(getAppVolumeBoost());
   bar.innerHTML = `
     <label for="${APP_VOLUME_ID}">Volume</label>
-    <input type="range" id="${APP_VOLUME_ID}" min="100" max="150" step="1" value="${pct}" aria-valuemin="100" aria-valuemax="150" aria-valuenow="${pct}" />
+    <input type="range" id="${APP_VOLUME_ID}" min="50" max="150" step="1" value="${pct}" aria-valuemin="50" aria-valuemax="150" aria-valuenow="${pct}" />
     <span class="app-volume-val" id="appVolumeVal">${pct}%</span>
   `;
   header.insertAdjacentElement("afterend", bar);

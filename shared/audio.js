@@ -9,9 +9,10 @@ export function createAudioContext() {
 
 let sharedCtx = null;
 
-/** App-wide output boost after per-instrument gain (1 = default, 1.5 = +50%). */
-const APP_VOL_MIN = 1;
+/** App-wide output gain after per-instrument level (0.5…1.5 = 50%…150%). */
+const APP_VOL_MIN = 0.5;
 const APP_VOL_MAX = 1.5;
+const APP_VOL_DEFAULT = 1;
 const APP_VOL_STORAGE = "omo-app-volume-boost";
 
 let appOutputGain = null;
@@ -24,7 +25,7 @@ function readStoredVolumeBoost() {
   } catch {
     /* noop */
   }
-  return APP_VOL_MIN;
+  return APP_VOL_DEFAULT;
 }
 
 appVolumeBoost = readStoredVolumeBoost();
@@ -34,7 +35,7 @@ export function getAppVolumeBoost() {
   return appVolumeBoost;
 }
 
-/** @param {number} boost 1 = 100% (default), 1.5 = +50% */
+/** @param {number} boost 0.5…1.5 (50%…150%); default 1 = 100% */
 export function setAppVolumeBoost(boost) {
   appVolumeBoost = Math.max(APP_VOL_MIN, Math.min(APP_VOL_MAX, boost));
   try {
@@ -45,14 +46,14 @@ export function setAppVolumeBoost(boost) {
   if (appOutputGain) appOutputGain.gain.value = appVolumeBoost;
 }
 
-/** Slider percent 100…150 ↔ boost 1…1.5. */
+/** Slider percent 50…150 ↔ boost 0.5…1.5. */
 export function appVolumePercentToBoost(percent) {
-  const p = Math.max(100, Math.min(150, percent));
-  return APP_VOL_MIN + ((p - 100) / 50) * (APP_VOL_MAX - APP_VOL_MIN);
+  const p = Math.max(50, Math.min(150, percent));
+  return APP_VOL_MIN + ((p - 50) / 100) * (APP_VOL_MAX - APP_VOL_MIN);
 }
 
 export function appVolumeBoostToPercent(boost = appVolumeBoost) {
-  return Math.round(100 + ((boost - APP_VOL_MIN) / (APP_VOL_MAX - APP_VOL_MIN)) * 50);
+  return Math.round(50 + ((boost - APP_VOL_MIN) / (APP_VOL_MAX - APP_VOL_MIN)) * 100);
 }
 
 /**

@@ -18,7 +18,7 @@ The apps should (in theory) work in all modern browsers, but we have found they 
 2. Turn **Audio on** (top right) if sound does not start on first touch.
 3. Tap **Learn** for how to play; **QR** shares a link to the same app for the group.
 4. Allow **microphone**, **motion**, or **camera** when prompted (browser and OS settings).
-5. Turn volume to at least **70%**; disable silent mode on iPhone.
+5. Use the **Volume** bar under the header (**50%–150%**, default 100%) to match loud/quiet phones; also raise system volume and disable silent mode on iPhone.
 6. **Add to Home Screen** for a more full-screen, offline-friendly install.
 
 ### Playing surfaces
@@ -51,11 +51,11 @@ Compact list — full tables with folder names: **[docs/CATALOG.md](docs/CATALOG
 
 | Resource | Contents |
 |----------|----------|
-| **[App catalog](docs/CATALOG.md)** | All hub apps by section (synthesis · sensors · folder slug) |
+| [App catalog](docs/CATALOG.md) | All hub apps by section (synthesis · sensors · folder slug) |
 | [Workshop guide](docs/WORKSHOP-GUIDE.md) | 45-minute facilitator script |
 | [Ideas](docs/IDEAS.md) | Backlog and shipped history |
 | [Device support](support.html) | Sensor API checklist before workshops |
-| **[Wiki](https://github.com/fourMs/omo/wiki)** | Extended workshop material ([`docs/wiki/`](docs/wiki/)) |
+| [Wiki](https://github.com/fourMs/omo/wiki) | Extended workshop material ([`docs/wiki/`](docs/wiki/)) |
 
 ## License
 
