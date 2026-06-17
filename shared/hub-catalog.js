@@ -206,6 +206,13 @@ export const HUB_APPS = [
     sensors: "Mic · touch",
   },
   {
+    href: "apps/spectral-soup/",
+    title: "Spectral Soup",
+    section: "texture",
+    synth: "Averaged FFT soup pad",
+    sensors: "Mic · touch",
+  },
+  {
     href: "apps/tap-bloom/",
     title: "Tap Bloom",
     section: "texture",

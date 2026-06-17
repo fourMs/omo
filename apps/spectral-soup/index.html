@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Spectral Soup — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .spectral-soup-app .stage {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+    }
+    .spectral-soup-app .center {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+    .spectral-soup-app .rec-btn {
+      --heat: 0;
+      appearance: none;
+      padding: 0;
+      cursor: pointer;
+      font-family: inherit;
+      width: min(52vmin, 240px);
+      height: min(52vmin, 240px);
+      border-radius: 50%;
+      border: 4px solid rgba(148, 163, 184, 0.35);
+      background: radial-gradient(circle at 38% 32%, rgba(56, 189, 248, 0.18) 0%, #1a2233 68%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      touch-action: manipulation;
+      color: var(--text);
+      flex-shrink: 0;
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.45),
+        0 0 44px rgba(56, 189, 248, calc(0.08 + var(--heat) * 0.42)),
+        inset 0 0 0 1px rgba(56, 189, 248, calc(0.06 + var(--heat) * 0.18));
+      transition:
+        border-color 0.12s ease,
+        background 0.12s ease,
+        box-shadow 0.12s ease,
+        transform 0.08s ease;
+    }
+    .spectral-soup-app .rec-btn:active {
+      transform: scale(0.97);
+    }
+    .spectral-soup-app .rec-btn.cooking {
+      border-color: rgba(248, 113, 113, 0.85);
+      background: radial-gradient(circle at 38% 32%, rgba(248, 113, 113, 0.22) 0%, #1a2233 72%);
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.45),
+        0 0 50px rgba(248, 113, 113, 0.35);
+    }
+    .spectral-soup-app .rec-btn.playing {
+      border-color: rgba(251, 191, 36, 0.9);
+      background: radial-gradient(circle at 38% 32%, rgba(251, 191, 36, 0.2) 0%, #1a2233 72%);
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.45),
+        0 0 44px rgba(251, 191, 36, 0.28);
+    }
+    .spectral-soup-app .rec-icon {
+      width: min(22vmin, 72px);
+      height: min(22vmin, 72px);
+      border-radius: 18px;
+      background: rgba(56, 189, 248, 0.5);
+      box-shadow:
+        0 0 0 min(2.2vmin, 10px) rgba(56, 189, 248, 0.14),
+        inset 0 0 0 1px rgba(226, 232, 240, 0.16);
+      flex-shrink: 0;
+      transition: background 0.12s ease, box-shadow 0.12s ease, border-radius 0.15s ease;
+    }
+    .spectral-soup-app .rec-btn.cooking .rec-icon {
+      background: rgba(248, 113, 113, 0.7);
+      box-shadow: 0 0 0 min(2.2vmin, 10px) rgba(248, 113, 113, 0.2);
+      animation: soup-pulse 0.85s ease-in-out infinite;
+    }
+    .spectral-soup-app .rec-btn.playing .rec-icon {
+      background: rgba(251, 191, 36, 0.72);
+      box-shadow: 0 0 0 min(2.2vmin, 10px) rgba(251, 191, 36, 0.18);
+      animation: none;
+    }
+    .spectral-soup-app .label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .spectral-soup-app .hint {
+      margin: 0;
+      padding: 0.35rem 1rem 0.65rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      max-width: 20rem;
+      line-height: 1.35;
+      flex-shrink: 0;
+      align-self: center;
+    }
+    @keyframes soup-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(0.94); }
+    }
+  </style>
+</head>
+<body class="app-shell spectral-soup-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Spectral Soup</h1>
+  </header>
+
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Spectral sonic soup</h2>
+    <p>Turn <strong>Audio on</strong>, allow the <strong>mic</strong>. <strong>Hold</strong> the button to continuously analyse the room and average the spectrum into a thick “soup”.</p>
+    <p><strong>Release</strong> to play the soup as a shimmering pad. Hold again to cook a new soup.</p>
+  </div>
+
+  <p class="status-bar" id="status">Hold to cook spectrum · release to play</p>
+  <div class="readout-row">
+    <p class="value-chip">Mode <strong id="modeOut">idle</strong></p>
+    <p class="value-chip">Cook <strong id="cookOut">0%</strong></p>
+    <p class="value-chip">Partials <strong id="partialsOut">0</strong></p>
+  </div>
+
+  <div class="main-stage stage" id="stage">
+    <div class="center">
+      <button type="button" id="cookBtn" class="rec-btn" aria-label="Hold to cook spectrum">
+        <span class="rec-icon" aria-hidden="true"></span>
+        <span class="label" id="btnLabel">Hold to cook</span>
+      </button>
+    </div>
+    <p class="hint" id="hint">Mic → spectrum average → pad</p>
+  </div>
+
+  <script type="module">
+    import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus, getMicStream, primeMicStream, connectMicAnalyser } from "../../shared/audio.js";
+
+    bindLearn();
+
+    const stage = document.getElementById("stage");
+    const cookBtn = document.getElementById("cookBtn");
+    const btnLabel = document.getElementById("btnLabel");
+    const hint = document.getElementById("hint");
+    const modeOut = document.getElementById("modeOut");
+    const cookOut = document.getElementById("cookOut");
+    const partialsOut = document.getElementById("partialsOut");
+
+    const FFT_SIZE = 2048;
+    const PARTIALS = 48; // more partials = thicker soup
+    const COOK_MAX_MS = 6000;
+    const UPDATE_MS = 55;
+
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    let ctx, master, analyser, micStream;
+    let built = false;
+    let cooking = false;
+    let playing = false;
+    let activePointer = null;
+    let cookTimer = null;
+    let updateTimer = null;
+
+    let freqData = null;
+    let avgBands = null;
+    let frames = 0;
+
+    let partialOscs = [];
+
+    function hzForPartial(i) {
+      // Log scale: emphasize low mids, still reach air.
+      const lo = 70;
+      const hi = 7200;
+      const t = i / (PARTIALS - 1);
+      return lo * Math.pow(hi / lo, t);
+    }
+
+    function captureBands() {
+      if (!analyser || !freqData) return null;
+      analyser.getByteFrequencyData(freqData);
+      const bands = new Float32Array(PARTIALS);
+      const binCount = freqData.length;
+      const per = binCount / PARTIALS;
+      for (let p = 0; p < PARTIALS; p++) {
+        let sum = 0;
+        const i0 = (p * per) | 0;
+        const i1 = Math.min(binCount, ((p + 1) * per) | 0);
+        for (let i = i0; i < i1; i++) sum += freqData[i];
+        bands[p] = sum / Math.max(1, i1 - i0) / 255;
+      }
+      return bands;
+    }
+
+    function resetSoup() {
+      avgBands = new Float32Array(PARTIALS);
+      frames = 0;
+      cookOut.textContent = "0%";
+      cookBtn.style.setProperty("--heat", "0");
+    }
+
+    function accumulateSoup(bands) {
+      if (!avgBands || !bands) return;
+      frames++;
+      const n = frames;
+      // Running mean: avg += (x - avg) / n
+      for (let i = 0; i < PARTIALS; i++) {
+        avgBands[i] += (bands[i] - avgBands[i]) / n;
+      }
+      const pct = clamp((n * UPDATE_MS) / COOK_MAX_MS, 0, 1);
+      cookOut.textContent = `${Math.round(pct * 100)}%`;
+      cookBtn.style.setProperty("--heat", String(pct));
+    }
+
+    function releasePartials() {
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      partialOscs.forEach(({ osc, gn }) => {
+        gn.gain.setTargetAtTime(0, t, 0.06);
+        try { osc.stop(t + 0.12); } catch { /* noop */ }
+      });
+      partialOscs = [];
+      partialsOut.textContent = "0";
+    }
+
+    function buildSoupPad() {
+      releasePartials();
+      if (!ctx || !master || !avgBands) return;
+      const t = ctx.currentTime;
+      let active = 0;
+      for (let i = 0; i < PARTIALS; i++) {
+        // shape: lift quiet bins a bit, tame very loud bins
+        const raw = avgBands[i];
+        const amp = Math.pow(clamp(raw, 0, 1), 1.4);
+        if (amp < 0.02) continue;
+        active++;
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = hzForPartial(i);
+        const gn = ctx.createGain();
+        gn.gain.value = 0;
+        osc.connect(gn);
+        gn.connect(master);
+        osc.start(t);
+        gn.gain.setTargetAtTime(amp * 0.18, t + 0.01, 0.08);
+        partialOscs.push({ osc, gn });
+      }
+      partialsOut.textContent = String(active);
+    }
+
+    function stopPlaying() {
+      if (!playing) return;
+      playing = false;
+      cookBtn.classList.remove("playing");
+      btnLabel.textContent = "Hold to cook";
+      modeOut.textContent = "idle";
+      releasePartials();
+    }
+
+    function startPlaying() {
+      if (!avgBands || frames < 2) {
+        setStatus("status", "Hold a bit longer to cook a soup", "warn");
+        return;
+      }
+      playing = true;
+      cookBtn.classList.add("playing");
+      btnLabel.textContent = "Playing soup";
+      modeOut.textContent = "play";
+      buildSoupPad();
+      setStatus("status", "Soup playing — hold to cook a new one", "ok");
+    }
+
+    function stopCooking() {
+      if (!cooking) return;
+      cooking = false;
+      cookBtn.classList.remove("cooking");
+      btnLabel.textContent = "Hold to cook";
+      clearTimeout(cookTimer);
+      cookTimer = null;
+      clearInterval(updateTimer);
+      updateTimer = null;
+    }
+
+    function startCooking() {
+      if (!built || !analyser) return;
+      stopPlaying();
+      resetSoup();
+      cooking = true;
+      cookBtn.classList.add("cooking");
+      btnLabel.textContent = "Cooking…";
+      modeOut.textContent = "cook";
+      hint.textContent = "Listening… keep holding";
+      setStatus("status", "Cooking spectrum… release to play", "ok");
+
+      updateTimer = setInterval(() => {
+        try {
+          const bands = captureBands();
+          if (bands) accumulateSoup(bands);
+        } catch {
+          /* keep cooking loop alive */
+        }
+      }, UPDATE_MS);
+
+      cookTimer = setTimeout(() => {
+        if (cooking && activePointer != null) stopCooking();
+      }, COOK_MAX_MS);
+    }
+
+    async function boot(c) {
+      ctx = c;
+      if (built) return;
+      ({ master } = createMasterBus(ctx, 0.55));
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = FFT_SIZE;
+      analyser.smoothingTimeConstant = 0.7;
+      freqData = new Uint8Array(analyser.frequencyBinCount);
+      resetSoup();
+      try {
+        micStream = await getMicStream();
+        connectMicAnalyser(ctx, micStream, analyser, { inputGain: 1.6 });
+      } catch {
+        setStatus("status", "Mic denied — cannot cook soup", "warn");
+      }
+      built = true;
+    }
+
+    cookBtn.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      primeMicStream();
+      await startAudio(boot);
+      if (!built || !micStream) return;
+      activePointer = e.pointerId;
+      cookBtn.setPointerCapture(e.pointerId);
+      startCooking();
+    });
+
+    const release = (e) => {
+      if (e.pointerId !== activePointer) return;
+      activePointer = null;
+      if (cookBtn.hasPointerCapture(e.pointerId)) cookBtn.releasePointerCapture(e.pointerId);
+      stopCooking();
+      hint.textContent = "Mic → spectrum average → pad";
+      startPlaying();
+    };
+
+    cookBtn.addEventListener("pointerup", release);
+    cookBtn.addEventListener("pointercancel", release);
+    cookBtn.addEventListener("lostpointercapture", () => {
+      // If the pointer was lost mid-cook, stop cooking but don't auto-play.
+      stopCooking();
+      activePointer = null;
+    });
+  </script>
+</body>
+</html>
