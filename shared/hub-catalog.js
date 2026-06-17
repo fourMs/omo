@@ -185,6 +185,13 @@ export const HUB_APPS = [
     sensors: "Mic · touch · tilt",
   },
   {
+    href: "apps/hold-loop-tilt/",
+    title: "Hold Loop Tilt",
+    section: "texture",
+    synth: "Hold record → loop",
+    sensors: "Mic · touch · tilt",
+  },
+  {
     href: "apps/granular-tilt/",
     title: "Granular Tilt",
     section: "texture",

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Hold Loop Tilt — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .hold-loop-app .stage {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+    }
+    .hold-loop-app .center {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+    .hold-loop-app .rec-btn {
+      --tilt-h: 205;
+      --tilt-s: 48%;
+      --tilt-l: 46%;
+      --tilt-glow: 0.22;
+      appearance: none;
+      padding: 0;
+      cursor: pointer;
+      font-family: inherit;
+      width: min(52vmin, 240px);
+      height: min(52vmin, 240px);
+      border-radius: 50%;
+      border: 4px solid hsl(var(--tilt-h), var(--tilt-s), calc(var(--tilt-l) + 8%));
+      background: radial-gradient(
+        circle at 38% 32%,
+        hsl(var(--tilt-h), calc(var(--tilt-s) - 8%), calc(var(--tilt-l) - 6%)) 0%,
+        #1a2233 68%
+      );
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      touch-action: manipulation;
+      color: var(--text);
+      flex-shrink: 0;
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.45),
+        0 0 40px hsla(var(--tilt-h), 70%, 50%, var(--tilt-glow));
+      transition:
+        border-color 0.1s ease,
+        background 0.1s ease,
+        box-shadow 0.1s ease,
+        transform 0.08s ease;
+    }
+    .hold-loop-app .rec-btn:active {
+      transform: scale(0.97);
+    }
+    .hold-loop-app .rec-btn .rec-icon {
+      width: min(22vmin, 72px);
+      height: min(22vmin, 72px);
+      border-radius: 50%;
+      background: hsl(var(--tilt-h), calc(var(--tilt-s) + 18%), var(--tilt-l));
+      box-shadow: 0 0 0 min(2.2vmin, 10px) hsla(var(--tilt-h), 75%, 52%, var(--tilt-glow));
+      flex-shrink: 0;
+      transition: background 0.1s ease, box-shadow 0.1s ease, border-radius 0.15s ease;
+    }
+    .hold-loop-app .rec-btn.recording {
+      border-color: #f87171;
+      background: radial-gradient(circle at 38% 32%, #5c2a2a 0%, #1a2233 70%);
+      box-shadow: 0 0 32px rgba(248, 113, 113, 0.35);
+    }
+    .hold-loop-app .rec-btn.recording .rec-icon {
+      border-radius: 10px;
+      width: min(18vmin, 52px);
+      height: min(18vmin, 52px);
+      background: #ef4444;
+      box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.28);
+      animation: hold-loop-rec-pulse 0.85s ease-in-out infinite;
+    }
+    .hold-loop-app .rec-btn.looping:not(.recording) {
+      border-color: hsl(var(--tilt-h), var(--tilt-s), calc(var(--tilt-l) + 12%));
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 0 36px hsla(var(--tilt-h), 65%, 55%, calc(var(--tilt-glow) + 0.08));
+    }
+    .hold-loop-app .rec-btn.looping:not(.recording) .rec-icon {
+      background: hsl(var(--tilt-h), calc(var(--tilt-s) + 22%), calc(var(--tilt-l) + 8%));
+      box-shadow: 0 0 0 min(2.2vmin, 10px) hsla(var(--tilt-h), 80%, 58%, calc(var(--tilt-glow) + 0.1));
+    }
+    .hold-loop-app .rec-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .hold-loop-app .hint {
+      margin: 0;
+      padding: 0.35rem 1rem 0.65rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      max-width: 18rem;
+      line-height: 1.35;
+      flex-shrink: 0;
+      align-self: center;
+    }
+    @keyframes hold-loop-rec-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(0.94); }
+    }
+  </style>
+</head>
+<body class="app-shell hold-loop-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Hold Loop Tilt</h1>
+  </header>
+
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Hold → record</h2>
+    <p>Turn <strong>Audio on</strong>, then <strong>hold</strong> the button to record from the mic. <strong>Release</strong> to immediately loop the sound.</p>
+    <p><strong>Tilt</strong> controls the loop: <strong>forward/back</strong> changes <strong>speed</strong>, <strong>left/right</strong> changes <strong>pitch</strong>.</p>
+  </div>
+
+  <p class="status-bar" id="status">Hold to record · release to loop</p>
+  <div class="control-row" aria-live="polite" aria-label="Loop controls">
+    <label>Speed</label>
+    <span><strong id="speedOut">—</strong>×</span>
+    <label>Pitch</label>
+    <span><strong id="pitchOut">—</strong>¢</span>
+  </div>
+
+  <div class="main-stage stage" id="stage">
+    <div class="center">
+      <button type="button" id="recordBtn" class="rec-btn" aria-label="Hold to record">
+        <span class="rec-icon" aria-hidden="true"></span>
+        <span class="rec-label" id="btnLabel">Hold to record</span>
+      </button>
+    </div>
+    <p class="hint" id="hint">Tilt for speed/pitch · hold to record</p>
+  </div>
+
+  <script type="module">
+    import { bindLearn, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus, getMicStream, primeMicStream } from "../../shared/audio.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+
+    const stage = document.getElementById("stage");
+    const recordBtn = document.getElementById("recordBtn");
+    const hint = document.getElementById("hint");
+    const btnLabel = document.getElementById("btnLabel");
+    const speedOut = document.getElementById("speedOut");
+    const pitchOut = document.getElementById("pitchOut");
+
+    const MAX_RECORD_MS = 8000;
+    const DETUNE_MAX_CENTS = 1200;
+    const RATE_MIN = 0.5;
+    const RATE_MAX = 2.0;
+
+    let ctx, master;
+    let built = false;
+    let stream = null;
+    let micReady = false;
+    let tiltReady = false;
+
+    let recording = false;
+    let activePointer = null;
+    let recordTimer = null;
+
+    let mediaRecorder = null;
+    let recordChunks = [];
+    let useMediaRecorder = typeof MediaRecorder !== "undefined";
+
+    let recordSource, recordProcessor, recordSilent, spChunks, spLength;
+
+    let loopBuffer = null;
+    let loopSource = null;
+
+    let playbackRate = 1;
+    let detuneCents = 0;
+    let lastX = 0;
+    let lastY = 0;
+
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    function setTiltVisual(x01, y01) {
+      // x01: -1..1 (gamma), y01: -1..1 (beta)
+      lastX = clamp(x01, -1, 1);
+      lastY = clamp(y01, -1, 1);
+      if (recording) return;
+      const tiltMag01 = clamp(Math.hypot(lastX, lastY) / 1.25, 0, 1);
+      const hue = Math.round(210 - tiltMag01 * 150);
+      const sat = 44 + tiltMag01 * 34;
+      const light = 40 + tiltMag01 * 20;
+      recordBtn.style.setProperty("--tilt-h", String(hue));
+      recordBtn.style.setProperty("--tilt-s", `${sat}%`);
+      recordBtn.style.setProperty("--tilt-l", `${light}%`);
+      recordBtn.style.setProperty("--tilt-glow", String(0.14 + tiltMag01 * 0.42));
+    }
+
+    function applyTiltToLoop() {
+      // Map tilt axes:
+      // - beta (forward/back) -> speed
+      // - gamma (left/right) -> pitch
+      playbackRate = clamp(1 + lastY * 0.65, RATE_MIN, RATE_MAX);
+      detuneCents = Math.round(clamp(lastX, -1, 1) * DETUNE_MAX_CENTS);
+
+      speedOut.textContent = playbackRate.toFixed(2);
+      pitchOut.textContent = String(detuneCents);
+
+      if (!ctx || !loopSource) return;
+      const t = ctx.currentTime;
+      loopSource.playbackRate.setTargetAtTime(playbackRate, t, 0.08);
+      if (typeof loopSource.detune?.setTargetAtTime === "function") {
+        loopSource.detune.setTargetAtTime(detuneCents, t, 0.08);
+      } else if (typeof loopSource.detune === "number") {
+        loopSource.detune = detuneCents;
+      }
+    }
+
+    async function enableTilt() {
+      if (tiltReady) return;
+      const ok = await enableSensors({ needMotion: false, needOrientation: true });
+      tiltReady = true;
+      if (!ok) {
+        // Desktop / no-sensor fallback: pointer position on stage
+        stage.addEventListener("pointermove", (e) => {
+          const r = stage.getBoundingClientRect();
+          const x = (e.clientX - r.left) / Math.max(1, r.width);
+          const y = (e.clientY - r.top) / Math.max(1, r.height);
+          // center-origin: -1..1
+          const x01 = (x - 0.5) * 2;
+          const y01 = (0.5 - y) * 2;
+          setTiltVisual(x01, y01);
+          applyTiltToLoop();
+        }, { passive: true });
+        hint.textContent = "Drag around for speed/pitch · hold to record";
+        return;
+      }
+      onOrientation(({ beta, gamma }) => {
+        // Normalize beta/gamma approximately to -1..1
+        const b = clamp((beta ?? 0) / 70, -1, 1);
+        const g = clamp((gamma ?? 0) / 70, -1, 1);
+        setTiltVisual(g, b);
+        applyTiltToLoop();
+      });
+    }
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(ctx, 0.8));
+      built = true;
+      setTiltVisual(lastX, lastY);
+      applyTiltToLoop();
+    }
+
+    async function ensureMic() {
+      if (micReady) return true;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("status", "Mic not supported", "warn");
+        return false;
+      }
+      try {
+        stream = await getMicStream();
+        micReady = true;
+        return true;
+      } catch {
+        setStatus("status", "Mic denied — allow mic in browser", "warn");
+        return false;
+      }
+    }
+
+    function stopLoop() {
+      if (!loopSource) return;
+      try { loopSource.stop(); } catch { /* already stopped */ }
+      try { loopSource.disconnect(); } catch { /* noop */ }
+      loopSource = null;
+      recordBtn.classList.remove("looping");
+    }
+
+    function startLoop() {
+      if (!loopBuffer || !built) return;
+      stopLoop();
+      loopSource = ctx.createBufferSource();
+      loopSource.buffer = loopBuffer;
+      loopSource.loop = true;
+      loopSource.playbackRate.value = playbackRate;
+      if (typeof loopSource.detune === "number") loopSource.detune = detuneCents;
+      loopSource.connect(master);
+      loopSource.start();
+      recordBtn.classList.add("looping");
+      btnLabel.textContent = "Looping";
+      hint.textContent = "Tilt for speed/pitch · hold again to re-record";
+      setTiltVisual(lastX, lastY);
+    }
+
+    function teardownScriptCapture() {
+      if (recordProcessor) recordProcessor.onaudioprocess = null;
+      try { recordProcessor?.disconnect(); } catch { /* noop */ }
+      try { recordSource?.disconnect(); } catch { /* noop */ }
+      try { recordSilent?.disconnect(); } catch { /* noop */ }
+      recordProcessor = null;
+      recordSource = null;
+      recordSilent = null;
+    }
+
+    function bufferFromScriptCapture() {
+      const minSamples = Math.floor(ctx.sampleRate * 0.08);
+      if (spLength < minSamples) return null;
+      const buf = ctx.createBuffer(1, spLength, ctx.sampleRate);
+      const out = buf.getChannelData(0);
+      let off = 0;
+      for (const chunk of spChunks) {
+        out.set(chunk, off);
+        off += chunk.length;
+      }
+      return buf;
+    }
+
+    function recorderMime() {
+      if (typeof MediaRecorder === "undefined") return "";
+      if (MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) return "audio/webm;codecs=opus";
+      if (MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+      return "";
+    }
+
+    function setRecordingUi(on) {
+      recordBtn.classList.toggle("recording", on);
+      btnLabel.textContent = on ? "Recording…" : "Hold to record";
+      if (!on) setTiltVisual(lastX, lastY);
+    }
+
+    async function commitLoopFromBlob(blob) {
+      hint.textContent = "Processing…";
+      await startAudio();
+      try {
+        const ab = await blob.arrayBuffer();
+        loopBuffer = await ctx.decodeAudioData(ab);
+        startLoop();
+        setStatus("status", "Looping · tilt for speed/pitch", "ok");
+      } catch {
+        hint.textContent = "Tilt for speed/pitch · hold to record";
+        setStatus("status", "Too short — try again", "warn");
+      }
+    }
+
+    async function commitLoopFromScript() {
+      await startAudio();
+      loopBuffer = bufferFromScriptCapture();
+      if (!loopBuffer) {
+        hint.textContent = "Tilt for speed/pitch · hold to record";
+        setStatus("status", "Too short — try again", "warn");
+        return;
+      }
+      startLoop();
+      setStatus("status", "Looping · tilt for speed/pitch", "ok");
+    }
+
+    function startRecording() {
+      if (!stream || recording) return;
+      stopLoop();
+      recording = true;
+      setRecordingUi(true);
+      hint.textContent = "";
+      setStatus("status", "Recording…", "ok");
+
+      if (useMediaRecorder) {
+        recordChunks = [];
+        const mime = recorderMime();
+        try {
+          mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        } catch {
+          useMediaRecorder = false;
+          startRecording();
+          return;
+        }
+        mediaRecorder.ondataavailable = (ev) => {
+          if (ev.data.size > 0) recordChunks.push(ev.data);
+        };
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordChunks, { type: mediaRecorder.mimeType || "audio/mp4" });
+          void commitLoopFromBlob(blob);
+        };
+        mediaRecorder.start(250);
+      } else {
+        spChunks = [];
+        spLength = 0;
+        recordSource = ctx.createMediaStreamSource(stream);
+        recordProcessor = ctx.createScriptProcessor(4096, 1, 1);
+        recordSilent = ctx.createGain();
+        recordSilent.gain.value = 0;
+        recordProcessor.onaudioprocess = (e) => {
+          if (!recording) return;
+          const ch = e.inputBuffer.getChannelData(0);
+          spChunks.push(Float32Array.from(ch));
+          spLength += ch.length;
+        };
+        recordSource.connect(recordProcessor);
+        recordProcessor.connect(recordSilent);
+        recordSilent.connect(ctx.destination);
+      }
+
+      recordTimer = setTimeout(() => {
+        if (recording && activePointer != null) void endRecording();
+      }, MAX_RECORD_MS);
+    }
+
+    async function endRecording() {
+      if (!recording) return;
+      clearTimeout(recordTimer);
+      recordTimer = null;
+      recording = false;
+      setRecordingUi(false);
+
+      if (useMediaRecorder && mediaRecorder?.state === "recording") {
+        mediaRecorder.stop();
+        return;
+      }
+
+      teardownScriptCapture();
+      await commitLoopFromScript();
+    }
+
+    primeSensors({ needMotion: false, needOrientation: true });
+
+    recordBtn.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      primeMicStream();
+      primeSensors({ needMotion: false, needOrientation: true });
+      await startAudio(!built ? (c) => { buildAudio(c); void enableTilt(); } : undefined);
+      if (!(await ensureMic())) return;
+      activePointer = e.pointerId;
+      recordBtn.setPointerCapture(e.pointerId);
+      startRecording();
+    });
+
+    const release = async (e) => {
+      if (e.pointerId !== activePointer) return;
+      activePointer = null;
+      if (recordBtn.hasPointerCapture(e.pointerId)) recordBtn.releasePointerCapture(e.pointerId);
+      await startAudio();
+      await endRecording();
+    };
+
+    recordBtn.addEventListener("pointerup", release);
+    recordBtn.addEventListener("pointercancel", release);
+    recordBtn.addEventListener("lostpointercapture", () => {
+      if (recording) void startAudio().then(() => endRecording());
+      activePointer = null;
+    });
+  </script>
+</body>
+</html>
