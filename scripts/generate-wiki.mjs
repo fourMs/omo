@@ -7,7 +7,7 @@
  */
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SITE = "https://fourms.github.io/omo";
@@ -50,18 +50,16 @@ const REDIRECTS = [
   ["wavetable-scan", "synth-tour", "?engine=wavetable"],
 ];
 
-function parseCatalogEntries(catalog) {
-  const entries = [];
-  const re =
-    /href:\s*"apps\/([^/]+)\/"[\s\S]*?title:\s*"([^"]*)"[\s\S]*?section:\s*"([^"]*)"[\s\S]*?synth:\s*"([^"]*)"[\s\S]*?sensors:\s*"([^"]*)"(?:[\s\S]*?teaches:\s*"([^"]*)")?/g;
-  for (const m of catalog.matchAll(re)) {
-    entries.push({ slug: m[1], title: m[2], section: m[3], synth: m[4], sensors: m[5], teaches: m[6] || "" });
-  }
-  return entries;
-}
-
-const catalog = fs.readFileSync(path.join(root, "shared/hub-catalog.js"), "utf8");
-const entries = parseCatalogEntries(catalog);
+// Import the catalog module directly — no fragile regex parsing.
+const { HUB_APPS } = await import(pathToFileURL(path.join(root, "shared/hub-catalog.js")).href);
+const entries = HUB_APPS.map((a) => ({
+  slug: a.href.match(/apps\/([^/]+)\//)[1],
+  title: a.title,
+  section: a.section,
+  synth: a.synth,
+  sensors: a.sensors,
+  teaches: a.teaches || "",
+}));
 
 function catalogLines({ site }) {
   const appLink = (a) => (site ? `[${a.title}](${SITE}/apps/${a.slug}/)` : `[${a.title}](../apps/${a.slug}/)`);

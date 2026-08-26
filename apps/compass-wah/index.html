@@ -52,7 +52,13 @@
     import { wireScreenHold } from "../../shared/hold-play.js";
     import { createMotionExpression } from "../../shared/motion-express.js";
     import { playAmpFromTiltAndMotion } from "../../shared/tilt-amp.js";
-    import { enableSensors, onMotion, onOrientation, primeSensors } from "../../shared/sensors.js";
+    import {
+      onMotion,
+      onOrientation,
+      primeSensors,
+      requestMotionPermission,
+      requestOrientationPermission,
+    } from "../../shared/sensors.js";
 
     bindLearn();
     const canvas = document.getElementById("compass");
@@ -64,7 +70,7 @@
 
     // Choir constants (from the former Heading Choir app).
     const VOICE_COUNT = 5;
-    const SECTOR_LABELS = ["N", "NE", "E", "SE", "S"];
+    const SECTOR_LABELS = ["N", "ENE", "SE", "SW", "WNW"]; // sector centres: 0°, 72°, 144°, 216°, 288°
     const BEAM_DEG = 52;
 
     const motionExpr = createMotionExpression({ baseAmp: 0.28 });
@@ -237,9 +243,12 @@
 
     async function initSensors() {
       if (sensorsReady) return true;
-      const ok = await enableSensors(SENSOR_OPTS);
-      if (!ok) {
-        setStatus("status", "Allow orientation + motion in Settings", "warn");
+      // Orientation is the compass — required for both modes. Motion only
+      // enriches Wah (shake vibrato), so a denied motion prompt must not
+      // block the app (Choir never needed it).
+      const [okM, okO] = await Promise.all([requestMotionPermission(), requestOrientationPermission()]);
+      if (!okO) {
+        setStatus("status", "Compass blocked — allow orientation", "warn");
         draw();
         return false;
       }
@@ -249,11 +258,13 @@
         if (typeof b === "number" && Number.isFinite(b) && b !== 0) beta = b;
         applyVoice();
       });
-      onMotion((data) => {
-        if (!holding || mode !== "wah") return;
-        motion = motionExpr.update(data);
-        applyVoice();
-      });
+      if (okM) {
+        onMotion((data) => {
+          if (!holding || mode !== "wah") return;
+          motion = motionExpr.update(data);
+          applyVoice();
+        });
+      }
       sensorsReady = true;
       setStatus("status", mode === "choir" ? "Hold compass and turn your body" : "Hold screen to play", "ok");
       draw();

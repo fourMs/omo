@@ -39,7 +39,14 @@
   <script type="module">
     import { bindLearn, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
-    import { enableSensors, normalizeAccel, onMotion, onOrientation, primeSensors } from "../../shared/sensors.js";
+    import {
+      normalizeAccel,
+      onMotion,
+      onOrientation,
+      primeSensors,
+      requestMotionPermission,
+      requestOrientationPermission,
+    } from "../../shared/sensors.js";
 
     bindLearn();
     const pad = document.getElementById("pad");
@@ -123,6 +130,7 @@
       }
       freqOut.textContent = "—";
       qOut.textContent = "—";
+      updateSensorWarning();
     }
 
     function showFilter(freq, q) {
@@ -184,12 +192,29 @@
       if (mode === "flat" && flat !== wasFlat) applyGate();
     }
 
+    let haveMotion = false;
+    let haveOrientation = false;
+
     async function enableTilt() {
       if (sensorsOn) return;
-      if (await enableSensors(SENSOR_OPTS)) {
-        sensorsOn = true;
-        onMotion(handleMotion);
-        onOrientation(handleOrientation);
+      sensorsOn = true;
+      // Request independently: tilt/shake need motion, ladder/flat need
+      // orientation — a denied motion prompt must not kill the other modes.
+      const [okM, okO] = await Promise.all([requestMotionPermission(), requestOrientationPermission()]);
+      haveMotion = okM;
+      haveOrientation = okO;
+      if (okM) onMotion(handleMotion);
+      if (okO) onOrientation(handleOrientation);
+      updateSensorWarning();
+    }
+
+    function updateSensorWarning() {
+      if (!sensorsOn) return;
+      const needsMotion = mode === "tilt" || mode === "shake";
+      const missing = needsMotion ? !haveMotion : !haveOrientation;
+      if (missing) {
+        freqOut.textContent = "blocked";
+        qOut.textContent = needsMotion ? "allow motion" : "allow tilt";
       }
     }
 

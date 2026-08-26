@@ -224,6 +224,10 @@
     // --- Soup: running mean of the spectrum, played by a fixed partial bank.
     function startSoup() {
       if (souping || !analyser) return;
+      if (!micStream) {
+        setStatus("status", "Mic denied — cannot cook soup", "warn");
+        return;
+      }
       souping = true;
       stopSchedule();
       avgBands = new Float32Array(SOUP_PARTIALS);

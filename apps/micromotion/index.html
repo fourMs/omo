@@ -169,6 +169,10 @@
     async function recalibrate() {
       setStatus("srcOut", "Calibrating — hold still", "warn");
       await tracker.calibrate(2);
+      if (!tracker.state.hasMotion) {
+        setStatus("srcOut", "No motion sensor — open on a phone", "warn");
+        return;
+      }
       setStatus("srcOut", "Hold still", "ok");
     }
 
@@ -287,7 +291,7 @@
         if (now - statTick > 200) {
           statTick = now;
           const st = tracker.state;
-          if (!st.calibrating) {
+          if (!st.calibrating && st.hasMotion) {
             setStatus("stillOut", `Still ${Math.round(st.stillness * 100)}%`);
             setStatus(
               "srcOut",

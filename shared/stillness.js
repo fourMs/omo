@@ -66,6 +66,8 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
 
   const state = {
     running: false,
+    /** True once a devicemotion event has arrived — false means no accelerometer. */
+    hasMotion: false,
     calibrating: false,
     calibrated: false,
     calibrationProgress: 0,
@@ -103,6 +105,7 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
   let calDone = null;
 
   function handleMotion(m) {
+    state.hasMotion = true;
     const now = performance.now();
     const dt = lastMotionT ? clamp((now - lastMotionT) / 1000, 0.004, 0.1) : 1 / 60;
     lastMotionT = now;
@@ -153,7 +156,7 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
   }
 
   function swayNow() {
-    if (emaShortB == null) return { mag: 0, x: 0 };
+    if (emaShortB == null) return { mag: 0, x: 0, y: 0 };
     const dB = angleDiffDeg(emaShortB, emaLongB);
     const dG = angleDiffDeg(emaShortG, emaLongG);
     return { mag: Math.hypot(dB, dG), x: dG, y: dB };
@@ -246,6 +249,12 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
       state.calibrationProgress = 0;
       return new Promise((resolve) => {
         calDone = resolve;
+        // Completion is driven by devicemotion events; without an
+        // accelerometer (desktop) none arrive — finish on a timer so the
+        // promise always resolves and hasMotion tells the app what happened.
+        setTimeout(() => {
+          if (state.calibrating) finishCalibration();
+        }, seconds * 1000 + 1200);
       });
     },
   };

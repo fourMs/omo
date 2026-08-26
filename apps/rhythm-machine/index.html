@@ -242,9 +242,14 @@
       return step % 2 === 1 ? base * (1 + skew) : base * (1 - skew);
     }
 
+    let schedTimer = null;
+
     function scheduler() {
       if (!playing || !ctx) return;
       const now = ctx.currentTime;
+      // After a background gap the context clock keeps running while timers
+      // freeze — resume cleanly instead of firing every missed step at once.
+      if (nextTime < now - 0.2) nextTime = now + 0.02;
       while (nextTime <= now + 0.05) {
         const col = stepIndex;
         if (col === 0 && barCount > 0 && gen === "lsystem") {
@@ -260,7 +265,7 @@
         stepIndex = (col + 1) % STEPS;
         if (stepIndex === 0) barCount++;
       }
-      requestAnimationFrame(scheduler);
+      schedTimer = setTimeout(scheduler, 25);
     }
 
     // Euclid ring-pick buttons.
@@ -325,6 +330,7 @@
       if (playing) {
         playing = false;
         playStep = -1;
+        clearTimeout(schedTimer);
         playBtn.classList.remove("active");
         playBtn.textContent = "▶";
         redraw();

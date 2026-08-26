@@ -95,7 +95,7 @@
   <script type="module">
     import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
     import { connectMicAnalyser, createMasterBus, getMicStream, primeMicStream } from "../../shared/audio.js";
-    import { enableSensors, onMotion, primeSensors } from "../../shared/sensors.js";
+    import { enableSensors, onMotionGyro, primeSensors } from "../../shared/sensors.js";
 
     bindLearn();
 
@@ -203,6 +203,11 @@
           mod.start();
           applyPreset();
           matrix.hidden = false;
+          // The matrix DOM outlives the engine — re-sync the highlight to
+          // the freshly-mounted engine's preset (always Classic on mount).
+          document.querySelectorAll("#matrix button").forEach((b) => {
+            b.classList.toggle("active", +b.dataset.p === preset);
+          });
         },
         setPreset(p) {
           preset = p;
@@ -693,9 +698,11 @@
     function wireGyro() {
       if (gyroWired) return;
       gyroWired = true;
-      enableSensors({ needMotion: true, needOrientation: false }).then((ok) => {
+      // onMotionGyro falls back to orientation spin rates on Android phones
+      // that report no rotationRate — so Spin/spread still work there.
+      enableSensors({ needMotion: true, needOrientation: true }).then((ok) => {
         if (!ok) return;
-        onMotion(({ rotAlpha: a, rotBeta: b, rotGamma: g }) => {
+        onMotionGyro(({ rotAlpha: a, rotBeta: b, rotGamma: g }) => {
           gyroRate = Math.hypot(a, b, g);
           engine?.onGyro?.(gyroRate);
         });
@@ -727,14 +734,14 @@
     pad.addEventListener("pointerdown", async (e) => {
       e.preventDefault();
       if (engineName === "am") primeMicStream();
-      if (engineName === "supersaw") primeSensors({ needMotion: true, needOrientation: false });
+      if (engineName === "supersaw") primeSensors({ needMotion: true, needOrientation: true });
       await startAudio(!built ? buildAudio : undefined);
       if (!built || !engine) return;
       if (engineName === "supersaw") wireGyro();
-      if (!engine.multi) {
-        activeId = e.pointerId;
-        try { pad.setPointerCapture(e.pointerId); } catch { /* noop */ }
-      }
+      if (!engine.multi) activeId = e.pointerId;
+      // Capture every pointer (multi-touch included) so a release outside
+      // the pad still reaches the end handlers — no stuck notes on desktop.
+      try { pad.setPointerCapture(e.pointerId); } catch { /* noop */ }
       holding = true;
       pad.classList.add("active");
       await engine.down(e);
