@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#05070a" />
+  <title>Micromotion — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .micromotion-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+    .micromotion-stats {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .micromotion-stats span { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body class="app-shell micromotion-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Micromotion</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Three voices of a still body</h2>
+    <p>Tap once, then hold the phone against your chest and stand still. Like <em>Standstill</em>, sound lives in stillness and large movement silences it — but here what remains is <strong>split into three voices</strong>:</p>
+    <p><strong>Sway</strong> (teal, low wash) — slow postural drift, below ~1 Hz; it also carries the stereo position. <strong>Tremor</strong> (amber, high shimmer) — fast jitter from muscle and heartbeat, ~2–8 Hz. <strong>Rotation</strong> (violet, detuned tone) — turning, from the gyroscope; on phones without one it is estimated from tilt, and the readout says which.</p>
+    <p>The lanes scroll your last half minute — a live picture of motion your eyes cannot see. Try slow breathing, then a heartbeat-focused hold, and watch which lane answers.</p>
+  </div>
+  <div class="control-row">
+    <button type="button" class="btn btn-secondary btn-sm" id="calBtn" disabled>Recalibrate</button>
+  </div>
+  <p class="status-bar micromotion-stats"><span id="stillOut">—</span><span id="srcOut">Tap to begin</span></p>
+  <div class="main-stage">
+    <canvas id="stage" class="micromotion-canvas" aria-label="Micromotion bands"></canvas>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, primeSensors } from "../../shared/sensors.js";
+    import { createStillness } from "../../shared/stillness.js";
+
+    bindLearn();
+
+    const canvas = document.getElementById("stage");
+    const g = canvas.getContext("2d");
+    const calBtn = document.getElementById("calBtn");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    const SENSOR_OPTS = { needMotion: true, needOrientation: true };
+    const tracker = createStillness();
+
+    const LANES = [
+      { key: "sway", label: "Sway · balance", hue: 178 },
+      { key: "tremor", label: "Tremor · heartbeat", hue: 38 },
+      { key: "rotation", label: "Rotation", hue: 268 },
+    ];
+    const HISTORY = 360; // ~30 s at 12 samples/s
+    const history = LANES.map(() => new Float32Array(HISTORY));
+    let histPos = 0, histTick = 0;
+
+    let ctx, master, built = false, running = false;
+    let swayVoice, tremorVoice, rotVoice;
+
+    function noiseSource(c) {
+      const buf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      src.start();
+      return src;
+    }
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      const canPan = !!c.createStereoPanner;
+
+      // Sway: noise → low bandpass → pan → gain. The slow wash.
+      {
+        const band = c.createBiquadFilter();
+        band.type = "bandpass";
+        band.frequency.value = 240;
+        band.Q.value = 4;
+        const pan = canPan ? c.createStereoPanner() : null;
+        const gain = c.createGain();
+        gain.gain.value = 0;
+        noiseSource(c).connect(band);
+        if (pan) {
+          band.connect(pan);
+          pan.connect(gain);
+        } else {
+          band.connect(gain);
+        }
+        gain.connect(master);
+        swayVoice = { band, pan, gain };
+      }
+
+      // Tremor: noise → high bandpass → tremolo → gain. The shimmer.
+      {
+        const band = c.createBiquadFilter();
+        band.type = "bandpass";
+        band.frequency.value = 1400;
+        band.Q.value = 8;
+        const trem = c.createGain();
+        trem.gain.value = 1;
+        const lfo = c.createOscillator();
+        lfo.frequency.value = 5;
+        const lfoDepth = c.createGain();
+        lfoDepth.gain.value = 0.55;
+        lfo.connect(lfoDepth);
+        lfoDepth.connect(trem.gain);
+        lfo.start();
+        const gain = c.createGain();
+        gain.gain.value = 0;
+        noiseSource(c).connect(band);
+        band.connect(trem);
+        trem.connect(gain);
+        gain.connect(master);
+        tremorVoice = { band, lfo, gain };
+      }
+
+      // Rotation: two detuned triangles; turning spreads the detune and width.
+      {
+        const mk = (panVal) => {
+          const osc = c.createOscillator();
+          osc.type = "triangle";
+          osc.frequency.value = 330;
+          const gain = c.createGain();
+          gain.gain.value = 0;
+          if (canPan) {
+            const pan = c.createStereoPanner();
+            pan.pan.value = panVal;
+            osc.connect(pan);
+            pan.connect(gain);
+          } else {
+            osc.connect(gain);
+          }
+          gain.connect(master);
+          osc.start();
+          return { osc, gain };
+        };
+        rotVoice = { up: mk(0.5), down: mk(-0.5) };
+      }
+
+      built = true;
+    }
+
+    registerAudioBoot(build);
+
+    async function begin() {
+      primeSensors(SENSOR_OPTS);
+      await startAudio(!built ? build : undefined);
+      if (running) return;
+      const ok = await enableSensors(SENSOR_OPTS);
+      if (!ok) {
+        setStatus("srcOut", "Motion permission needed", "warn");
+        return;
+      }
+      tracker.start();
+      running = true;
+      calBtn.disabled = false;
+      await recalibrate();
+    }
+
+    async function recalibrate() {
+      setStatus("srcOut", "Calibrating — hold still", "warn");
+      await tracker.calibrate(2);
+      setStatus("srcOut", "Hold still", "ok");
+    }
+
+    function updateAudio() {
+      if (!built || !running) return;
+      const st = tracker.state;
+      const t = ctx.currentTime;
+      const gate = st.calibrating ? 0 : Math.pow(st.stillness, 2);
+      const fast = gate < 0.05 ? 0.07 : 0.35;
+
+      // Door-I rule: each voice keeps a whisper floor and rises with its band.
+      const swayLevel = (0.12 + 0.88 * st.sway) * gate * 0.34;
+      swayVoice.gain.gain.setTargetAtTime(swayLevel, t, fast);
+      swayVoice.band.frequency.setTargetAtTime(220 * Math.pow(2, st.sway * 1.2), t, 0.25);
+      if (swayVoice.pan) swayVoice.pan.pan.setTargetAtTime(st.swayX * 0.9, t, 0.35);
+
+      const tremLevel = (0.08 + 0.92 * st.tremor) * gate * 0.26;
+      tremorVoice.gain.gain.setTargetAtTime(tremLevel, t, fast);
+      tremorVoice.band.frequency.setTargetAtTime(1200 * Math.pow(2, st.tremor), t, 0.15);
+      tremorVoice.lfo.frequency.setTargetAtTime(4 + st.tremor * 8, t, 0.2);
+
+      const hasRot = st.gyroSource !== "none";
+      const rotLevel = hasRot ? (0.08 + 0.92 * st.rotation) * gate * 0.15 : 0;
+      const cents = 4 + st.rotation * 42;
+      rotVoice.up.gain.gain.setTargetAtTime(rotLevel, t, fast);
+      rotVoice.down.gain.gain.setTargetAtTime(rotLevel, t, fast);
+      rotVoice.up.osc.detune.setTargetAtTime(cents, t, 0.2);
+      rotVoice.down.osc.detune.setTargetAtTime(-cents, t, 0.2);
+    }
+
+    function resizeCanvas() {
+      const box = canvas.parentElement.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(box.width * dpr));
+      canvas.height = Math.max(1, Math.floor(box.height * dpr));
+    }
+
+    function draw(now) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const dpr = devicePixelRatio || 1;
+      const st = tracker.state;
+      g.fillStyle = "#05070a";
+      g.fillRect(0, 0, w, h);
+
+      if (!running) {
+        g.fillStyle = "rgba(190, 215, 235, 0.85)";
+        g.font = `${16 * dpr}px system-ui, sans-serif`;
+        g.textAlign = "center";
+        g.fillText("Tap to begin", w / 2, h / 2);
+        return;
+      }
+
+      // Sample bands into the scrolling history (~12 Hz).
+      if (now - histTick > 80 && !st.calibrating) {
+        histTick = now;
+        LANES.forEach((lane, i) => {
+          history[i][histPos] = st[lane.key];
+        });
+        histPos = (histPos + 1) % HISTORY;
+      }
+
+      const pad = 10 * dpr;
+      const laneH = (h - pad * 4) / 3;
+      LANES.forEach((lane, i) => {
+        const top = pad + i * (laneH + pad);
+        const disabled = lane.key === "rotation" && st.gyroSource === "none";
+        g.fillStyle = `hsla(${lane.hue}, 40%, 55%, ${disabled ? 0.05 : 0.1})`;
+        g.fillRect(0, top, w, laneH);
+
+        if (!disabled) {
+          // Scrolling band curve, newest at the right edge.
+          g.strokeStyle = `hsla(${lane.hue}, 75%, 68%, 0.9)`;
+          g.lineWidth = 1.6 * dpr;
+          g.beginPath();
+          for (let x = 0; x < HISTORY; x++) {
+            const v = history[i][(histPos + x) % HISTORY];
+            const px = (x / (HISTORY - 1)) * w;
+            const py = top + laneH - v * (laneH - 4 * dpr) - 2 * dpr;
+            x ? g.lineTo(px, py) : g.moveTo(px, py);
+          }
+          g.stroke();
+
+          // Live level block at the right edge.
+          const v = st[lane.key];
+          g.fillStyle = `hsla(${lane.hue}, 80%, 70%, 0.85)`;
+          g.fillRect(w - 8 * dpr, top + laneH - v * laneH, 6 * dpr, Math.max(2 * dpr, v * laneH));
+        }
+
+        g.fillStyle = `hsla(${lane.hue}, 60%, 80%, 0.9)`;
+        g.font = `${11 * dpr}px system-ui, sans-serif`;
+        g.textAlign = "left";
+        const suffix =
+          lane.key === "rotation"
+            ? st.gyroSource === "sensor"
+              ? " · gyro"
+              : st.gyroSource === "tilt"
+                ? " · tilt estimate"
+                : " · no sensor"
+            : "";
+        g.fillText(lane.label + suffix, pad, top + 14 * dpr);
+      });
+
+      if (st.calibrating) {
+        g.fillStyle = "rgba(235, 240, 250, 0.9)";
+        g.font = `${14 * dpr}px system-ui, sans-serif`;
+        g.textAlign = "center";
+        g.fillText(`Calibrating ${Math.round(st.calibrationProgress * 100)}% — hold still`, w / 2, h - 16 * dpr);
+      }
+    }
+
+    let statTick = 0;
+    function frame(now) {
+      if (running && built) {
+        updateAudio();
+        if (now - statTick > 200) {
+          statTick = now;
+          const st = tracker.state;
+          if (!st.calibrating) {
+            setStatus("stillOut", `Still ${Math.round(st.stillness * 100)}%`);
+            setStatus(
+              "srcOut",
+              st.gyroSource === "sensor" ? "Gyro + accel" : st.gyroSource === "tilt" ? "Accel + tilt" : "Accel only"
+            );
+          }
+        }
+      }
+      draw(now);
+      requestAnimationFrame(frame);
+    }
+
+    canvas.addEventListener(
+      "pointerdown",
+      (e) => {
+        e.preventDefault();
+        void begin();
+      },
+      { passive: false }
+    );
+    calBtn.addEventListener("click", () => {
+      if (running) void recalibrate();
+    });
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

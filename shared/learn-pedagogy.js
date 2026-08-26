@@ -301,6 +301,16 @@ export const LEARN_PEDAGOGY = {
     "For large groups: some parts pulse, some hold harmony, some evolve — discuss roles before playing.",
   ],
 
+  standstill: [
+    "An inverse action–sound mapping: quantity of motion closes the gate, so sound exists only while you hold still — the opposite of every other instrument here.",
+    "Nobody reaches zero: research on the standstill paradigm finds ~6.5 mm/s of head micromotion in people trying their best. That residue steers brightness and stereo position, following the Oslo Standstill Database sonification (log-scaled motion → filter brightness, never pitch).",
+  ],
+
+  micromotion: [
+    "The motion left in a still body is split into bands: slow postural sway (below ~1 Hz), fast tremor and heartbeat (~2–8 Hz), and rotation from the gyroscope — each band drives its own voice.",
+    "Also a lesson in sensing: accelerometers measure acceleration, not position, and phones without a gyroscope estimate rotation from tilt — the readout shows which source you are hearing.",
+  ],
+
   // Legacy URLs (redirect apps) — same pedagogy as canonical instrument
   "ks-pluck": "See Resonant Wire → Pocket range: wider pitch span, same Karplus–Strong model.",
   "fm-touch-tilt": "See FM Fingerpaint → Tilt mod: modulator rate from phone angle.",

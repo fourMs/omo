@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#04070b" />
+  <title>Standstill — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .standstill-stage { position: relative; }
+    .standstill-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+    .standstill-stats {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .standstill-stats span {
+      font-variant-numeric: tabular-nums;
+      min-width: 7.5ch;
+      text-align: center;
+    }
+  </style>
+</head>
+<body class="app-shell standstill-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Standstill</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Sound from stillness</h2>
+    <p>An <strong>inverse instrument</strong>: sound appears when you <strong>stop moving</strong>. Tap once, hold the phone against your chest, and stand as still as you can.</p>
+    <p>After a short calibration a soft wash fades in. Keep still and it <strong>blooms</strong> — new tones join the longer you hold. Any movement silences it instantly; stillness must be earned back slowly.</p>
+    <p>You will never reach silence-proof stillness: the wandering dot is your own <strong>micromotion</strong> — balance, breathing, heartbeat — steering the sound's colour and stereo position.</p>
+    <p><strong>Championship</strong> runs a 60-second standstill competition: highest average stillness wins.</p>
+  </div>
+  <div class="control-row standstill-controls">
+    <button type="button" class="btn btn-secondary btn-sm" id="calBtn" disabled>Recalibrate</button>
+    <button type="button" class="btn btn-sm" id="champBtn" disabled>Championship</button>
+  </div>
+  <p class="status-bar standstill-stats"><span id="stillOut">—</span><span id="heldOut">—</span><span id="modeOut">Tap to begin</span></p>
+  <div class="main-stage standstill-stage">
+    <canvas id="stage" class="standstill-canvas" aria-label="Stillness display"></canvas>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, primeSensors } from "../../shared/sensors.js";
+    import { createStillness } from "../../shared/stillness.js";
+
+    bindLearn();
+
+    const canvas = document.getElementById("stage");
+    const g = canvas.getContext("2d");
+    const calBtn = document.getElementById("calBtn");
+    const champBtn = document.getElementById("champBtn");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    const SENSOR_OPTS = { needMotion: true, needOrientation: true };
+    const tracker = createStillness();
+
+    // Pad tones join as stillness is sustained: [freq, fade-in start s, full s].
+    const PAD_STAGES = [
+      [146.83, 3, 7], // D3
+      [220.0, 8, 13], // A3
+      [293.66, 14, 20], // D4
+      [440.0, 22, 30], // A4 shimmer
+    ];
+
+    let ctx, master, built = false, running = false;
+    let bed, pads = [], lastT = 0;
+    let bloomPulse = 0; // visual pulse when a new pad voice arrives
+    let padOn = PAD_STAGES.map(() => false);
+
+    // Championship state.
+    let champ = null; // { phase: 'count'|'round'|'done', endT, sum, n, score }
+    const BEST_KEY = "omo-standstill-best";
+
+    function makeVoice(c, type, freq, dest) {
+      const osc = c.createOscillator();
+      osc.type = type;
+      osc.frequency.value = freq;
+      const gain = c.createGain();
+      gain.gain.value = 0;
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start();
+      return { osc, gain };
+    }
+
+    function padReverb(c, dest) {
+      const sec = 4.5;
+      const len = Math.floor(c.sampleRate * sec);
+      const buf = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2;
+      }
+      const conv = c.createConvolver();
+      conv.buffer = buf;
+      const wet = c.createGain();
+      wet.gain.value = 0.5;
+      conv.connect(wet);
+      wet.connect(dest);
+      return conv;
+    }
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      const reverb = padReverb(c, master);
+
+      // Bed: looping noise → bandpass (Q 6) → pan → gain, after the Oslo
+      // Standstill Database sonification (brightness carries motion, not pitch).
+      const noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+      const nd = noiseBuf.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+      const noise = c.createBufferSource();
+      noise.buffer = noiseBuf;
+      noise.loop = true;
+      const band = c.createBiquadFilter();
+      band.type = "bandpass";
+      band.frequency.value = 300;
+      band.Q.value = 6;
+      const pan = c.createStereoPanner ? c.createStereoPanner() : null;
+      const bedGain = c.createGain();
+      bedGain.gain.value = 0;
+      noise.connect(band);
+      if (pan) {
+        band.connect(pan);
+        pan.connect(bedGain);
+      } else {
+        band.connect(bedGain);
+      }
+      bedGain.connect(master);
+      bedGain.connect(reverb);
+      noise.start();
+      bed = { band, pan, gain: bedGain };
+
+      // Pad: detuned sine pairs that join one by one with sustained stillness.
+      pads = PAD_STAGES.map(([freq]) => {
+        const a = makeVoice(c, "sine", freq, master);
+        const b = makeVoice(c, "sine", freq, master);
+        b.osc.detune.value = 6;
+        a.gain.connect(reverb);
+        return { a, b, freq };
+      });
+
+      built = true;
+    }
+
+    registerAudioBoot(build);
+
+    async function begin() {
+      primeSensors(SENSOR_OPTS);
+      await startAudio(!built ? build : undefined);
+      if (running) return;
+      const ok = await enableSensors(SENSOR_OPTS);
+      if (!ok) {
+        setStatus("modeOut", "Motion permission needed", "warn");
+        return;
+      }
+      tracker.start();
+      running = true;
+      calBtn.disabled = false;
+      champBtn.disabled = false;
+      await recalibrate();
+    }
+
+    async function recalibrate() {
+      setStatus("modeOut", "Calibrating — hold still", "warn");
+      padOn = PAD_STAGES.map(() => false);
+      await tracker.calibrate(2);
+      setStatus("modeOut", "Hold still", "ok");
+    }
+
+    function beep(freq, when, dur = 0.09, level = 0.25) {
+      const osc = ctx.createOscillator();
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.001, when);
+      gain.gain.exponentialRampToValueAtTime(level, when + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, when + dur);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start(when);
+      osc.stop(when + dur + 0.05);
+    }
+
+    function startChampionship() {
+      if (!running || champ) return;
+      const t = ctx.currentTime;
+      beep(660, t);
+      beep(660, t + 1);
+      beep(660, t + 2);
+      beep(990, t + 3, 0.25, 0.3);
+      champ = { phase: "count", endT: performance.now() + 3000, sum: 0, n: 0, score: 0 };
+      champBtn.disabled = true;
+      setStatus("modeOut", "Get ready…", "warn");
+    }
+
+    function updateChampionship(now) {
+      if (!champ) return;
+      if (champ.phase === "count" && now >= champ.endT) {
+        champ.phase = "round";
+        champ.endT = now + 60000;
+        setStatus("modeOut", "Championship — 60 s", "ok");
+      } else if (champ.phase === "round") {
+        champ.sum += tracker.state.stillness;
+        champ.n++;
+        if (now >= champ.endT) {
+          champ.phase = "done";
+          champ.score = Math.round((champ.sum / Math.max(1, champ.n)) * 100);
+          champ.endT = now + 8000;
+          let best = 0;
+          try {
+            best = parseInt(localStorage.getItem(BEST_KEY), 10) || 0;
+            if (champ.score > best) {
+              best = champ.score;
+              localStorage.setItem(BEST_KEY, String(best));
+            }
+          } catch { /* noop */ }
+          champ.best = best;
+          beep(990, ctx.currentTime, 0.3, 0.3);
+          setStatus("modeOut", `Score ${champ.score}% · best ${best}%`, "ok");
+        }
+      } else if (champ.phase === "done" && now >= champ.endT) {
+        champ = null;
+        champBtn.disabled = false;
+        setStatus("modeOut", "Hold still", "ok");
+      }
+    }
+
+    function updateAudio(dt) {
+      if (!built || !running) return;
+      const st = tracker.state;
+      const t = ctx.currentTime;
+      const gate = st.calibrating ? 0 : Math.pow(st.stillness, 3);
+
+      // Brightness from residual micromotion inside the stillness: the sound
+      // says "still is never still". 300–1200 Hz, log-spaced.
+      const micro = clamp(st.tremor * 0.6 + st.sway * 0.6 + st.rotation * 0.3, 0, 1);
+      bed.band.frequency.setTargetAtTime(300 * Math.pow(4, micro), t, 0.12);
+      bed.gain.gain.setTargetAtTime(gate * 0.4, t, gate < 0.05 ? 0.06 : 0.3);
+      if (bed.pan) bed.pan.pan.setTargetAtTime(st.swayX * 0.8, t, 0.4);
+
+      // Pad voices bloom with sustained stillness.
+      PAD_STAGES.forEach(([freq, from, full], i) => {
+        const grow = clamp((st.stillSeconds - from) / (full - from), 0, 1);
+        if (grow > 0 && !padOn[i]) {
+          padOn[i] = true;
+          bloomPulse = 1;
+        } else if (grow === 0) {
+          padOn[i] = false;
+        }
+        const level = grow * gate * (0.11 - i * 0.015);
+        pads[i].a.gain.gain.setTargetAtTime(level, t, gate < 0.05 ? 0.08 : 0.8);
+        pads[i].b.gain.gain.setTargetAtTime(level * 0.7, t, gate < 0.05 ? 0.08 : 0.8);
+      });
+
+      bloomPulse = Math.max(0, bloomPulse - dt * 0.6);
+    }
+
+    // --- Visuals: your micromotion is the picture -------------------------
+    let trail = [];
+
+    function resizeCanvas() {
+      const box = canvas.parentElement.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(box.width * dpr));
+      canvas.height = Math.max(1, Math.floor(box.height * dpr));
+    }
+
+    function draw(now) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const dpr = devicePixelRatio || 1;
+      const st = tracker.state;
+      g.fillStyle = "rgba(4, 7, 11, 0.16)";
+      g.fillRect(0, 0, w, h);
+
+      const cx = w / 2;
+      const cy = h / 2;
+
+      if (!running) {
+        g.fillStyle = "rgba(190, 215, 235, 0.85)";
+        g.font = `${16 * dpr}px system-ui, sans-serif`;
+        g.textAlign = "center";
+        g.fillText("Tap to begin", cx, cy);
+        return;
+      }
+
+      if (st.calibrating) {
+        g.strokeStyle = "rgba(120, 190, 235, 0.9)";
+        g.lineWidth = 3 * dpr;
+        g.beginPath();
+        g.arc(cx, cy, 40 * dpr, -Math.PI / 2, -Math.PI / 2 + st.calibrationProgress * Math.PI * 2);
+        g.stroke();
+        g.fillStyle = "rgba(190, 215, 235, 0.85)";
+        g.font = `${14 * dpr}px system-ui, sans-serif`;
+        g.textAlign = "center";
+        g.fillText("Calibrating — hold still", cx, cy + 70 * dpr);
+        return;
+      }
+
+      // Wandering dot: amplified sway (your micromotion, made visible).
+      const dx = cx + st.swayX * w * 0.18;
+      const dy = cy + st.swayY * h * 0.14;
+      trail.push({ x: dx, y: dy });
+      if (trail.length > 220) trail.shift();
+      g.strokeStyle = `hsla(200, 60%, 75%, ${0.16 + st.stillness * 0.2})`;
+      g.lineWidth = 1.4 * dpr;
+      g.beginPath();
+      trail.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
+      g.stroke();
+
+      // Bloom rings: one per sounding pad voice, breathing slowly.
+      const nOn = padOn.filter(Boolean).length;
+      for (let i = 0; i < nOn; i++) {
+        const breathe = 1 + Math.sin(now / 1400 + i * 1.7) * 0.05;
+        const r = (60 + i * 42) * dpr * breathe;
+        const alpha = st.stillness * (0.34 - i * 0.05) + bloomPulse * 0.3;
+        g.strokeStyle = `hsla(${185 + i * 14}, 65%, 78%, ${alpha})`;
+        g.lineWidth = 2 * dpr;
+        g.beginPath();
+        g.arc(cx, cy, r, 0, Math.PI * 2);
+        g.stroke();
+      }
+
+      // The dot itself: bright when still, dim red-shifted when moving.
+      const hue = 160 + st.stillness * 40;
+      g.fillStyle = `hsla(${hue}, 70%, ${55 + st.stillness * 35}%, 0.95)`;
+      g.beginPath();
+      g.arc(dx, dy, (4 + st.stillness * 4) * dpr, 0, Math.PI * 2);
+      g.fill();
+
+      // Championship overlays.
+      if (champ) {
+        g.fillStyle = "rgba(235, 240, 250, 0.95)";
+        g.textAlign = "center";
+        if (champ.phase === "count") {
+          const left = Math.ceil((champ.endT - now) / 1000);
+          g.font = `${64 * dpr}px system-ui, sans-serif`;
+          g.fillText(String(left), cx, cy - 90 * dpr);
+        } else if (champ.phase === "round") {
+          const leftS = Math.ceil((champ.endT - now) / 1000);
+          const mean = champ.n ? champ.sum / champ.n : 0;
+          g.font = `${22 * dpr}px system-ui, sans-serif`;
+          g.fillText(`${leftS}s · ${Math.round(mean * 100)}%`, cx, 40 * dpr);
+        } else {
+          g.font = `${44 * dpr}px system-ui, sans-serif`;
+          g.fillText(`${champ.score}%`, cx, cy - 90 * dpr);
+          g.font = `${15 * dpr}px system-ui, sans-serif`;
+          g.fillText(`best ${champ.best}%`, cx, cy - 60 * dpr);
+        }
+      }
+    }
+
+    let statTick = 0;
+    function frame(now) {
+      const dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 1 / 60;
+      lastT = now;
+      if (running && built) {
+        updateAudio(dt);
+        updateChampionship(now);
+        if (now - statTick > 200) {
+          statTick = now;
+          const st = tracker.state;
+          if (!st.calibrating) {
+            setStatus("stillOut", `Still ${Math.round(st.stillness * 100)}%`);
+            setStatus("heldOut", `Held ${st.stillSeconds.toFixed(0)} s`);
+          }
+        }
+      }
+      draw(now);
+      requestAnimationFrame(frame);
+    }
+
+    canvas.addEventListener(
+      "pointerdown",
+      (e) => {
+        e.preventDefault();
+        void begin();
+      },
+      { passive: false }
+    );
+    calBtn.addEventListener("click", () => {
+      if (running) void recalibrate();
+    });
+    champBtn.addEventListener("click", () => startChampionship());
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

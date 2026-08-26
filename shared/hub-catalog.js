@@ -314,6 +314,20 @@ export const HUB_APPS = [
   { href: "apps/vocoder-choir/", title: "Vocoder Choir", section: "texture", synth: "Band vocoder", sensors: "Mic · tilt · touch" },
   { href: "apps/gesture-regression/", title: "Gesture Regression", section: "ai", synth: "ML → filter", sensors: "Motion · touch" },
   {
+    href: "apps/standstill/",
+    title: "Standstill",
+    section: "drones",
+    synth: "Inverse stillness bloom",
+    sensors: "Motion · tilt",
+  },
+  {
+    href: "apps/micromotion/",
+    title: "Micromotion",
+    section: "drones",
+    synth: "Band-split stillness voices",
+    sensors: "Motion · gyro (optional)",
+  },
+  {
     href: "apps/swarm-bloom/",
     title: "Swarm Bloom",
     section: "drones",
