@@ -26,7 +26,7 @@ export const SECTIONS = {
   synthesis: {
     name: "Synthesis",
     color: "#f472b6",
-    apps: ["fm-touch", "synth-tour", "ks-string", "additive-bells", "pinch-bass"],
+    apps: ["fm-touch", "synth-tour", "ks-string", "additive-bells", "pinch-bass", "mapping-roulette"],
   },
   ai: {
     name: "AI",

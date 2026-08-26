@@ -244,6 +244,7 @@ export const HUB_APPS = [
   { href: "apps/clap-architect/", title: "Clap Architect", section: "rhythm", synth: "Learned kit", sensors: "Mic · touch" },
   { href: "apps/shadow-sequencer/", title: "Shadow Sequencer", section: "rhythm", synth: "8-step mask", sensors: "Camera · touch" },
   { href: "apps/pinch-bass/", title: "Pinch Bass", section: "synthesis", synth: "Subtractive bass", sensors: "Pinch · XY" },
+  { href: "apps/mapping-roulette/", title: "Mapping Roulette", section: "synthesis", synth: "Remappable saw voice", sensors: "Touch · drag speed" },
   { href: "apps/bowed-waveguide/", title: "Bowed Waveguide", section: "melody", synth: "Continuous KS", sensors: "Touch drag" },
   {
     href: "apps/crystalis/",

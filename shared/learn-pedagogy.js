@@ -195,6 +195,11 @@ export const LEARN_PEDAGOGY = {
     "Optical sequencing — visible gesture is the score.",
   ],
 
+  "mapping-roulette": [
+    "On acoustic instruments the action–sound link is a coupling, bundled with the physics; on electronic instruments it is a mapping — a design decision that can be redealt at any time. Scramble does exactly that.",
+    "Hunt & Wanderley found one-to-one mappings are not necessarily best: harder, cross-coupled mappings (one movement affecting several parameters, like a violin bow) were more engaging and, with practice, supported better performance. Test it on yourself.",
+  ],
+
   "pinch-bass": [
     "Two-finger pinch: the centre of the pair sets pitch (X) and filter cutoff (Y); spread controls level and resonance. One finger defaults to 25% spread.",
     "Continuous bass control — move the gesture around the pad without lifting to sweep timbre and sub weight.",

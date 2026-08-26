@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Mapping Roulette — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .roulette-map { text-transform: none; letter-spacing: 0; }
+  </style>
+</head>
+<body class="app-shell mapping-roulette-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Mapping Roulette</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Who decides what a gesture means?</h2>
+    <p>Turn <strong>Audio on</strong>, then <strong>hold and move</strong> on the pad. Three gesture dimensions — <strong>X</strong>, <strong>Y</strong>, and <strong>drag speed</strong> — control three sound parameters: <strong>pitch</strong>, <strong>brightness</strong>, and <strong>loudness</strong>.</p>
+    <p><strong>Natural</strong> is the obvious one-knob-per-parameter layout. <strong>Scramble</strong> deals a new random assignment — suddenly your practiced gesture means something else. <strong>Cross-couple</strong> blends gestures into every parameter at once, more like a violin bow.</p>
+    <p>Play a phrase, scramble, play it again. How long until the new mapping feels like an instrument?</p>
+  </div>
+  <div class="control-row">
+    <button type="button" class="btn btn-secondary btn-sm" id="naturalBtn" aria-pressed="true">Natural</button>
+    <button type="button" class="btn btn-sm" id="scrambleBtn">Scramble</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="crossBtn" aria-pressed="false">Cross-couple</button>
+  </div>
+  <p class="status-bar roulette-map" id="mapOut">Pitch ← X · Brightness ← Y · Loudness ← speed</p>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid"><div class="touch-dot" id="dot"></div></div>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+
+    bindLearn();
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    const GESTURES = ["X", "Y", "speed"];
+    const PARAMS = ["Pitch", "Brightness", "Loudness"];
+
+    let ctx, master, osc, filt, amp, built = false;
+    let activeId = null, holding = false;
+    let gx = 0.5, gy = 0.5, speed = 0;
+    let lastMove = null;
+
+    // mapping[param] = { weights: [wX, wY, wSpeed], invert: [bool ×3] }
+    let mapping = naturalMapping();
+
+    function naturalMapping() {
+      return PARAMS.map((_, p) => ({
+        weights: GESTURES.map((_, g) => (g === p ? 1 : 0)),
+        invert: [false, false, false],
+      }));
+    }
+
+    function scrambleMapping() {
+      // Random permutation, sometimes with an inverted axis.
+      const perm = [0, 1, 2];
+      for (let i = perm.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [perm[i], perm[j]] = [perm[j], perm[i]];
+      }
+      return PARAMS.map((_, p) => ({
+        weights: GESTURES.map((_, g) => (g === perm[p] ? 1 : 0)),
+        invert: GESTURES.map((_, g) => g === perm[p] && Math.random() < 0.35),
+      }));
+    }
+
+    function crossMapping() {
+      // Every parameter listens to two gestures at once (Hunt & Wanderley).
+      return PARAMS.map((_, p) => {
+        const main = (p + Math.floor(Math.random() * 3)) % 3;
+        let second = Math.floor(Math.random() * 3);
+        if (second === main) second = (second + 1) % 3;
+        const wMain = 0.55 + Math.random() * 0.25;
+        const weights = [0, 0, 0];
+        weights[main] = wMain;
+        weights[second] = 1 - wMain;
+        return { weights, invert: [false, false, false] };
+      });
+    }
+
+    function describeMapping() {
+      const parts = PARAMS.map((name, p) => {
+        const m = mapping[p];
+        const srcs = GESTURES.filter((_, g) => m.weights[g] > 0.01)
+          .map((gName, idx) => {
+            const g = GESTURES.indexOf(gName);
+            const pct = m.weights[g];
+            const inv = m.invert[g] ? "−" : "";
+            return pct >= 0.99 ? `${inv}${gName}` : `${inv}${gName} ${(pct * 100).toFixed(0)}%`;
+          });
+        return `${name} ← ${srcs.join(" + ")}`;
+      });
+      setStatus("mapOut", parts.join(" · "));
+    }
+
+    function setModeButtons(active) {
+      const btns = { natural: "naturalBtn", cross: "crossBtn" };
+      for (const [key, id] of Object.entries(btns)) {
+        const b = document.getElementById(id);
+        b.setAttribute("aria-pressed", String(key === active));
+        b.classList.toggle("btn-play", key === active);
+      }
+    }
+
+    function gestureValue(g) {
+      const raw = g === 0 ? gx : g === 1 ? 1 - gy : speed;
+      return clamp(raw, 0, 1);
+    }
+
+    function paramValue(p) {
+      const m = mapping[p];
+      let v = 0;
+      for (let g = 0; g < 3; g++) {
+        if (m.weights[g] <= 0) continue;
+        const gv = gestureValue(g);
+        v += m.weights[g] * (m.invert[g] ? 1 - gv : gv);
+      }
+      return clamp(v, 0, 1);
+    }
+
+    function applyVoice(on) {
+      if (!built) return;
+      const t = ctx.currentTime;
+      const pitch = 82.4 * Math.pow(2, paramValue(0) * 2.5);
+      const cutoff = 200 * Math.pow(2, paramValue(1) * 4.3);
+      const loud = on ? 0.05 + paramValue(2) * 0.38 : 0;
+      osc.frequency.setTargetAtTime(pitch, t, 0.03);
+      filt.frequency.setTargetAtTime(cutoff, t, 0.04);
+      amp.gain.setTargetAtTime(loud, t, on ? 0.05 : 0.08);
+    }
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.value = 165;
+      filt = ctx.createBiquadFilter();
+      filt.type = "lowpass";
+      filt.frequency.value = 900;
+      filt.Q.value = 3;
+      amp = ctx.createGain();
+      amp.gain.value = 0;
+      osc.connect(filt);
+      filt.connect(amp);
+      amp.connect(master);
+      osc.start();
+      built = true;
+    }
+
+    registerAudioBoot(build);
+
+    // Drag speed decays toward zero when the finger rests — like a bow.
+    setInterval(() => {
+      speed *= 0.82;
+      if (holding) applyVoice(true);
+    }, 60);
+
+    function updateFromEvent(e) {
+      const r = pad.getBoundingClientRect();
+      gx = clamp((e.clientX - r.left) / r.width, 0, 1);
+      gy = clamp((e.clientY - r.top) / r.height, 0, 1);
+      const now = performance.now();
+      if (lastMove) {
+        const dt = Math.max(8, now - lastMove.t);
+        const px = Math.hypot(e.clientX - lastMove.x, e.clientY - lastMove.y) / dt * 1000;
+        speed = clamp(speed * 0.6 + (px / 1400) * 0.4, 0, 1);
+      }
+      lastMove = { x: e.clientX, y: e.clientY, t: now };
+      dot.style.left = `${gx * 100}%`;
+      dot.style.top = `${gy * 100}%`;
+    }
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await startAudio(!built ? build : undefined);
+      if (!built) return;
+      activeId = e.pointerId;
+      pad.setPointerCapture(e.pointerId);
+      pad.classList.add("active");
+      holding = true;
+      lastMove = null;
+      speed = 0.4; // an attack has some energy
+      updateFromEvent(e);
+      applyVoice(true);
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!holding || e.pointerId !== activeId) return;
+      updateFromEvent(e);
+      applyVoice(true);
+    });
+
+    const stop = (e) => {
+      if (e.pointerId !== activeId) return;
+      holding = false;
+      activeId = null;
+      pad.classList.remove("active");
+      applyVoice(false);
+    };
+    pad.addEventListener("pointerup", stop);
+    pad.addEventListener("pointercancel", stop);
+    pad.addEventListener("lostpointercapture", stop);
+
+    document.getElementById("naturalBtn").addEventListener("click", () => {
+      mapping = naturalMapping();
+      setModeButtons("natural");
+      describeMapping();
+    });
+    document.getElementById("scrambleBtn").addEventListener("click", () => {
+      mapping = scrambleMapping();
+      setModeButtons("scramble");
+      describeMapping();
+    });
+    document.getElementById("crossBtn").addEventListener("click", () => {
+      mapping = crossMapping();
+      setModeButtons("cross");
+      describeMapping();
+    });
+
+    describeMapping();
+  </script>
+</body>
+</html>
