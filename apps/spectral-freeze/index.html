@@ -15,15 +15,18 @@
   <div class="learn-panel panel" id="learnPanel">
     <h2>Frozen spectrum pad</h2>
     <p>Turn <strong>Audio on</strong>, tap <strong>Start cloud</strong>. Allow the <strong>mic</strong> when asked — grains spray from what the room sounds like.</p>
-    <p><strong>Hold</strong> the scope to freeze the current spectrum as a shimmering chord. Release to return to live grains.</p>
+    <p><strong>Hold</strong> the scope: in <strong>Freeze</strong> the current spectrum rings as a shimmering chord; in <strong>Soup</strong> the spectrum is <strong>averaged</strong> for as long as you hold, thickening into a live pad. Release to return to live grains.</p>
   </div>
   <div class="app-toolbar">
     <button type="button" class="btn btn-sm" id="playBtn">Start cloud</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="modeFreezeBtn" aria-pressed="true">Freeze</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="modeSoupBtn" aria-pressed="false">Soup</button>
   </div>
   <p class="status-bar" id="status">Tap Start cloud or Audio on</p>
   <div class="readout-row">
     <p class="value-chip">Mode <strong id="modeOut">live</strong></p>
     <p class="value-chip">Partials <strong id="partialsOut">0</strong></p>
+    <p class="value-chip" id="cookChip" hidden>Cook <strong id="cookOut">0%</strong></p>
   </div>
   <div class="main-stage">
     <div id="tapZone" class="stage-fill play-grid">
@@ -44,8 +47,15 @@
     const tapZone = document.getElementById("tapZone");
     const canvas = document.getElementById("scope");
     const playBtn = document.getElementById("playBtn");
+    const modeFreezeBtn = document.getElementById("modeFreezeBtn");
+    const modeSoupBtn = document.getElementById("modeSoupBtn");
+    const cookChip = document.getElementById("cookChip");
+    const cookOut = document.getElementById("cookOut");
     const g = canvas.getContext("2d");
     const PARTIALS = 20;
+    const SOUP_PARTIALS = 48; // more partials = thicker soup
+    const SOUP_RIPE_MS = 6000;
+    const SOUP_UPDATE_MS = 55;
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
     let ctx, master, analyser, micStream;
@@ -58,6 +68,26 @@
     let captureBuf = null;
     let freqData = null;
     let holdPointer = null;
+
+    // Soup mode (from the former Spectral Soup app): averaged spectrum pad.
+    let holdMode = new URLSearchParams(location.search).get("mode") === "soup" ? "soup" : "freeze";
+    let souping = false;
+    let soupTimer = null;
+    let avgBands = null;
+    let soupFrames = 0;
+    let soupOscs = [];
+
+    function setHoldMode(mode) {
+      holdMode = mode;
+      modeFreezeBtn.setAttribute("aria-pressed", String(mode === "freeze"));
+      modeSoupBtn.setAttribute("aria-pressed", String(mode === "soup"));
+      modeFreezeBtn.classList.toggle("btn-play", mode === "freeze");
+      modeSoupBtn.classList.toggle("btn-play", mode === "soup");
+      cookChip.hidden = mode !== "soup";
+      if (cloudOn) {
+        setStatus("status", mode === "soup" ? "Hold scope to cook soup" : "Hold scope to freeze", "ok");
+      }
+    }
 
     function resizeCanvas() {
       const box = canvas.parentElement.getBoundingClientRect();
@@ -74,7 +104,7 @@
     }
 
     function spawnGrain() {
-      if (!cloudOn || frozen || !ctx || !captureBuf) return;
+      if (!cloudOn || frozen || souping || !ctx || !captureBuf) return;
       const dur = 0.02 + Math.random() * 0.04;
       const maxOff = captureBuf.duration - dur - 0.002;
       if (maxOff <= 0) return;
@@ -96,7 +126,7 @@
     }
 
     function scheduleGrains() {
-      if (!cloudOn || frozen) return;
+      if (!cloudOn || frozen || souping) return;
       spawnGrain();
       scheduleTimer = setTimeout(scheduleGrains, 30 + Math.random() * 70);
     }
@@ -106,13 +136,13 @@
       scheduleTimer = null;
     }
 
-    function captureSpectrum() {
+    function captureSpectrum(nBands = PARTIALS) {
       if (!analyser || !freqData) return null;
       analyser.getByteFrequencyData(freqData);
-      const bands = new Float32Array(PARTIALS);
+      const bands = new Float32Array(nBands);
       const binCount = freqData.length;
-      const per = binCount / PARTIALS;
-      for (let p = 0; p < PARTIALS; p++) {
+      const per = binCount / nBands;
+      for (let p = 0; p < nBands; p++) {
         let sum = 0;
         const i0 = (p * per) | 0;
         const i1 = Math.min(binCount, ((p + 1) * per) | 0);
@@ -122,10 +152,8 @@
       return bands;
     }
 
-    function hzForPartial(i) {
-      const lo = 80;
-      const hi = 6000;
-      const t = i / (PARTIALS - 1);
+    function hzForBand(i, nBands, lo, hi) {
+      const t = i / (nBands - 1);
       return lo * Math.pow(hi / lo, t);
     }
 
@@ -149,7 +177,7 @@
         const osc = ctx.createOscillator();
         const gn = ctx.createGain();
         osc.type = "sine";
-        osc.frequency.value = hzForPartial(i);
+        osc.frequency.value = hzForBand(i, PARTIALS, 80, 6000);
         gn.gain.value = 0;
         osc.connect(gn);
         gn.connect(master);
@@ -193,6 +221,69 @@
       if (cloudOn) scheduleGrains();
     }
 
+    // --- Soup: running mean of the spectrum, played by a fixed partial bank.
+    function startSoup() {
+      if (souping || !analyser) return;
+      souping = true;
+      stopSchedule();
+      avgBands = new Float32Array(SOUP_PARTIALS);
+      soupFrames = 0;
+      cookOut.textContent = "0%";
+      const t = ctx.currentTime;
+      soupOscs = [];
+      for (let i = 0; i < SOUP_PARTIALS; i++) {
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = hzForBand(i, SOUP_PARTIALS, 70, 7200);
+        const gn = ctx.createGain();
+        gn.gain.value = 0;
+        osc.connect(gn);
+        gn.connect(master);
+        osc.start(t);
+        soupOscs.push({ osc, gn, i });
+      }
+      document.getElementById("modeOut").textContent = "soup";
+      setStatus("status", "Cooking — keep holding", "ok");
+      soupTimer = setInterval(() => {
+        const bands = captureSpectrum(SOUP_PARTIALS);
+        if (!bands || !avgBands) return;
+        soupFrames++;
+        for (let i = 0; i < SOUP_PARTIALS; i++) {
+          avgBands[i] += (bands[i] - avgBands[i]) / soupFrames;
+        }
+        cookOut.textContent = `${Math.round(clamp((soupFrames * SOUP_UPDATE_MS) / SOUP_RIPE_MS, 0, 1) * 100)}%`;
+        const tt = ctx.currentTime;
+        let active = 0;
+        for (const { gn, i } of soupOscs) {
+          const amp = Math.pow(clamp(avgBands[i], 0, 1), 1.4);
+          if (amp >= 0.02) active++;
+          gn.gain.setTargetAtTime(amp * 0.18, tt, 0.06);
+        }
+        document.getElementById("partialsOut").textContent = String(active);
+      }, SOUP_UPDATE_MS);
+    }
+
+    function stopSoup() {
+      if (!souping) return;
+      souping = false;
+      clearInterval(soupTimer);
+      soupTimer = null;
+      const t = ctx.currentTime;
+      soupOscs.forEach(({ osc, gn }) => {
+        gn.gain.setTargetAtTime(0, t, 0.06);
+        try {
+          osc.stop(t + 0.12);
+        } catch {
+          /* noop */
+        }
+      });
+      soupOscs = [];
+      avgBands = null;
+      document.getElementById("partialsOut").textContent = "0";
+      document.getElementById("modeOut").textContent = "live";
+      if (cloudOn) scheduleGrains();
+    }
+
     function draw() {
       if (!cloudOn) return;
       resizeCanvas();
@@ -201,15 +292,16 @@
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.fillStyle = "#0f172a";
       g.fillRect(0, 0, w, h);
-      const data = frozenBands || captureSpectrum();
+      const data = souping ? avgBands : frozenBands || captureSpectrum();
       if (!data) {
         requestAnimationFrame(draw);
         return;
       }
-      const barW = w / PARTIALS;
-      for (let i = 0; i < PARTIALS; i++) {
+      const n = data.length;
+      const barW = w / n;
+      for (let i = 0; i < n; i++) {
         const bh = data[i] * (h - 8);
-        g.fillStyle = frozen ? "#fbbf24" : "#6ee7b7";
+        g.fillStyle = souping ? "#f59e0b" : frozen ? "#fbbf24" : "#6ee7b7";
         g.fillRect(i * barW + 1, h - bh, barW - 2, bh);
       }
       requestAnimationFrame(draw);
@@ -220,7 +312,7 @@
       cloudOn = true;
       playBtn.textContent = "Cloud on";
       playBtn.classList.add("btn-play");
-      setStatus("status", "Live grains — hold scope to freeze", "ok");
+      setStatus("status", holdMode === "soup" ? "Live grains — hold scope to cook soup" : "Live grains — hold scope to freeze", "ok");
       scheduleGrains();
       draw();
     }
@@ -229,6 +321,7 @@
       cloudOn = false;
       frozen = false;
       stopSchedule();
+      stopSoup();
       releasePartials();
       playBtn.textContent = "Start cloud";
       playBtn.classList.remove("btn-play");
@@ -281,7 +374,7 @@
       ctx = c;
       if (built) {
         if (ctx.state === "suspended") await unlockAudio(ctx);
-        if (cloudOn && !frozen) scheduleGrains();
+        if (cloudOn && !frozen && !souping) scheduleGrains();
         return;
       }
       ({ master } = createMasterBus(ctx, 0.58));
@@ -318,6 +411,10 @@
       void ensurePlaying();
     });
 
+    modeFreezeBtn.addEventListener("click", () => setHoldMode("freeze"));
+    modeSoupBtn.addEventListener("click", () => setHoldMode("soup"));
+    setHoldMode(holdMode);
+
     document.getElementById("audioToggle")?.addEventListener("click", () => {
       setTimeout(() => {
         if (!isAudioActive()) stopCloud();
@@ -330,14 +427,16 @@
         if (!built) return;
         holdPointer = e.pointerId;
         tapZone.setPointerCapture(e.pointerId);
-        freezeSpectrum();
+        if (holdMode === "soup") startSoup();
+        else freezeSpectrum();
       });
     });
 
     const endHold = (e) => {
       if (e.pointerId !== holdPointer) return;
       holdPointer = null;
-      unfreeze();
+      if (souping) stopSoup();
+      else unfreeze();
     };
     tapZone.addEventListener("pointerup", endHold);
     tapZone.addEventListener("pointercancel", endHold);

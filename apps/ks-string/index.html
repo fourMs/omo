@@ -15,6 +15,7 @@
   <div class="learn-panel panel" id="learnPanel">
     <h2>Karplus–Strong</h2>
     <p>Turn <strong>Audio on</strong>, then tap to pluck. <strong>X</strong> = pitch, <strong>Y</strong> = strength. Tilt = damping.</p>
+    <p>Pluck near the <strong>rim</strong> for bright, bridge-like harmonics; the <strong>centre</strong> is warmer — like picking position on a guitar.</p>
     <p>Stage range: lower, longer wire with reverb on every pluck.</p>
   </div>
   <div class="main-stage">
@@ -74,8 +75,11 @@
       const nx = clamp(x / r.width, 0, 1);
       const ny = clamp(y / r.height, 0, 1);
       const freq = mapX(nx);
-      const strength = 0.1 + (1 - ny) * 0.5;
-      const dampHz = currentDamp;
+      // Pluck position (from Edge Strum): near the rim = near the bridge,
+      // brighter and a little harder; the centre stays warm.
+      const rim = 1 - clamp(Math.min(nx, 1 - nx, ny, 1 - ny) / 0.22, 0, 1);
+      const strength = 0.1 + (1 - ny) * 0.5 + rim * 0.15;
+      const dampHz = currentDamp * (1 + rim * 1.6);
       karplusPluck(ctx, master, pool, freq, {
         strength,
         dampHz,

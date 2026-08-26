@@ -70,19 +70,9 @@ export const LEARN_PEDAGOGY = {
     "Many sensor dimensions on one filtered tone: mapping design makes the same synth feel like a new instrument.",
   ],
 
-  "motion-wah": [
-    "A bandpass filter follows phone tilt: forward/back sweeps wah frequency, sideways changes resonance.",
-    "Classic motion-controlled timbre — the body becomes the filter knob without touching the screen after the initial hold.",
-  ],
-
-  "shake-filter": [
-    "Hold for a steady tone; sudden accelerometer jerks open the filter cutoff and resonance.",
-    "Onset and gesture energy map to brightness — sharp physical moves become audible swells.",
-  ],
-
-  "flat-edge": [
-    "The drone only sounds when the phone lies flat on a table; tilt away and the gate closes.",
-    "Orientation as an on/off condition — useful for tabletop ensemble games and deliberate stillness.",
+  "motion-filter": [
+    "One saw tone, one filter, four action–sound mappings: tilt sweeps a wah bandpass, shakes jerk a lowpass open, a four-stage ladder (Moog-style, ≈24 dB/oct) follows pad and tilt, and Flat gates sound to a tabletop pose.",
+    "The synth never changes — only the mapping does. Compare mappings to feel how mapping design, not synthesis, makes an instrument.",
   ],
 
   "heading-choir": [
@@ -132,17 +122,12 @@ export const LEARN_PEDAGOGY = {
 
   "ks-string": [
     "Karplus–Strong synthesis: a short delay loop with filtering mimics a vibrating string. A noise burst sets it ringing.",
-    "Pluck position and strength change pitch and brightness; tilt often controls decay (damping).",
+    "Pluck position matters like on a guitar — near the rim emphasizes high harmonics (picking near the bridge), the centre is warmer; tilt controls decay (damping).",
   ],
 
   "additive-bells": [
     "A tone is built from many sine partials at harmonic ratios; motion or hit strength shapes the mix.",
     "Demonstrates Fourier idea: timbre = which partials are loud; bells have inharmonic partials in real life, simplified here.",
-  ],
-
-  "filter-ladder": [
-    "A ladder-style lowpass filter (Moog-like) removes highs; resonance emphasizes the cutoff edge.",
-    "Classic subtractive bass/leads — sweep the cutoff to feel formant-like vowels or wah effects.",
   ],
 
   "ring-mod-gong": [
@@ -161,8 +146,8 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "spectral-freeze": [
-    "Analysis splits sound into partials or bands; freezing holds the spectrum while you reshape or sustain.",
-    "Bridges spectral thinking — timbre as a set of frequencies, not only a single waveform.",
+    "Analysis splits sound into partials or bands; freezing holds one spectral snapshot, while Soup mode averages the spectrum for as long as you hold, thickening into a pad.",
+    "Bridges spectral thinking — timbre as a set of frequencies, not only a single waveform; snapshot vs average shows two ways to summarise a changing spectrum.",
   ],
 
   "tap-bloom": [
@@ -240,11 +225,6 @@ export const LEARN_PEDAGOGY = {
     "Continuous bass control — move the gesture around the pad without lifting to sweep timbre and sub weight.",
   ],
 
-  "edge-strum": [
-    "Touch position near the edge emphasizes higher harmonics in a string model; centre is more fundamental.",
-    "Spatial playing on one surface — same as picking near the bridge on a guitar.",
-  ],
-
   "am-radio": [
     "Amplitude modulation: a slow oscillator multiplies level, creating sidebands around the carrier — radio-like.",
     "Mic may replace the modulator — voice or room sound heterodynes with the tone.",
@@ -312,6 +292,13 @@ export const LEARN_PEDAGOGY = {
   ],
 
   // Legacy URLs (redirect apps) — same pedagogy as canonical instrument
+  "hold-loop-tilt": "See Sampler: hold the centre button to record, release to loop, tilt to shape.",
+  "spectral-soup": "See Spectral Freeze → Soup mode: the spectrum is averaged while you hold, playing back as a live pad.",
+  "edge-strum": "See KS String: pluck near the rim for bright, bridge-like harmonics; the centre is warmer.",
+  "motion-wah": "See Motion Filter → Tilt wah: forward/back sweeps the bandpass, sideways sets resonance.",
+  "shake-filter": "See Motion Filter → Shake: accelerometer jerks open the lowpass.",
+  "flat-edge": "See Motion Filter → Flat gate: sound only while the phone lies flat.",
+  "filter-ladder": "See Motion Filter → Ladder: four lowpass stages, pad Y and tilt set cutoff.",
   "ks-pluck": "See Resonant Wire → Pocket range: wider pitch span, same Karplus–Strong model.",
   "fm-touch-tilt": "See FM Fingerpaint → Tilt mod: modulator rate from phone angle.",
   "motion-grid": "See Motion Cam: frame differencing drives density.",

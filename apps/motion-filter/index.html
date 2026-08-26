@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Motion Filter — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell motion-filter-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Motion Filter</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>One tone, four motion mappings</h2>
+    <p>Turn <strong>Audio on</strong>, then <strong>hold</strong> the pad — <strong>X</strong> = pitch. Allow motion when asked. Pick how your movement drives the filter:</p>
+    <p><strong>Tilt</strong> — forward/back sweeps a wah bandpass, sideways sets resonance. <strong>Shake</strong> — sudden jerks open a lowpass. <strong>Ladder</strong> — four lowpass stages (≈24 dB/oct, Moog-style); pad <strong>Y</strong> and tilt set cutoff, slider sets resonance. <strong>Flat</strong> — sound only while the phone lies flat, a tabletop gate.</p>
+    <p>Same synth every time — only the <strong>mapping</strong> changes. Notice how each mapping makes it feel like a different instrument.</p>
+  </div>
+  <div class="control-row">
+    <label for="modeSel">Mapping</label>
+    <select id="modeSel">
+      <option value="tilt">Tilt wah</option>
+      <option value="shake">Shake</option>
+      <option value="ladder">Ladder</option>
+      <option value="flat">Flat gate</option>
+    </select>
+    <label for="res" id="resLabel" hidden>Res</label>
+    <input type="range" id="res" min="0" max="18" value="8" step="0.5" hidden />
+  </div>
+  <div class="readout-row">
+    <p class="value-chip">Filter <strong id="freqOut">—</strong> Hz</p>
+    <p class="value-chip">Q <strong id="qOut">—</strong></p>
+  </div>
+  <div class="main-stage">
+    <div id="pad" class="stage-fill play-grid"><div class="touch-dot" id="dot"></div></div>
+  </div>
+  <script type="module">
+    import { bindLearn, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { enableSensors, normalizeAccel, onMotion, onOrientation, primeSensors } from "../../shared/sensors.js";
+
+    bindLearn();
+    const pad = document.getElementById("pad");
+    const dot = document.getElementById("dot");
+    const modeSel = document.getElementById("modeSel");
+    const resSlider = document.getElementById("res");
+    const resLabel = document.getElementById("resLabel");
+    const freqOut = document.getElementById("freqOut");
+    const qOut = document.getElementById("qOut");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    const MODES = ["tilt", "shake", "ladder", "flat"];
+    const SENSOR_OPTS = { needMotion: true, needOrientation: true };
+    let mode = new URLSearchParams(location.search).get("mode");
+    if (!MODES.includes(mode)) mode = "tilt";
+    modeSel.value = mode;
+
+    let ctx, master, built = false, sensorsOn = false;
+    let osc, gate, band, lowpass, ladder;
+    let holding = false, activePointer = null;
+    let padY = 0.5;
+    let lastAccel = null;
+    let tiltMag = 0.35;
+    let flat = false;
+
+    function buildAudio(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+      osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.value = 110;
+      gate = ctx.createGain();
+      gate.gain.value = 0;
+      band = ctx.createBiquadFilter();
+      band.type = "bandpass";
+      band.frequency.value = 800;
+      band.Q.value = 12;
+      lowpass = ctx.createBiquadFilter();
+      lowpass.type = "lowpass";
+      lowpass.frequency.value = 900;
+      lowpass.Q.value = 4;
+      ladder = [];
+      for (let i = 0; i < 4; i++) {
+        const f = ctx.createBiquadFilter();
+        f.type = "lowpass";
+        f.frequency.value = 1200;
+        f.Q.value = 0.707;
+        if (i) ladder[i - 1].connect(f);
+        ladder.push(f);
+      }
+      gate.connect(master);
+      osc.start();
+      connectChain();
+      built = true;
+    }
+
+    function connectChain() {
+      osc.disconnect();
+      band.disconnect();
+      lowpass.disconnect();
+      ladder[3].disconnect();
+      if (mode === "tilt") {
+        osc.connect(band);
+        band.connect(gate);
+      } else if (mode === "ladder") {
+        osc.connect(ladder[0]);
+        ladder[3].connect(gate);
+      } else {
+        // shake and flat both run through the single lowpass
+        osc.connect(lowpass);
+        lowpass.connect(gate);
+      }
+    }
+
+    function setMode(m) {
+      mode = m;
+      resSlider.hidden = resLabel.hidden = m !== "ladder";
+      if (built) {
+        connectChain();
+        applyGate();
+      }
+      freqOut.textContent = "—";
+      qOut.textContent = "—";
+    }
+
+    function showFilter(freq, q) {
+      freqOut.textContent = freq.toFixed(0);
+      qOut.textContent = q.toFixed(1);
+    }
+
+    function applyLadder() {
+      const when = ctx.currentTime;
+      const res = +resSlider.value;
+      const mix = holding ? clamp((1 - padY) * 0.6 + tiltMag * 0.4, 0, 1) : tiltMag;
+      const cutoff = 120 + mix * 7800;
+      ladder.forEach((f, i) => {
+        f.frequency.setTargetAtTime(cutoff, when, 0.04);
+        f.Q.setTargetAtTime(i === 3 ? res : 0.707, when, 0.05);
+      });
+      showFilter(cutoff, res);
+    }
+
+    function applyGate() {
+      if (!built) return;
+      const t = ctx.currentTime;
+      const on = holding && (mode !== "flat" || flat);
+      const level = mode === "flat" ? 0.26 : 0.35;
+      gate.gain.setTargetAtTime(on ? level : 0, t, on ? 0.03 : 0.06);
+    }
+
+    function handleMotion(m) {
+      if (!built || !holding) return;
+      const t = ctx.currentTime;
+      if (mode === "tilt") {
+        const n = normalizeAccel(m.x, m.y, m.z);
+        const tiltY = clamp((n.y + 1) / 2, 0, 1);
+        const tiltX = clamp((n.x + 1) / 2, 0, 1);
+        const freq = 150 + tiltY * 3500;
+        const q = 4 + tiltX * 16;
+        band.frequency.setTargetAtTime(freq, t, 0.03);
+        band.Q.setTargetAtTime(q, t, 0.03);
+        showFilter(freq, q);
+      } else if (mode === "shake") {
+        if (lastAccel) {
+          const j = Math.hypot(m.x - lastAccel.x, m.y - lastAccel.y, m.z - lastAccel.z);
+          const freq = 400 + j * 900;
+          const q = 4 + j * 4;
+          lowpass.frequency.setTargetAtTime(freq, t, 0.04);
+          lowpass.Q.setTargetAtTime(q, t, 0.05);
+          showFilter(freq, q);
+        }
+        lastAccel = { x: m.x, y: m.y, z: m.z };
+      }
+    }
+
+    function handleOrientation(o) {
+      tiltMag = clamp(Math.hypot(o.beta || 0, o.gamma || 0) / 90, 0, 1);
+      const wasFlat = flat;
+      flat = Math.abs(o.beta || 0) < 18 && Math.abs(o.gamma || 0) < 18;
+      if (!built) return;
+      if (mode === "ladder" && holding) applyLadder();
+      if (mode === "flat" && flat !== wasFlat) applyGate();
+    }
+
+    async function enableTilt() {
+      if (sensorsOn) return;
+      if (await enableSensors(SENSOR_OPTS)) {
+        sensorsOn = true;
+        onMotion(handleMotion);
+        onOrientation(handleOrientation);
+      }
+    }
+
+    function updatePad(clientX, clientY) {
+      const r = pad.getBoundingClientRect();
+      if (r.width <= 0) return;
+      const nx = clamp((clientX - r.left) / r.width, 0, 1);
+      padY = clamp((clientY - r.top) / r.height, 0, 1);
+      osc.frequency.setTargetAtTime(55 * Math.pow(2, nx * 2.5), ctx.currentTime, 0.03);
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${padY * 100}%`;
+      if (mode === "ladder") applyLadder();
+    }
+
+    modeSel.addEventListener("change", () => setMode(modeSel.value));
+    resSlider.addEventListener("input", () => {
+      if (built && mode === "ladder") applyLadder();
+    });
+
+    pad.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      primeSensors(SENSOR_OPTS);
+      void enableTilt();
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built) return;
+      activePointer = e.pointerId;
+      pad.setPointerCapture(e.pointerId);
+      pad.classList.add("active");
+      holding = true;
+      lastAccel = null;
+      updatePad(e.clientX, e.clientY);
+      applyGate();
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!holding || e.pointerId !== activePointer) return;
+      updatePad(e.clientX, e.clientY);
+    });
+
+    const stop = (e) => {
+      if (e.pointerId !== activePointer) return;
+      holding = false;
+      activePointer = null;
+      pad.classList.remove("active");
+      applyGate();
+    };
+    pad.addEventListener("pointerup", stop);
+    pad.addEventListener("pointercancel", stop);
+    pad.addEventListener("lostpointercapture", stop);
+
+    setMode(mode);
+  </script>
+</body>
+</html>
