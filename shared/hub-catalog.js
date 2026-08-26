@@ -31,10 +31,10 @@ export const HUB_APPS = [
     sensors: "Touch",
   },
   {
-    href: "apps/circular-drum/",
-    title: "Circular Drum",
+    href: "apps/rhythm-machine/",
+    title: "Rhythm Machine",
     section: "rhythm",
-    synth: "Ring sequencer",
+    synth: "Ring seq · draw, Euclid, L-system",
     sensors: "Touch",
   },
   {
@@ -90,7 +90,7 @@ export const HUB_APPS = [
     href: "apps/compass-wah/",
     title: "Compass Wah",
     section: "drones",
-    synth: "Compass filter",
+    synth: "Compass wah or choir",
     sensors: "Touch · compass · tilt",
   },
   {
@@ -241,20 +241,6 @@ export const HUB_APPS = [
     sensors: "Touch pad",
   },
   {
-    href: "apps/euclidean-rings/",
-    title: "Euclidean Rings",
-    section: "rhythm",
-    synth: "Euclidean rings",
-    sensors: "Touch",
-  },
-  {
-    href: "apps/lsystem-groove/",
-    title: "L-System Groove",
-    section: "rhythm",
-    synth: "L-system rewrite",
-    sensors: "Touch",
-  },
-  {
     href: "apps/chaos-attractor/",
     title: "Chaos Attractor",
     section: "texture",
@@ -270,7 +256,6 @@ export const HUB_APPS = [
   },
   { href: "apps/room-reverb-send/", title: "Room Reverb Send", section: "texture", synth: "Convolver wet", sensors: "Mic · touch" },
   { href: "apps/clap-architect/", title: "Clap Architect", section: "rhythm", synth: "Learned kit", sensors: "Mic · touch" },
-  { href: "apps/heading-choir/", title: "Heading Choir", section: "drones", synth: "Detuned pans", sensors: "Compass · touch" },
   { href: "apps/shadow-sequencer/", title: "Shadow Sequencer", section: "rhythm", synth: "8-step mask", sensors: "Camera · touch" },
   { href: "apps/pinch-bass/", title: "Pinch Bass", section: "synthesis", synth: "Subtractive bass", sensors: "Pinch · XY" },
   { href: "apps/am-radio/", title: "Am Radio", section: "synthesis", synth: "AM sidebands", sensors: "Mic · touch" },

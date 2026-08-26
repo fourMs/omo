@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Rhythm Machine — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+</head>
+<body class="app-shell circular-drum-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Rhythm Machine</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>One ring, three pattern generators</h2>
+    <p>Turn <strong>Audio on</strong>, press ▶. 16 steps go clockwise from the top; outer ring kick, inner open hat. Pick where the pattern comes from:</p>
+    <p><strong>Draw</strong> — tap segments to toggle hits, or start from a style template. <strong>Euclid</strong> — each ring spreads its hits as evenly as possible, E(k,16); select a ring and shift its <strong>phase</strong> for polyrhythms. <strong>L-system</strong> — a rewrite rule (A→AB, B→A) regrows the pattern every bar.</p>
+    <p>Same drums, same clock — only the <strong>pattern source</strong> changes: hand, formula, or grammar.</p>
+  </div>
+  <div class="seq-toolbar">
+    <div class="control-row">
+      <label for="gen">Source</label>
+      <select id="gen">
+        <option value="draw">Draw</option>
+        <option value="euclid">Euclid</option>
+        <option value="lsystem">L-system</option>
+      </select>
+      <label for="bpm">BPM</label>
+      <input type="range" id="bpm" min="60" max="160" value="100" />
+      <span id="bpmVal">100</span>
+      <button type="button" class="btn btn-play" id="playBtn">▶</button>
+    </div>
+    <div class="control-row">
+      <label for="swing">Swing</label>
+      <input type="range" id="swing" min="0" max="75" value="0" />
+      <span id="swingVal">0%</span>
+      <button type="button" class="btn btn-secondary btn-sm" id="clearBtn">Clear</button>
+    </div>
+    <div class="control-row" id="drawRow">
+      <label for="template">Pattern</label>
+      <select id="template">
+        <option value="custom">Custom</option>
+        <option value="rock">Rock</option>
+        <option value="house">House</option>
+        <option value="disco">Disco</option>
+        <option value="hiphop">Hip-hop</option>
+        <option value="funk">Funk</option>
+        <option value="techno">Techno</option>
+      </select>
+      <span class="circ-drum-legend" aria-hidden="true">💥🥁🔔🔓 outer → inner</span>
+    </div>
+    <div class="control-row" id="euclidPickRow" aria-label="Select ring" hidden></div>
+    <div class="control-row" id="euclidPhaseRow" hidden>
+      <label>Phase</label>
+      <span id="ringLabel">Kick</span>
+      <button type="button" class="btn btn-secondary btn-sm" id="phaseDown" aria-label="Phase back">−</button>
+      <span id="phaseVal">0</span>
+      <button type="button" class="btn btn-secondary btn-sm" id="phaseUp" aria-label="Phase forward">+</button>
+    </div>
+    <div class="control-row" id="lsysRow" hidden>
+      <button type="button" class="btn btn-secondary btn-sm" id="resetBtn">Reset</button>
+      <span aria-live="polite">Gen <strong id="genOut">0</strong> · <strong id="ruleOut">A→AB, B→A</strong></span>
+    </div>
+  </div>
+  <p class="status-bar" id="status">Tap ring to edit · Audio on</p>
+  <div class="main-stage circular-drum-stage">
+    <canvas id="seq" class="canvas-fill" aria-label="Rhythm machine sequencer"></canvas>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { drawCircularSeq, expandPattern8to16, hitCircularSeq } from "../../shared/circular-seq.js";
+    import { euclideanRhythm } from "../../shared/euclidean.js";
+    import { createLSystemGroove } from "../../shared/lsystem-groove.js";
+    import { DRUM_SEQ_ROWS } from "../../shared/drum-sounds.js";
+
+    bindLearn();
+
+    const STEPS = 16;
+    const GENS = ["draw", "euclid", "lsystem"];
+    const canvas = document.getElementById("seq");
+    const g = canvas.getContext("2d");
+    const genSel = document.getElementById("gen");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    const pattern = DRUM_SEQ_ROWS.map(() => Array(STEPS).fill(false));
+    let ctx, master, playing = false, stepIndex = 0, nextTime = 0, playStep = -1;
+    let audioReady = false;
+    let applyingTemplate = false;
+    let barCount = 0;
+
+    let gen = new URLSearchParams(location.search).get("gen");
+    if (!GENS.includes(gen)) gen = "draw";
+    genSel.value = gen;
+
+    // --- Euclid state -----------------------------------------------------
+    const EUCLID_RINGS = [
+      { pulses: 4 },
+      { pulses: 5 },
+      { pulses: 7 },
+      { pulses: 3 },
+    ];
+    const phases = EUCLID_RINGS.map(() => 0);
+    let selectedRing = 0;
+
+    // --- L-system state ---------------------------------------------------
+    const lsys = createLSystemGroove("A", { A: "AB", B: "A" });
+
+    const TEMPLATES_8 = {
+      rock: { bpm: 110, swing: 0, rows: [[1,0,0,0,1,0,0,0],[0,0,1,0,0,0,1,0],[1,0,1,0,1,0,1,0],[0,0,0,0,0,0,0,0]] },
+      house: { bpm: 124, swing: 0, rows: [[1,1,1,1,1,1,1,1],[0,0,1,0,0,0,1,0],[0,1,0,1,0,1,0,1],[0,0,0,0,0,0,0,0]] },
+      disco: { bpm: 118, swing: 12, rows: [[1,0,0,0,1,0,0,0],[0,0,1,0,0,0,1,0],[1,1,1,1,1,1,1,1],[0,0,0,1,0,0,0,1]] },
+      hiphop: { bpm: 92, swing: 8, rows: [[1,0,0,1,0,0,1,0],[0,0,1,0,0,0,1,0],[1,0,1,0,1,0,1,0],[0,0,0,0,0,0,0,0]] },
+      funk: { bpm: 104, swing: 18, rows: [[1,0,0,1,0,0,1,0],[0,0,1,0,0,1,0,0],[1,1,0,1,1,1,0,1],[0,0,0,0,0,0,0,1]] },
+      techno: { bpm: 130, swing: 0, rows: [[1,1,1,1,1,1,1,1],[0,0,0,0,1,0,0,0],[1,0,1,0,1,0,1,0],[0,0,0,1,0,0,0,1]] },
+    };
+
+    function sizeCanvas() {
+      const box = canvas.parentElement.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      const w = Math.max(1, Math.floor(box.width * dpr));
+      const h = Math.max(1, Math.floor(box.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      return { w, h, dpr };
+    }
+
+    function redraw() {
+      const { w, h, dpr } = sizeCanvas();
+      drawCircularSeq(g, w, h, dpr, {
+        pattern,
+        rows: DRUM_SEQ_ROWS,
+        playStep: playing ? playStep : -1,
+        selectedRing: gen === "euclid" ? selectedRing : -1,
+      });
+    }
+
+    function setPatternRow(ri, row) {
+      for (let ci = 0; ci < STEPS; ci++) pattern[ri][ci] = !!row[ci];
+    }
+
+    function rebuildEuclid() {
+      EUCLID_RINGS.forEach((r, ri) => setPatternRow(ri, euclideanRhythm(r.pulses, STEPS, phases[ri])));
+      redraw();
+    }
+
+    function applyLSystemToPattern() {
+      for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+        setPatternRow(ri, lsys.toPattern(STEPS, ri * 5));
+      }
+      const label = lsys.getRuleLabel();
+      document.getElementById("genOut").textContent = String(lsys.getGeneration());
+      document.getElementById("ruleOut").textContent = label;
+      redraw();
+    }
+
+    function updatePhaseUI() {
+      document.getElementById("phaseVal").textContent = String(phases[selectedRing]);
+      document.getElementById("ringLabel").textContent = DRUM_SEQ_ROWS[selectedRing].name;
+      document.querySelectorAll("#euclidPickRow button").forEach((btn, i) => {
+        btn.classList.toggle("active", i === selectedRing);
+        btn.setAttribute("aria-pressed", i === selectedRing ? "true" : "false");
+      });
+    }
+
+    function setGen(next) {
+      gen = next;
+      document.getElementById("drawRow").hidden = gen !== "draw";
+      document.getElementById("euclidPickRow").hidden = gen !== "euclid";
+      document.getElementById("euclidPhaseRow").hidden = gen !== "euclid";
+      document.getElementById("lsysRow").hidden = gen !== "lsystem";
+      if (gen === "euclid") {
+        rebuildEuclid();
+        updatePhaseUI();
+      } else if (gen === "lsystem") {
+        applyLSystemToPattern();
+      } else {
+        redraw();
+      }
+    }
+
+    function applyTemplate(id) {
+      const t = TEMPLATES_8[id];
+      if (!t) return;
+      applyingTemplate = true;
+      const rows16 = expandPattern8to16(t.rows);
+      rows16.forEach((row, ri) => setPatternRow(ri, row));
+      document.getElementById("bpm").value = String(t.bpm);
+      document.getElementById("bpmVal").textContent = String(t.bpm);
+      document.getElementById("swing").value = String(t.swing);
+      document.getElementById("swingVal").textContent = `${t.swing}%`;
+      applyingTemplate = false;
+      redraw();
+    }
+
+    async function boot(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.65));
+      audioReady = true;
+    }
+
+    registerAudioBoot(boot);
+
+    function ensureAudio() {
+      if (audioReady) return Promise.resolve(ctx);
+      return startAudio(boot);
+    }
+
+    function hitFromEvent(e) {
+      const r = canvas.getBoundingClientRect();
+      const px = ((e.clientX - r.left) / r.width) * canvas.width;
+      const py = ((e.clientY - r.top) / r.height) * canvas.height;
+      return hitCircularSeq(px, py, canvas.width, canvas.height, DRUM_SEQ_ROWS.length, STEPS);
+    }
+
+    canvas.addEventListener("pointerdown", async (e) => {
+      e.preventDefault();
+      await ensureAudio();
+      const hit = hitFromEvent(e);
+      if (!hit) return;
+      if (gen === "euclid") {
+        selectedRing = hit.ring;
+        updatePhaseUI();
+        redraw();
+        return;
+      }
+      pattern[hit.ring][hit.step] = !pattern[hit.ring][hit.step];
+      if (gen === "draw" && !applyingTemplate) document.getElementById("template").value = "custom";
+      redraw();
+      if (audioReady && pattern[hit.ring][hit.step]) DRUM_SEQ_ROWS[hit.ring].play(ctx, master);
+    });
+
+    function stepDuration(step) {
+      const bpm = +document.getElementById("bpm").value;
+      const base = 60 / bpm / 4;
+      const swing = +document.getElementById("swing").value / 100;
+      if (swing === 0) return base;
+      const skew = swing * 0.5;
+      return step % 2 === 1 ? base * (1 + skew) : base * (1 - skew);
+    }
+
+    function scheduler() {
+      if (!playing || !ctx) return;
+      const now = ctx.currentTime;
+      while (nextTime <= now + 0.05) {
+        const col = stepIndex;
+        if (col === 0 && barCount > 0 && gen === "lsystem") {
+          lsys.rewrite();
+          applyLSystemToPattern();
+        }
+        playStep = col;
+        redraw();
+        for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+          if (pattern[ri][col]) DRUM_SEQ_ROWS[ri].play(ctx, master);
+        }
+        nextTime += stepDuration(col);
+        stepIndex = (col + 1) % STEPS;
+        if (stepIndex === 0) barCount++;
+      }
+      requestAnimationFrame(scheduler);
+    }
+
+    // Euclid ring-pick buttons.
+    const ringPick = document.getElementById("euclidPickRow");
+    DRUM_SEQ_ROWS.forEach((row, ri) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-secondary btn-sm";
+      btn.textContent = `${row.icon} ${row.name}`;
+      btn.setAttribute("aria-label", `Select ${row.name} ring`);
+      btn.setAttribute("aria-pressed", ri === 0 ? "true" : "false");
+      btn.addEventListener("click", () => {
+        selectedRing = clamp(ri, 0, DRUM_SEQ_ROWS.length - 1);
+        updatePhaseUI();
+        redraw();
+      });
+      ringPick.appendChild(btn);
+    });
+
+    const setPhase = (d) => {
+      phases[selectedRing] = ((phases[selectedRing] + d) % STEPS + STEPS) % STEPS;
+      updatePhaseUI();
+      rebuildEuclid();
+    };
+    document.getElementById("phaseDown").onclick = () => setPhase(-1);
+    document.getElementById("phaseUp").onclick = () => setPhase(1);
+
+    document.getElementById("resetBtn").onclick = () => {
+      lsys.reset("A");
+      barCount = 0;
+      stepIndex = 0;
+      applyLSystemToPattern();
+    };
+
+    document.getElementById("bpm").oninput = (e) => {
+      document.getElementById("bpmVal").textContent = e.target.value;
+    };
+    document.getElementById("swing").oninput = (e) => {
+      document.getElementById("swingVal").textContent = `${e.target.value}%`;
+    };
+
+    document.getElementById("template").addEventListener("change", (e) => {
+      const id = e.target.value;
+      if (id === "custom") return;
+      void ensureAudio().then(() => applyTemplate(id));
+    });
+
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      for (let ri = 0; ri < DRUM_SEQ_ROWS.length; ri++) {
+        for (let ci = 0; ci < STEPS; ci++) pattern[ri][ci] = false;
+      }
+      if (gen === "draw") document.getElementById("template").value = "custom";
+      redraw();
+    });
+
+    genSel.addEventListener("change", () => setGen(genSel.value));
+
+    const playBtn = document.getElementById("playBtn");
+    playBtn.addEventListener("click", async () => {
+      await ensureAudio();
+      if (!ctx) return;
+      if (playing) {
+        playing = false;
+        playStep = -1;
+        playBtn.classList.remove("active");
+        playBtn.textContent = "▶";
+        redraw();
+        return;
+      }
+      playing = true;
+      stepIndex = 0;
+      playStep = 0;
+      barCount = 0;
+      nextTime = ctx.currentTime + 0.05;
+      playBtn.classList.add("active");
+      playBtn.textContent = "■";
+      scheduler();
+    });
+
+    setGen(gen);
+    new ResizeObserver(() => redraw()).observe(canvas.parentElement);
+    requestAnimationFrame(() => redraw());
+  </script>
+</body>
+</html>

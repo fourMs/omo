@@ -30,9 +30,9 @@ export const LEARN_PEDAGOGY = {
     "Players program patterns, then hear how repetition and syncopation create groove.",
   ],
 
-  "circular-drum": [
-    "Steps are placed on a ring; the playhead travels around the circle like a rotary sequencer.",
-    "Same idea as linear steps, but the cyclic layout highlights phase and polyrhythm when rings run at different lengths.",
+  "rhythm-machine": [
+    "Steps sit on a ring and a playhead sweeps clockwise; the cyclic layout makes phase and polyrhythm visible. Three pattern sources feed the same ring: hand-drawn steps, Euclidean rhythms E(k,16) that spread hits as evenly as possible, and an L-system that rewrites the pattern every bar.",
+    "The same formula E(k,n) underlies many world musics and techno patterns; the L-system shows structure growing from a two-symbol grammar. Compare sources: how does groove differ when a hand, a formula, or a grammar wrote it?",
   ],
 
   firefly: [
@@ -66,18 +66,13 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "compass-wah": [
-    "Hold the screen and rotate flat — compass heading sweeps a lowpass filter while tilt and shake add volume and vibrato.",
-    "Many sensor dimensions on one filtered tone: mapping design makes the same synth feel like a new instrument.",
+    "Hold the screen and rotate flat — in Wah mode the compass heading sweeps a lowpass filter while tilt and shake add volume and vibrato; in Choir mode five detuned voices sit around the rose and the section you face sings loudest.",
+    "Many sensor dimensions on one instrument: mapping design makes the same sensors feel like different instruments, and where you face in the room becomes your place in the mix.",
   ],
 
   "motion-filter": [
     "One saw tone, one filter, four action–sound mappings: tilt sweeps a wah bandpass, shakes jerk a lowpass open, a four-stage ladder (Moog-style, ≈24 dB/oct) follows pad and tilt, and Flat gates sound to a tabletop pose.",
     "The synth never changes — only the mapping does. Compare mappings to feel how mapping design, not synthesis, makes an instrument.",
-  ],
-
-  "heading-choir": [
-    "Hold and turn your body — compass heading pans a detuned choir in stereo.",
-    "Spatial ensemble: where you face in the room becomes your place in the mix.",
   ],
 
   harmonizer: [
@@ -185,16 +180,6 @@ export const LEARN_PEDAGOGY = {
     "Stochastic melody — structure without a fixed score; compare human vs machine choices.",
   ],
 
-  "euclidean-rings": [
-    "Euclidean rhythm distributes k hits evenly among n steps; rotating rings place polymetric grids.",
-    "Mathematical rhythm — same formula underlies many world musics and techno patterns.",
-  ],
-
-  "lsystem-groove": [
-    "An L-system rewrites a symbol string; symbols map to drum hits, growing patterns over generations.",
-    "Algorithmic composition: simple rules, complex output — fractal-like rhythmic growth.",
-  ],
-
   "chaos-attractor": [
     "A chaotic map (e.g. Lorenz-style) drives filter or pitch; tiny changes grow into large swings.",
     "Deterministic but unpredictable — sensitivity to initial conditions as a performance parameter.",
@@ -299,6 +284,10 @@ export const LEARN_PEDAGOGY = {
   "shake-filter": "See Motion Filter → Shake: accelerometer jerks open the lowpass.",
   "flat-edge": "See Motion Filter → Flat gate: sound only while the phone lies flat.",
   "filter-ladder": "See Motion Filter → Ladder: four lowpass stages, pad Y and tilt set cutoff.",
+  "heading-choir": "See Compass Wah → Choir: turn your body and the section you face sings loudest.",
+  "circular-drum": "See Rhythm Machine → Draw: tap ring segments to toggle hits.",
+  "euclidean-rings": "See Rhythm Machine → Euclid: E(k,16) rings with per-ring phase.",
+  "lsystem-groove": "See Rhythm Machine → L-system: the pattern rewrites every bar.",
   "ks-pluck": "See Resonant Wire → Pocket range: wider pitch span, same Karplus–Strong model.",
   "fm-touch-tilt": "See FM Fingerpaint → Tilt mod: modulator rate from phone angle.",
   "motion-grid": "See Motion Cam: frame differencing drives density.",

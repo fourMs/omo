@@ -9,10 +9,9 @@
   <script type="module">
     const mode = new URLSearchParams(location.search).get("mode");
     const legacy = {
-      tilt: "../motion-wah/",
-      shake: "../shake-filter/",
-      flat: "../flat-edge/",
-      choir: "../heading-choir/",
+      tilt: "../motion-filter/?mode=tilt",
+      shake: "../motion-filter/?mode=shake",
+      flat: "../motion-filter/?mode=flat",
     };
     if (mode && legacy[mode]) location.replace(legacy[mode]);
   </script>
@@ -23,16 +22,25 @@
     <h1>Compass Wah</h1>
   </header>
   <div class="learn-panel panel" id="learnPanel">
-    <h2>Compass filter</h2>
-    <p>Turn <strong>Audio on</strong>, tap the compass, allow <strong>orientation</strong> and <strong>motion</strong> on iPhone.</p>
-    <p><strong>Hold anywhere</strong> on the screen to play. <strong>Rotate</strong> flat for wah · <strong>tilt</strong> forward/back for volume · <strong>shake</strong> for vibrato.</p>
+    <h2>Compass instrument</h2>
+    <p>Turn <strong>Audio on</strong>, tap the compass, allow <strong>orientation</strong> and <strong>motion</strong> on iPhone. <strong>Hold anywhere</strong> on the screen to play.</p>
+    <p><strong>Wah</strong>: rotate flat to sweep the filter · tilt forward/back for volume · shake for vibrato.</p>
+    <p><strong>Choir</strong>: five voices sit around the rose — turn your body and the section you face sings loudest. Level mixing (not pan only) keeps rotation audible on phone speakers.</p>
   </div>
   <p class="status-bar" id="status">Hold screen to play · Audio on</p>
-  <div class="readout-row">
+  <div class="control-row">
+    <button type="button" class="btn btn-secondary btn-sm" id="modeWahBtn" aria-pressed="true">Wah</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="modeChoirBtn" aria-pressed="false">Choir</button>
+  </div>
+  <div class="readout-row" id="wahReadout">
     <p class="value-chip">Heading <strong id="headOut">—</strong>°</p>
     <p class="value-chip">Cutoff <strong id="cutOut">—</strong> Hz</p>
     <p class="value-chip">Amp <strong id="ampOut">—</strong></p>
     <p class="value-chip">Vib <strong id="vibOut">—</strong></p>
+  </div>
+  <div class="readout-row" id="choirReadout" hidden>
+    <p class="value-chip">Heading <strong id="headOut2">—</strong>°</p>
+    <p class="value-chip">Front <strong id="frontOut">—</strong></p>
   </div>
   <div class="main-stage">
     <canvas id="compass" class="canvas-fill play-grid" aria-label="Compass"></canvas>
@@ -49,16 +57,45 @@
     bindLearn();
     const canvas = document.getElementById("compass");
     const g = canvas.getContext("2d");
+    const modeWahBtn = document.getElementById("modeWahBtn");
+    const modeChoirBtn = document.getElementById("modeChoirBtn");
     const SENSOR_OPTS = { needMotion: true, needOrientation: true };
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    // Choir constants (from the former Heading Choir app).
+    const VOICE_COUNT = 5;
+    const SECTOR_LABELS = ["N", "NE", "E", "SE", "S"];
+    const BEAM_DEG = 52;
 
     const motionExpr = createMotionExpression({ baseAmp: 0.28 });
     let motion = { amp: 0.28, vibCents: 0, vibHz: 5 };
 
+    let mode = new URLSearchParams(location.search).get("mode") === "choir" ? "choir" : "wah";
     let ctx, master, osc, filt, gate, vibOsc, vibGain, built = false;
+    let voices = [];
     let sensorsReady = false;
     let holding = false;
     let alpha = 0;
     let beta = 90;
+
+    function setMode(m) {
+      mode = m;
+      modeWahBtn.setAttribute("aria-pressed", String(m === "wah"));
+      modeChoirBtn.setAttribute("aria-pressed", String(m === "choir"));
+      modeWahBtn.classList.toggle("btn-play", m === "wah");
+      modeChoirBtn.classList.toggle("btn-play", m === "choir");
+      document.getElementById("wahReadout").hidden = m !== "wah";
+      document.getElementById("choirReadout").hidden = m !== "choir";
+      if (built) {
+        const t = ctx.currentTime;
+        if (m !== "wah") {
+          gate.gain.setTargetAtTime(0, t, 0.05);
+          vibGain.gain.setTargetAtTime(0, t, 0.05);
+        }
+        if (m !== "choir") voices.forEach((v) => v.g.gain.setTargetAtTime(0, t, 0.05));
+        applyVoice();
+      }
+    }
 
     function headingFromOrientation(o) {
       if (typeof o.webkitCompassHeading === "number" && Number.isFinite(o.webkitCompassHeading)) {
@@ -68,23 +105,30 @@
       return alpha;
     }
 
+    function angularDist(a, b) {
+      let d = Math.abs(a - b) % 360;
+      if (d > 180) d = 360 - d;
+      return d;
+    }
+
+    function sectorGain(heading, sectorCenter) {
+      const d = angularDist(heading, sectorCenter);
+      const t = clamp(1 - d / BEAM_DEG, 0, 1);
+      return t * t;
+    }
+
     function draw() {
       const { w, h, dpr } = sizeCompassCanvas(canvas);
       drawCompassRose(g, w, h, dpr, { heading: alpha, beta });
     }
 
-    function applyVoice() {
-      if (!built || !ctx) return;
-      const t = ctx.currentTime;
-      const heading = ((alpha % 360) + 360) % 360;
-      document.getElementById("headOut").textContent = heading.toFixed(0);
+    function applyWah(t, heading) {
       if (!holding) {
         gate.gain.setTargetAtTime(0, t, 0.05);
         vibGain.gain.setTargetAtTime(0, t, 0.05);
         document.getElementById("cutOut").textContent = "—";
         document.getElementById("ampOut").textContent = "—";
         document.getElementById("vibOut").textContent = "—";
-        draw();
         return;
       }
       const cut = 200 + (heading / 360) * 6000;
@@ -96,12 +140,54 @@
       document.getElementById("cutOut").textContent = cut.toFixed(0);
       document.getElementById("ampOut").textContent = `${(playAmp * 100).toFixed(0)}%`;
       document.getElementById("vibOut").textContent = motion.vibCents.toFixed(1);
+    }
+
+    function applyChoir(t, heading) {
+      let best = 0;
+      let bestG = -1;
+      const weights = [];
+      for (let i = 0; i < VOICE_COUNT; i++) {
+        const center = (i / VOICE_COUNT) * 360;
+        const w = sectorGain(heading, center);
+        weights.push(w);
+        if (w > bestG) {
+          bestG = w;
+          best = i;
+        }
+      }
+      document.getElementById("frontOut").textContent = SECTOR_LABELS[best] ?? "—";
+      if (!holding) {
+        voices.forEach((v) => v.g.gain.setTargetAtTime(0, t, 0.1));
+        return;
+      }
+      const sum = weights.reduce((a, b) => a + b, 0) || 1;
+      voices.forEach((v, i) => {
+        const norm = weights[i] / sum;
+        const gn = 0.025 + norm * 0.38;
+        v.g.gain.setTargetAtTime(gn, t, 0.06);
+        const pan = Math.sin(((heading / 360) + i / VOICE_COUNT) * Math.PI * 2) * 0.95;
+        v.p.pan.setTargetAtTime(pan, t, 0.08);
+        const bright = 0.35 + norm * 0.65;
+        v.f.frequency.setTargetAtTime(280 + bright * 2200, t, 0.08);
+        v.f.Q.setTargetAtTime(0.7 + norm * 2.5, t, 0.08);
+      });
+    }
+
+    function applyVoice() {
+      if (!built || !ctx) return;
+      const t = ctx.currentTime;
+      const heading = ((alpha % 360) + 360) % 360;
+      document.getElementById("headOut").textContent = heading.toFixed(0);
+      document.getElementById("headOut2").textContent = heading.toFixed(0);
+      if (mode === "wah") applyWah(t, heading);
+      else applyChoir(t, heading);
       draw();
     }
 
     function buildAudio(c) {
       ctx = c;
       ({ master } = createMasterBus(c, 0.5));
+      // Wah voice.
       gate = ctx.createGain();
       gate.gain.value = 0;
       filt = ctx.createBiquadFilter();
@@ -122,6 +208,27 @@
       gate.connect(master);
       osc.start();
       vibOsc.start();
+      // Choir voices.
+      voices = [];
+      for (let i = 0; i < VOICE_COUNT; i++) {
+        const o = ctx.createOscillator();
+        const gn = ctx.createGain();
+        const f = ctx.createBiquadFilter();
+        const p = ctx.createStereoPanner();
+        gn.gain.value = 0;
+        f.type = "lowpass";
+        f.frequency.value = 900;
+        f.Q.value = 1;
+        o.type = i % 2 ? "triangle" : "sawtooth";
+        o.frequency.value = 110 * Math.pow(2, (i * 7) / 12);
+        o.detune.value = (i - 2) * 6;
+        o.connect(f);
+        f.connect(gn);
+        gn.connect(p);
+        p.connect(master);
+        o.start();
+        voices.push({ o, g: gn, f, p });
+      }
       built = true;
       draw();
     }
@@ -143,17 +250,22 @@
         applyVoice();
       });
       onMotion((data) => {
-        if (!holding) return;
+        if (!holding || mode !== "wah") return;
         motion = motionExpr.update(data);
         applyVoice();
       });
       sensorsReady = true;
-      setStatus("status", "Hold screen to play", "ok");
+      setStatus("status", mode === "choir" ? "Hold compass and turn your body" : "Hold screen to play", "ok");
       draw();
       return true;
     }
 
+    modeWahBtn.addEventListener("click", () => setMode("wah"));
+    modeChoirBtn.addEventListener("click", () => setMode("choir"));
+    setMode(mode);
+
     wireScreenHold(document.body, {
+      ignore: ".back-link, #learnBtn, #modeWahBtn, #modeChoirBtn",
       async onStart() {
         primeSensors(SENSOR_OPTS);
         await startAudio(!built ? buildAudio : undefined);
