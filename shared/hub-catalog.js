@@ -8,6 +8,7 @@ export const HUB_APPS = [
     section: "rhythm",
     synth: "Ensemble click",
     sensors: "Touch · shared URL",
+    teaches: "Pulse and tactus · Time and rhythm",
   },
   {
     href: "apps/clix/",
@@ -15,6 +16,7 @@ export const HUB_APPS = [
     section: "rhythm",
     synth: "Typed impulse · grid velocity",
     sensors: "Keyboard · touch",
+    teaches: "Ensemble timing and velocity grids · Time and rhythm",
   },
   {
     href: "apps/drumkit/",
@@ -22,6 +24,7 @@ export const HUB_APPS = [
     section: "rhythm",
     synth: "Drum synthesis",
     sensors: "Touch",
+    teaches: "Onsets, envelopes, drum timbre · Time and rhythm",
   },
   {
     href: "apps/drum-sequencer/",
@@ -29,6 +32,7 @@ export const HUB_APPS = [
     section: "rhythm",
     synth: "Step sequencer",
     sensors: "Touch",
+    teaches: "Metre, repetition, syncopation · Time and rhythm",
   },
   {
     href: "apps/rhythm-machine/",
@@ -36,6 +40,7 @@ export const HUB_APPS = [
     section: "rhythm",
     synth: "Ring seq · draw, Euclid, L-system",
     sensors: "Touch",
+    teaches: "Euclidean and generative rhythm · Time and rhythm",
   },
   {
     href: "apps/firefly/",
@@ -43,6 +48,7 @@ export const HUB_APPS = [
     section: "rhythm",
     synth: "Pulse click",
     sensors: "Mic · touch",
+    teaches: "Entrainment, coupled oscillators · Time and rhythm",
   },
   {
     href: "apps/delay-throw/",
@@ -50,6 +56,7 @@ export const HUB_APPS = [
     section: "rhythm",
     synth: "Delay feedback",
     sensors: "Touch · tilt",
+    teaches: "Delay, feedback, echo rhythm · Electroacoustics",
   },
   {
     href: "apps/evo-drumkit/",
@@ -57,6 +64,7 @@ export const HUB_APPS = [
     section: "ai",
     synth: "Evolving drums",
     sensors: "Touch · mic",
+    teaches: "Evolutionary algorithms · Machine listening",
   },
   {
     href: "apps/green-button/",
@@ -64,6 +72,7 @@ export const HUB_APPS = [
     section: "drones",
     synth: "Swarm tones",
     sensors: "Touch · motion",
+    teaches: "Swell, vibrato, ensemble density · Electroacoustics",
   },
   {
     href: "apps/just-equal/",
@@ -71,6 +80,7 @@ export const HUB_APPS = [
     section: "drones",
     synth: "Detuned sines",
     sensors: "Touch",
+    teaches: "Just vs equal temperament · Harmony and melody",
   },
   {
     href: "apps/sound-saber/",
@@ -78,6 +88,7 @@ export const HUB_APPS = [
     section: "drones",
     synth: "Pulse · delay · ring",
     sensors: "Touch · motion",
+    teaches: "Motion as timbre · The body",
   },
   {
     href: "apps/motion-filter/",
@@ -85,6 +96,7 @@ export const HUB_APPS = [
     section: "drones",
     synth: "Tilt · shake · ladder · flat",
     sensors: "Touch · motion · tilt",
+    teaches: "Action–sound mappings · The body",
   },
   {
     href: "apps/compass-wah/",
@@ -92,6 +104,7 @@ export const HUB_APPS = [
     section: "drones",
     synth: "Compass wah or choir",
     sensors: "Touch · compass · tilt",
+    teaches: "Orientation as control · The body",
   },
   {
     href: "apps/harmonizer/",
@@ -99,6 +112,7 @@ export const HUB_APPS = [
     section: "drones",
     synth: "Chroma drones",
     sensors: "Mic · touch",
+    teaches: "Chroma and room harmony · Machine listening",
   },
   {
     href: "apps/piano/",
@@ -106,6 +120,7 @@ export const HUB_APPS = [
     section: "melody",
     synth: "Keyboard tones",
     sensors: "Touch",
+    teaches: "Pitch reference, voice-leading · Harmony and melody",
   },
   {
     href: "apps/mic-theremin/",
@@ -113,6 +128,7 @@ export const HUB_APPS = [
     section: "melody",
     synth: "Pitch-tracked sine",
     sensors: "Mic · touch",
+    teaches: "Pitch tracking · Machine listening",
   },
   {
     href: "apps/flute-blow/",
@@ -120,6 +136,7 @@ export const HUB_APPS = [
     section: "melody",
     synth: "Breath tone",
     sensors: "Mic · touch",
+    teaches: "Excitation and resonance · Acoustics",
   },
   {
     href: "apps/tilt-harp/",
@@ -127,6 +144,7 @@ export const HUB_APPS = [
     section: "melody",
     synth: "Plucked harp",
     sensors: "Touch · tilt",
+    teaches: "Damping and decay · Acoustics",
   },
   {
     href: "apps/bow-phone/",
@@ -134,6 +152,7 @@ export const HUB_APPS = [
     section: "melody",
     synth: "Bowed string",
     sensors: "Touch · camera",
+    teaches: "Continuous excitation · The body",
   },
   {
     href: "apps/fm-touch/",
@@ -141,6 +160,7 @@ export const HUB_APPS = [
     section: "synthesis",
     synth: "2-op FM · finger or tilt",
     sensors: "Touch · tilt",
+    teaches: "FM synthesis · Electroacoustics",
   },
   {
     href: "apps/synth-tour/",
@@ -148,6 +168,7 @@ export const HUB_APPS = [
     section: "synthesis",
     synth: "FM · ring · AM · PD · wavetable · supersaw",
     sensors: "Touch · mic · gyro",
+    teaches: "Synthesis techniques compared · Electroacoustics",
   },
   {
     href: "apps/ks-string/",
@@ -155,6 +176,7 @@ export const HUB_APPS = [
     section: "synthesis",
     synth: "KS · pluck position",
     sensors: "Touch · tilt",
+    teaches: "Physical modelling (Karplus–Strong) · Electroacoustics",
   },
   {
     href: "apps/additive-bells/",
@@ -162,6 +184,7 @@ export const HUB_APPS = [
     section: "synthesis",
     synth: "Additive partials",
     sensors: "Touch · motion",
+    teaches: "Additive synthesis, Fourier · Acoustics",
   },
   {
     href: "apps/sampler/",
@@ -169,6 +192,7 @@ export const HUB_APPS = [
     section: "texture",
     synth: "Sample playback",
     sensors: "Mic · touch · tilt",
+    teaches: "Sampling · Electroacoustics",
   },
   {
     href: "apps/granular-tilt/",
@@ -176,6 +200,7 @@ export const HUB_APPS = [
     section: "texture",
     synth: "Granular cloud",
     sensors: "Touch · tilt · mic",
+    teaches: "Granular synthesis · Electroacoustics",
   },
   {
     href: "apps/spectral-freeze/",
@@ -183,6 +208,7 @@ export const HUB_APPS = [
     section: "texture",
     synth: "FFT partials · freeze or soup",
     sensors: "Mic · touch",
+    teaches: "Spectrum, FFT, averaging · Acoustics",
   },
   {
     href: "apps/tap-bloom/",
@@ -190,6 +216,7 @@ export const HUB_APPS = [
     section: "texture",
     synth: "Generative blooms",
     sensors: "Touch",
+    teaches: "Generative layering and reverb · Electroacoustics",
   },
   {
     href: "apps/video-sonifier/",
@@ -197,6 +224,7 @@ export const HUB_APPS = [
     section: "texture",
     synth: "Camera → sound",
     sensors: "Camera",
+    teaches: "Sonification of visual motion · Vision",
   },
   {
     href: "apps/hum-clap/",
@@ -204,6 +232,7 @@ export const HUB_APPS = [
     section: "ai",
     synth: "k-NN classifier",
     sensors: "Mic",
+    teaches: "Audio classification · Machine listening",
   },
   {
     href: "apps/train-shake/",
@@ -211,6 +240,7 @@ export const HUB_APPS = [
     section: "ai",
     synth: "ML gesture map",
     sensors: "Motion",
+    teaches: "Rule-based vs learned models · Machine listening",
   },
   {
     href: "apps/markov-melody/",
@@ -218,6 +248,7 @@ export const HUB_APPS = [
     section: "melody",
     synth: "2nd-order Markov",
     sensors: "Touch · keyboard",
+    teaches: "Markov chains · Machine listening",
   },
   {
     href: "apps/kaoss-pad/",
@@ -225,6 +256,7 @@ export const HUB_APPS = [
     section: "melody",
     synth: "XY loop synth",
     sensors: "Touch pad",
+    teaches: "Scales and quantization · Harmony and melody",
   },
   {
     href: "apps/chaos-attractor/",
@@ -232,6 +264,7 @@ export const HUB_APPS = [
     section: "texture",
     synth: "Chaotic subtractive",
     sensors: "Touch · motion",
+    teaches: "Sensitivity to initial conditions · Electroacoustics",
   },
   {
     href: "apps/shepard-glide/",
@@ -239,31 +272,34 @@ export const HUB_APPS = [
     section: "drones",
     synth: "Shepard tone",
     sensors: "Touch · tilt",
+    teaches: "Shepard illusion · Psychoacoustics",
   },
-  { href: "apps/room-reverb-send/", title: "Room Reverb Send", section: "texture", synth: "Convolver wet", sensors: "Mic · touch" },
-  { href: "apps/clap-architect/", title: "Clap Architect", section: "rhythm", synth: "Learned kit", sensors: "Mic · touch" },
-  { href: "apps/shadow-sequencer/", title: "Shadow Sequencer", section: "rhythm", synth: "8-step mask", sensors: "Camera · touch" },
-  { href: "apps/pinch-bass/", title: "Pinch Bass", section: "synthesis", synth: "Subtractive bass", sensors: "Pinch · XY" },
-  { href: "apps/mapping-roulette/", title: "Mapping Roulette", section: "synthesis", synth: "Remappable saw voice", sensors: "Touch · drag speed" },
-  { href: "apps/bowed-waveguide/", title: "Bowed Waveguide", section: "melody", synth: "Continuous KS", sensors: "Touch drag" },
+  { href: "apps/room-reverb-send/", title: "Room Reverb Send", section: "texture", synth: "Convolver wet", sensors: "Mic · touch", teaches: "Reverberation and feedback · Acoustics" },
+  { href: "apps/clap-architect/", title: "Clap Architect", section: "rhythm", synth: "Learned kit", sensors: "Mic · touch", teaches: "Onset detection · Machine listening" },
+  { href: "apps/shadow-sequencer/", title: "Shadow Sequencer", section: "rhythm", synth: "8-step mask", sensors: "Camera · touch", teaches: "Optical sensing as score · Vision" },
+  { href: "apps/pinch-bass/", title: "Pinch Bass", section: "synthesis", synth: "Subtractive bass", sensors: "Pinch · XY", teaches: "Cross-coupled mapping · The body" },
+  { href: "apps/mapping-roulette/", title: "Mapping Roulette", section: "synthesis", synth: "Remappable saw voice", sensors: "Touch · drag speed", teaches: "Coupling vs mapping · The body" },
+  { href: "apps/bowed-waveguide/", title: "Bowed Waveguide", section: "melody", synth: "Continuous KS", sensors: "Touch drag", teaches: "Physical modelling (bowed) · Electroacoustics" },
   {
     href: "apps/crystalis/",
     title: "Crystalis",
     section: "melody",
     synth: "Bowed band · grid pluck",
     sensors: "Keyboard · touch pad",
+    teaches: "Ensemble grid performance · Time and rhythm",
   },
-  { href: "apps/pluck-bowl/", title: "Pluck Bowl", section: "synthesis", synth: "KS + LFO layers", sensors: "Touch position" },
-  { href: "apps/wind-bottle/", title: "Wind Bottle", section: "texture", synth: "Noise resonator", sensors: "Tilt · touch" },
-  { href: "apps/scrub-tape/", title: "Scrub Tape", section: "texture", synth: "Buffer scrub", sensors: "Mic · tape ribbon" },
-  { href: "apps/vocoder-choir/", title: "Vocoder Choir", section: "texture", synth: "Band vocoder", sensors: "Mic · tilt · touch" },
-  { href: "apps/gesture-regression/", title: "Gesture Regression", section: "ai", synth: "ML → filter", sensors: "Motion · touch" },
+  { href: "apps/pluck-bowl/", title: "Pluck Bowl", section: "synthesis", synth: "KS + LFO layers", sensors: "Touch position", teaches: "Inharmonic partials, strike position · Acoustics" },
+  { href: "apps/wind-bottle/", title: "Wind Bottle", section: "texture", synth: "Noise resonator", sensors: "Tilt · touch", teaches: "Noise and resonance · Acoustics" },
+  { href: "apps/scrub-tape/", title: "Scrub Tape", section: "texture", synth: "Buffer scrub", sensors: "Mic · tape ribbon", teaches: "Tape speed: time–pitch coupling · Electroacoustics" },
+  { href: "apps/vocoder-choir/", title: "Vocoder Choir", section: "texture", synth: "Band vocoder", sensors: "Mic · tilt · touch", teaches: "Source–filter model, formants · Acoustics" },
+  { href: "apps/gesture-regression/", title: "Gesture Regression", section: "ai", synth: "ML → filter", sensors: "Motion · touch", teaches: "Nearest-neighbour regression · Machine listening" },
   {
     href: "apps/standstill/",
     title: "Standstill",
     section: "drones",
     synth: "Inverse stillness bloom",
     sensors: "Motion · tilt",
+    teaches: "Micromotion and standstill · The body",
   },
   {
     href: "apps/micromotion/",
@@ -271,6 +307,7 @@ export const HUB_APPS = [
     section: "drones",
     synth: "Band-split stillness voices",
     sensors: "Motion · gyro (optional)",
+    teaches: "Motion bands and sensor limits · The body",
   },
   {
     href: "apps/swarm-bloom/",
@@ -278,6 +315,7 @@ export const HUB_APPS = [
     section: "drones",
     synth: "Evo drones + rhythm",
     sensors: "Mic · ensemble",
+    teaches: "Emergent ensemble roles · The body",
   },
 ];
 

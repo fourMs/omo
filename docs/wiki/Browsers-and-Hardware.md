@@ -25,8 +25,8 @@ OMO apps use the **Web Audio API** and browser sensor APIs. There is no native a
 |--------|-------------|------------|----------------|
 | Touch / multi-touch | All instruments | Yes | Yes |
 | Microphone | Firefly, Harmonizer, ML apps | Prompt | Prompt |
-| Device motion (tilt) | Motion Trump, Shepard, granular | After gesture + permission | Usually yes |
-| Compass | Compass Wah, Heading Choir | Yes (permission) | Varies |
+| Device motion (tilt) | Motion Filter, Standstill, Shepard, granular | After gesture + permission | Usually yes |
+| Compass | Compass Wah (Wah + Choir modes) | Yes (permission) | Varies |
 | Camera | Shadow Sequencer, Video Sonifier, Bow Phone | Prompt | Prompt |
 
 Run **[Device support](https://fourms.github.io/omo/support.html)** before a workshop to see which APIs this device exposes.
@@ -51,6 +51,6 @@ The site registers a **service worker** (`sw.js`) that caches the hub, shared sc
 
 ## Hardware quirks
 
-- **Motion Trump** folder: `apps/motion-wah/` (title on hub: Motion Trump).
+- **Motion Filter** folder: `apps/motion-filter/` (legacy `motion-wah`, `shake-filter`, `flat-edge`, `filter-ladder` redirect there).
 - Older **KS Pluck** URLs redirect to **KS String**.
 - Retired hub apps may still exist as redirect stubs — see [App catalog](App-Catalog) → Retired.

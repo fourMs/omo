@@ -21,7 +21,9 @@ New performers are welcome — see the [OMO project page](https://www.uio.no/rit
 
 | Page | Topic |
 |------|--------|
-| [App catalog](App-Catalog) | Every instrument with synthesis role and sensors (56 apps) |
+| [App catalog](App-Catalog) | Every instrument with synthesis role, sensors, and what it teaches (49 apps) |
+| [Learning with OMO](Learning-with-OMO) | The instruments as live demos of *Sensing Sound and Music* concepts |
+| [Micromotion & Sonification](Micromotion-and-Sonification) | Inverse instruments, the standstill workshop, sonification principles |
 | [Workshop guide](Workshop-Guide) | Before the room, 45 min script, troubleshooting |
 | [Browsers & hardware](Browsers-and-Hardware) | iOS / Android, sensors, volume |
 | [Ensemble sync](Ensemble-Sync) | Conductor, Firefly, Harmonizer |

@@ -25,7 +25,7 @@ Open hub → **Piano** (or **Kaoss Pad** on Lead program). Everyone finds one no
 
 ### Sensors (10 min)
 
-**Motion Trump** ([motion-wah](https://fourms.github.io/omo/apps/motion-wah/)) — “Tilt = vowel.” Conductor points up/down; group sweeps together without looking at screens.
+**Motion Filter** ([motion-filter](https://fourms.github.io/omo/apps/motion-filter/)) — “Tilt = vowel.” Conductor points up/down; group sweeps together without looking at screens. Switch the mapping (Tilt · Shake · Ladder · Flat) and repeat: same synth, new instrument.
 
 **Shepard Glide** — hold the pad; tilt controls rise/fall speed. Discuss endless glide vs stepped melody. If tone stops while held, reload (service worker update) and keep finger on the pad centre.
 
@@ -36,6 +36,10 @@ Open hub → **Piano** (or **Kaoss Pad** on Lead program). Everyone finds one no
 **Scrub Tape** — record, then drag the **tape ribbon** at the bottom (DJ scrub).
 
 **Pinch Bass** — two-finger spread on the pad; watch the live readout for filter and pitch.
+
+### Stillness (optional, 10 min)
+
+**Standstill** — everyone holds the phone to the chest and stands still; sound blooms with stillness and any movement silences it. Run one 60-second **Championship** heat. **Micromotion** splits what remains into sway, tremor, and rotation lanes. Full script and background: **[Micromotion & Sonification](https://github.com/fourMs/omo/wiki/Micromotion-and-Sonification)**.
 
 ### AI (10 min)
 
@@ -48,7 +52,7 @@ Open hub → **Piano** (or **Kaoss Pad** on Lead program). Everyone finds one no
 
 1. **Conductor** — set BPM, **Start countdown**, share link (QR, AirDrop, or short URL).
 2. **Drones** — **Just Equal** or **Harmonizer**; assign roots (e.g. F / A♭ / C / E♭).
-3. **Rhythm** — split **Drum Sequencer**, **Circular Drum**, **Drumkit**, **Firefly**, or **L-System Groove**.
+3. **Rhythm** — split **Drum Sequencer**, **Rhythm Machine** (Draw, Euclid, or L-system), **Drumkit**, or **Firefly**.
 4. **Melody** — **Markov Melody**, **Kaoss Pad** (Beat program for pulse layer), or **Mic Theremin**.
 5. **Texture** — **Granular Tilt**, **Video Sonifier**, or **Vocoder Choir** (hold centre button, sing).
 
@@ -62,21 +66,24 @@ One phone on **Shepard Glide** or **Just Equal**; others silent. Discuss what fe
 |----------|--------|------|--------|
 | 10 min | Pulse only | Conductor + Firefly | No melody; listen for entrainment |
 | 15 min | Camera room | Shadow Sequencer + Video Sonifier | Dim lights; discuss privacy |
-| 20 min | Synthesis tour | FM Touch → Filter Ladder → Pluck Bowl | Map oscillator → filter → resonator |
+| 20 min | Synthesis tour | Synth Tour (FM → Ring → Wavetable → Supersaw) → Pluck Bowl | One pad, engines compared by ear |
 | 25 min | Kaoss layer | Kaoss Pad Beat + drone row | Quantized pulse under free harmony |
 | 30 min | ML ethics | Train Shake + Hum Clap | Compare k-NN on motion vs audio features |
+| 30 min | Standstill session | Standstill + Micromotion | Inverse instruments; see Micromotion & Sonification |
 
-## Suggested role map (56 apps)
+## Suggested role map (49 apps)
 
 | Role | Good starting apps |
 |------|-------------------|
 | Pulse / time | Conductor, Firefly, Clap Architect |
-| Grid rhythm | Drumkit, Drum Sequencer, Circular Drum, Euclidean Rings, L-System Groove |
-| Drones / harmony | Just Equal, Harmonizer, Heading Choir, Swarm Bloom |
-| Motion expression | Motion Trump, Shake Filter, Sound Saber, Shepard Glide |
+| Grid rhythm | Drumkit, Drum Sequencer, Rhythm Machine |
+| Drones / harmony | Just Equal, Harmonizer, Compass Wah (Choir), Swarm Bloom |
+| Motion expression | Motion Filter, Sound Saber, Shepard Glide, Pinch Bass |
+| Stillness / micromotion | Standstill, Micromotion |
 | Melody / pitch | Piano, Kaoss Pad, Markov Melody, Flute Blow, Mic Theremin |
-| Timbre / FX | Sampler, Scrub Tape, Granular Tilt, Filter Ladder, Pluck Bowl |
+| Timbre / FX | Sampler, Scrub Tape, Granular Tilt, Synth Tour, Pluck Bowl |
 | Camera / room | Shadow Sequencer, Video Sonifier, Room Reverb Send |
+| Mapping design | Mapping Roulette, Motion Filter, Pinch Bass |
 | ML showcase | Train Shake, Hum Clap, Evo Drumkit, Gesture Regression |
 
 Full tables: [App catalog](App-Catalog).
@@ -100,7 +107,7 @@ Full tables: [App catalog](App-Catalog).
 
 ## Assessment prompts (school / university)
 
-1. Map **FM Touch** or **Filter Ladder** to oscillator → filter → output. Where is the sensor in the chain?
+1. Map **FM Touch** or **Motion Filter → Ladder** to oscillator → filter → output. Where is the sensor in the chain?
 2. Why is k-NN (**Hum Clap**, **Train Shake**) a form of supervised learning?
 3. Compare **Granular Tilt** (cloud texture) to **Pluck Bowl** (resonant strikes) — ambient vs rhythmic roles?
 4. **Kaoss Pad**: how does quantizing pitch on X differ from free pitch on **Mic Theremin**?

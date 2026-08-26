@@ -12,12 +12,15 @@ Phones expose more than mic + tilt. Each row is a candidate **app** (or major up
 
 | Idea | Sensor / API | Music role | Synthesis hook |
 |------|----------------|------------|----------------|
+| ~~**Mapping Roulette**~~ | X · Y · drag speed, re-dealable mapping | Coupling vs mapping, cross-coupling (Hunt & Wanderley) | [Mapping Roulette](../apps/mapping-roulette/) |
 | ~~**Kaoss Pad**~~ | X–Y pad + loop clock | Quantized lead / beat loops (Kaossilator-style) | [Kaoss Pad](../apps/kaoss-pad/) |
 
 ### Motion & orientation
 
 | Idea | Sensor / API | Music role | Synthesis hook |
 |------|----------------|------------|----------------|
+| ~~**Standstill**~~ | Accel + gyro, inverse QoM gate | Sound appears when you hold still; 60 s Championship | [Standstill](../apps/standstill/) |
+| ~~**Micromotion**~~ | Accel bands + gyro fallback | Sway / tremor / rotation as three voices | [Micromotion](../apps/micromotion/) |
 | ~~**Gyro Whirl**~~ | `rotationRate` (αβγ) | Spin phone → vibrato speed & stereo wobble | [Spin Chorus](../apps/gyro-whirl/) |
 | ~~**Shake Filter**~~ | High-pass jerk on accel | Sudden shakes open a filter | [Jerk Wah](../apps/shake-filter/) |
 | ~~**Flat / Edge**~~ | `beta` / `gamma` thresholds | Only sound when held flat vs upright | [Table Drone](../apps/flat-edge/) |
@@ -130,6 +133,20 @@ See **[CATALOG.md](CATALOG.md)** for all **56** hub apps (Rhythm 10 · Drones 11
 Recent additions include [Kaoss Pad](../apps/kaoss-pad/) (X–Y loop synth), centre-record UX on [Sampler](../apps/sampler/) and [Scrub Tape](../apps/scrub-tape/), and continuous [Shepard Glide](../apps/shepard-glide/).
 
 Retired from the hub (folders may remain for redirects): Part, Pocket Metronome, Pitch Hive, One Shot Orchestra, Synth Pad, Tilt Doppler, Torch Pulse, Whisper Gate, and others — see git history.
+
+---
+
+## Consolidation (2026-08)
+
+Quality over quantity: near-duplicate apps became **modes** of canonical instruments (old URLs redirect):
+
+- **Motion Filter** ← shake-filter, motion-wah, flat-edge, filter-ladder (`?mode=tilt|shake|ladder|flat`)
+- **Compass Wah** ← heading-choir (`?mode=choir`)
+- **Rhythm Machine** ← circular-drum, euclidean-rings, lsystem-groove (`?gen=draw|euclid|lsystem`)
+- **Synth Tour** ← fm-matrix, ring-mod-gong, am-radio, phase-distortion, wavetable-scan, supersaw-stack (`?engine=…`)
+- **Spectral Freeze** ← spectral-soup (`?mode=soup`) · **Sampler** ← hold-loop-tilt · **KS String** ← edge-strum (pluck position)
+
+`docs/CATALOG.md` and the wiki App-Catalog are now generated from `shared/hub-catalog.js` by `scripts/generate-wiki.mjs`.
 
 ---
 

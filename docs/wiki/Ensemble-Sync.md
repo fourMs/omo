@@ -30,7 +30,7 @@ Limitation: each phone schedules locally. Expect roughly **50–100 ms** jitter 
 
 [Harmonizer](https://fourms.github.io/omo/apps/harmonizer/) tracks **chroma** from the mic and drives detuned drone voices.
 
-- Assign different roots across the drone row (**Just Equal**, **Heading Choir**, **Harmonizer**).
+- Assign different roots across the drone row (**Just Equal**, **Compass Wah** in Choir mode, **Harmonizer**).
 - Not sample-accurate MIDI sync — harmonic **following** rather than beat clock.
 
 ## Swarm Bloom
@@ -39,7 +39,7 @@ Limitation: each phone schedules locally. Expect roughly **50–100 ms** jitter 
 
 ## Kaoss Pad & sequencers
 
-**Kaoss Pad** (Lead / Beat programs) and grid sequencers (**Drum Sequencer**, **Circular Drum**, **Euclidean Rings**) run on **local clocks**. Align by:
+**Kaoss Pad** (Lead / Beat programs) and grid sequencers (**Drum Sequencer**, **Rhythm Machine**) run on **local clocks**. Align by:
 
 - Starting on Conductor downbeat, or
 - Muting until the facilitator cues a layer.
