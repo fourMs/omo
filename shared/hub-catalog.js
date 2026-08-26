@@ -143,11 +143,11 @@ export const HUB_APPS = [
     sensors: "Touch · tilt",
   },
   {
-    href: "apps/fm-matrix/",
-    title: "FM Matrix",
+    href: "apps/synth-tour/",
+    title: "Synth Tour",
     section: "synthesis",
-    synth: "FM matrix",
-    sensors: "Touch",
+    synth: "FM · ring · AM · PD · wavetable · supersaw",
+    sensors: "Touch · mic · gyro",
   },
   {
     href: "apps/ks-string/",
@@ -162,13 +162,6 @@ export const HUB_APPS = [
     section: "synthesis",
     synth: "Additive partials",
     sensors: "Touch · motion",
-  },
-  {
-    href: "apps/ring-mod-gong/",
-    title: "Ring Mod Gong",
-    section: "synthesis",
-    synth: "Ring modulation",
-    sensors: "Touch",
   },
   {
     href: "apps/sampler/",
@@ -196,13 +189,6 @@ export const HUB_APPS = [
     title: "Tap Bloom",
     section: "texture",
     synth: "Generative blooms",
-    sensors: "Touch",
-  },
-  {
-    href: "apps/wavetable-scan/",
-    title: "Wavetable Scan",
-    section: "texture",
-    synth: "Wavetable morph",
     sensors: "Touch",
   },
   {
@@ -258,9 +244,6 @@ export const HUB_APPS = [
   { href: "apps/clap-architect/", title: "Clap Architect", section: "rhythm", synth: "Learned kit", sensors: "Mic · touch" },
   { href: "apps/shadow-sequencer/", title: "Shadow Sequencer", section: "rhythm", synth: "8-step mask", sensors: "Camera · touch" },
   { href: "apps/pinch-bass/", title: "Pinch Bass", section: "synthesis", synth: "Subtractive bass", sensors: "Pinch · XY" },
-  { href: "apps/am-radio/", title: "Am Radio", section: "synthesis", synth: "AM sidebands", sensors: "Mic · touch" },
-  { href: "apps/phase-distortion/", title: "Phase Distortion", section: "synthesis", synth: "Phase distortion", sensors: "Multi-touch" },
-  { href: "apps/supersaw-stack/", title: "Supersaw Stack", section: "synthesis", synth: "Saws or spin timbre", sensors: "Gyro · touch" },
   { href: "apps/bowed-waveguide/", title: "Bowed Waveguide", section: "melody", synth: "Continuous KS", sensors: "Touch drag" },
   {
     href: "apps/crystalis/",

@@ -6,12 +6,12 @@ export const SECTIONS = {
   drones: {
     name: "Drones",
     color: "#38bdf8",
-    apps: ["just-equal", "motion-wah", "compass-wah", "sound-saber"],
+    apps: ["just-equal", "motion-filter", "compass-wah", "sound-saber", "standstill", "micromotion"],
   },
   rhythm: {
     name: "Rhythm",
     color: "#fb923c",
-    apps: ["drumkit", "drum-sequencer", "delay-throw", "clix"],
+    apps: ["drumkit", "drum-sequencer", "rhythm-machine", "delay-throw", "clix"],
   },
   melody: {
     name: "Melody",
@@ -21,12 +21,12 @@ export const SECTIONS = {
   texture: {
     name: "Texture",
     color: "#6ee7b7",
-    apps: ["granular-tilt", "sampler", "video-sonifier", "wavetable-scan"],
+    apps: ["granular-tilt", "sampler", "video-sonifier", "spectral-freeze"],
   },
   synthesis: {
     name: "Synthesis",
     color: "#f472b6",
-    apps: ["fm-touch", "fm-matrix", "ks-string", "additive-bells", "filter-ladder", "supersaw-stack"],
+    apps: ["fm-touch", "synth-tour", "ks-string", "additive-bells", "pinch-bass"],
   },
   ai: {
     name: "AI",

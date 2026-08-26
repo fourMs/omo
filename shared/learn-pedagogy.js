@@ -110,9 +110,9 @@ export const LEARN_PEDAGOGY = {
     "Finger or tilt chooses carrier and modulator rates — small ratio changes produce large timbral shifts.",
   ],
 
-  "fm-matrix": [
-    "Several FM pairs are mixed; the grid sets levels or indices like a modular patch.",
-    "Players explore complex spectra by combining simple two-operator blocks.",
+  "synth-tour": [
+    "Six synthesis engines behind one pad: FM (sidebands from frequency wobble, with routable modulation), ring modulation (sum and difference tones), AM (radio-style sidebands, mic-driven depth), phase distortion (Casio-style waveshaping), wavetable morphing (smooth travel between stored cycles), and a supersaw stack (detuned saw chorus, gyro-widened).",
+    "Because the gesture never changes — X is always pitch — every difference you hear is the synthesis technique itself. Tour the engines and compare spectra by ear.",
   ],
 
   "ks-string": [
@@ -123,11 +123,6 @@ export const LEARN_PEDAGOGY = {
   "additive-bells": [
     "A tone is built from many sine partials at harmonic ratios; motion or hit strength shapes the mix.",
     "Demonstrates Fourier idea: timbre = which partials are loud; bells have inharmonic partials in real life, simplified here.",
-  ],
-
-  "ring-mod-gong": [
-    "Ring modulation multiplies two signals, producing sum and difference frequencies — often inharmonic, gong-like.",
-    "Touch maps carrier and modulator; inharmonic relationships avoid obvious pitch center.",
   ],
 
   sampler: [
@@ -148,11 +143,6 @@ export const LEARN_PEDAGOGY = {
   "tap-bloom": [
     "Each tap plants one pentatonic tone that repeats every four seconds — same pitch, steady rhythm, long decay and reverb.",
     "Generative ambient play — minimal gesture, layered blooms; vertical position chooses pitch height.",
-  ],
-
-  "wavetable-scan": [
-    "A single cycle waveform is stored; scanning through tables or morphing shapes changes harmonics smoothly.",
-    "Between pure sine and complex buzz; good for evolving pads and digital timbres.",
   ],
 
   "video-sonifier": [
@@ -208,21 +198,6 @@ export const LEARN_PEDAGOGY = {
   "pinch-bass": [
     "Two-finger pinch: the centre of the pair sets pitch (X) and filter cutoff (Y); spread controls level and resonance. One finger defaults to 25% spread.",
     "Continuous bass control — move the gesture around the pad without lifting to sweep timbre and sub weight.",
-  ],
-
-  "am-radio": [
-    "Amplitude modulation: a slow oscillator multiplies level, creating sidebands around the carrier — radio-like.",
-    "Mic may replace the modulator — voice or room sound heterodynes with the tone.",
-  ],
-
-  "phase-distortion": [
-    "Phase of a sine readout is shaped before conversion to audio — Casio-style digital colour.",
-    "Two fingers split pitch and distortion so you can hold a note while morphing timbre; smoothed curves reduce clicks.",
-  ],
-
-  "supersaw-stack": [
-    "Several detuned sawtooth oscillators stack for a wide chorus; gyro widens detune further.",
-    "Spin timbre uses sine + vibrato for a smoother, rotating stereo image.",
   ],
 
   crystalis: [
@@ -288,11 +263,17 @@ export const LEARN_PEDAGOGY = {
   "circular-drum": "See Rhythm Machine → Draw: tap ring segments to toggle hits.",
   "euclidean-rings": "See Rhythm Machine → Euclid: E(k,16) rings with per-ring phase.",
   "lsystem-groove": "See Rhythm Machine → L-system: the pattern rewrites every bar.",
+  "fm-matrix": "See Synth Tour → FM: routable two-operator FM with the same 2×2 matrix.",
+  "ring-mod-gong": "See Synth Tour → Ring mod: two sines multiplied into gong-like sidebands.",
+  "am-radio": "See Synth Tour → AM radio: mic level drives modulation depth.",
+  "phase-distortion": "See Synth Tour → Phase dist: two fingers split pitch and distortion.",
+  "wavetable-scan": "See Synth Tour → Wavetable: morph across eight single-cycle waves.",
+  "supersaw-stack": "See Synth Tour → Supersaw: detuned saw stack, gyro widens the spread.",
   "ks-pluck": "See Resonant Wire → Pocket range: wider pitch span, same Karplus–Strong model.",
   "fm-touch-tilt": "See FM Fingerpaint → Tilt mod: modulator rate from phone angle.",
   "motion-grid": "See Motion Cam: frame differencing drives density.",
   "color-band": "See Motion Cam: dominant hue selects scale degree.",
-  "gyro-whirl": "See Blade Chorus → Spin timbre: gyro-driven vibrato on a sine tone.",
+  "gyro-whirl": "See Synth Tour → Supersaw, Spin timbre: gyro-driven vibrato on a sine tone.",
 };
 
 export function slugFromAppPath(pathname = location.pathname) {

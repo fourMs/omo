@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="refresh" content="0; url=../synth-tour/?engine=supersaw&amp;timbre=spin" />
+  <title>Synth Tour — OMO</title>
   <script type="module">
-    const u = new URL("../supersaw-stack/", location.href);
-    u.searchParams.set("timbre", "spin");
-    location.replace(u.pathname + u.search);
+    location.replace(new URL("../synth-tour/?engine=supersaw&timbre=spin", location.href).href);
   </script>
 </head>
-<body><p><a href="../supersaw-stack/?timbre=spin">Blade Chorus (Spin)</a></p></body>
+<body><p><a href="../synth-tour/?engine=supersaw&timbre=spin">Synth Tour (supersaw, spin)</a></p></body>
 </html>
