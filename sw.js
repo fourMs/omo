@@ -1,4 +1,4 @@
-const CACHE = "omo-v111";
+const CACHE = "omo-v112";
 const ASSETS = [
   "./",
   "./index.html",
@@ -57,15 +57,22 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  const isDoc = e.request.mode === "navigate" || e.request.destination === "document";
   e.respondWith(
-    caches.match(e.request).then((cached) => {
+    caches.open(CACHE).then(async (c) => {
+      // Match only the current versioned cache — never mix files from an
+      // older deploy with a newer one (a page + shared-module skew can kill
+      // an app at module load).
+      const cached = await c.match(e.request);
       const net = fetch(e.request).then((res) => {
         if (res.ok && e.request.url.startsWith(self.location.origin)) {
-          const clone = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, clone));
+          c.put(e.request, res.clone());
         }
         return res;
       });
+      // Pages: network-first so updates arrive on the next load; cache is
+      // the offline fallback. Assets: cache-first for speed.
+      if (isDoc) return net.catch(() => cached || Response.error());
       return cached || net;
     })
   );

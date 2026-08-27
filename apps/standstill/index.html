@@ -88,7 +88,9 @@
     // Difficulty: slider 0–100 → activity multiplier 0.25×–4× (log-spaced).
     function applySensitivity(v) {
       const mult = Math.pow(4, (v - 50) / 50);
-      tracker.setSensitivity(mult);
+      // Optional call: if a stale-cached shared/stillness.js predates this
+      // API, degrade to a fixed difficulty instead of dying at module load.
+      tracker.setSensitivity?.(mult);
       sensVal.textContent = v < 20 ? "Easy" : v < 42 ? "Easier" : v <= 58 ? "Normal" : v <= 80 ? "Harder" : "Expert";
     }
     try {
