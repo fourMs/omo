@@ -38,7 +38,7 @@
   <script type="module">
     import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
-    import { enableSensors, primeSensors } from "../../shared/sensors.js";
+    import { primeSensors } from "../../shared/sensors.js";
     import { createStillness } from "../../shared/stillness.js";
 
     bindLearn();
@@ -151,19 +151,30 @@
 
     registerAudioBoot(build);
 
+    let sensorMsg = null;
+
     async function begin() {
-      primeSensors(SENSOR_OPTS);
-      await startAudio(!built ? build : undefined);
-      if (running) return;
-      const ok = await enableSensors(SENSOR_OPTS);
-      if (!ok) {
-        setStatus("srcOut", "Motion permission needed", "warn");
-        return;
+      try {
+        // One permission request, started in the tap gesture; awaiting the
+        // same promise waits for the user's actual Allow/Deny (iOS).
+        const permission = primeSensors(SENSOR_OPTS);
+        await startAudio(!built ? build : undefined);
+        if (running) return;
+        const ok = await permission;
+        if (!ok) {
+          sensorMsg = "Motion blocked — allow Motion & Orientation\nfor this site, then tap to retry";
+          setStatus("srcOut", "Motion permission needed", "warn");
+          return;
+        }
+        sensorMsg = null;
+        tracker.start();
+        running = true;
+        calBtn.disabled = false;
+        await recalibrate();
+      } catch (err) {
+        sensorMsg = `Could not start: ${err?.message || err}\nTap to retry`;
+        setStatus("srcOut", "Error — tap to retry", "warn");
       }
-      tracker.start();
-      running = true;
-      calBtn.disabled = false;
-      await recalibrate();
     }
 
     async function recalibrate() {
@@ -222,7 +233,14 @@
         g.fillStyle = "rgba(190, 215, 235, 0.85)";
         g.font = `${16 * dpr}px system-ui, sans-serif`;
         g.textAlign = "center";
-        g.fillText("Tap to begin", w / 2, h / 2);
+        if (sensorMsg) {
+          g.font = `${13 * dpr}px system-ui, sans-serif`;
+          sensorMsg.split("\n").forEach((line, i) => {
+            g.fillText(line, w / 2, h / 2 + (i - 0.5) * 20 * dpr);
+          });
+        } else {
+          g.fillText("Tap to begin", w / 2, h / 2);
+        }
         return;
       }
 

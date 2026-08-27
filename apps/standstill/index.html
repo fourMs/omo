@@ -51,7 +51,7 @@
   <script type="module">
     import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
-    import { enableSensors, primeSensors } from "../../shared/sensors.js";
+    import { primeSensors } from "../../shared/sensors.js";
     import { createStillness } from "../../shared/stillness.js";
 
     bindLearn();
@@ -180,20 +180,33 @@
 
     registerAudioBoot(build);
 
+    let sensorMsg = null;
+
     async function begin() {
-      primeSensors(SENSOR_OPTS);
-      await startAudio(!built ? build : undefined);
-      if (running) return;
-      const ok = await enableSensors(SENSOR_OPTS);
-      if (!ok) {
-        setStatus("modeOut", "Motion permission needed", "warn");
-        return;
+      try {
+        // Start the permission request synchronously, in the tap gesture
+        // (iOS requires it), then await THAT promise — a second
+        // requestPermission call would run outside the gesture and resolve
+        // denied while Safari's prompt is still on screen.
+        const permission = primeSensors(SENSOR_OPTS);
+        await startAudio(!built ? build : undefined);
+        if (running) return;
+        const ok = await permission;
+        if (!ok) {
+          sensorMsg = "Motion blocked — allow Motion & Orientation\nfor this site, then tap to retry";
+          setStatus("modeOut", "Motion permission needed", "warn");
+          return;
+        }
+        sensorMsg = null;
+        tracker.start();
+        running = true;
+        calBtn.disabled = false;
+        champBtn.disabled = false;
+        await recalibrate();
+      } catch (err) {
+        sensorMsg = `Could not start: ${err?.message || err}\nTap to retry`;
+        setStatus("modeOut", "Error — tap to retry", "warn");
       }
-      tracker.start();
-      running = true;
-      calBtn.disabled = false;
-      champBtn.disabled = false;
-      await recalibrate();
     }
 
     async function recalibrate() {
@@ -319,7 +332,14 @@
         g.fillStyle = "rgba(190, 215, 235, 0.85)";
         g.font = `${16 * dpr}px system-ui, sans-serif`;
         g.textAlign = "center";
-        g.fillText("Tap to begin", cx, cy);
+        if (sensorMsg) {
+          g.font = `${13 * dpr}px system-ui, sans-serif`;
+          sensorMsg.split("\n").forEach((line, i) => {
+            g.fillText(line, cx, cy + (i - 0.5) * 20 * dpr);
+          });
+        } else {
+          g.fillText("Tap to begin", cx, cy);
+        }
         return;
       }
 
