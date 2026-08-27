@@ -90,6 +90,7 @@
       "pointerdown",
       (e) => {
         e.preventDefault();
+        primeSensors(SENSOR_OPTS); // in-gesture for iOS
         holdCount += 1;
         activeId = e.pointerId;
         pad.classList.add("active");

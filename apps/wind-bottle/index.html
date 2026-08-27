@@ -124,6 +124,7 @@
 
     playBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
+      primeSensors({ needMotion: false, needOrientation: true }); // in-gesture for iOS
       if (holding) return;
       holding = true;
       activeId = e.pointerId;

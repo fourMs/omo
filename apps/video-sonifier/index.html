@@ -376,9 +376,23 @@
       grainTimer = setTimeout(scheduleGrain, interval * (jitterLo + Math.random() * (jitterHi - jitterLo)));
     }
 
+
+    /** Source rect that covers a target of tw×th from the video frame. */
+    function coverCrop(tw, th) {
+      const vw = video.videoWidth || tw;
+      const vh = video.videoHeight || th;
+      const scale = Math.max(tw / vw, th / vh);
+      const sw = tw / scale;
+      const sh = th / scale;
+      return { sx: (vw - sw) / 2, sy: (vh - sh) / 2, sw, sh };
+    }
+
     function analyzeFrame() {
       if (!stream || video.readyState < 2) return;
-      sctx.drawImage(video, 0, 0, GRID_W, GRID_H);
+      // Sample the same centre crop the preview shows (aspect-preserving).
+      const box = preview.parentElement.getBoundingClientRect();
+      const crop = box.width > 0 ? coverCrop(box.width, box.height) : coverCrop(GRID_W, GRID_H);
+      sctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, GRID_W, GRID_H);
       const img = sctx.getImageData(0, 0, GRID_W, GRID_H);
       let sum = 0;
       for (let i = 0; i < cellBrightness.length; i++) {
@@ -420,7 +434,8 @@
         pctx.translate(w, 0);
         pctx.scale(-1, 1);
       }
-      pctx.drawImage(video, 0, 0, w, h);
+      const crop = coverCrop(w, h);
+      pctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, w, h);
       pctx.restore();
 
       const cellW = w / GRID_W;

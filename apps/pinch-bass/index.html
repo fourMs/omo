@@ -245,6 +245,8 @@
     }
 
     pad.addEventListener("pointerdown", async (e) => {
+      // Capture so a release outside the pad still ends the note (desktop).
+      try { pad.setPointerCapture(e.pointerId); } catch { /* noop */ }
       await startAudio(!built ? build : undefined);
       pointerDown(e);
     });

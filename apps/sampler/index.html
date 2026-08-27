@@ -340,6 +340,7 @@
 
     recordBtn.addEventListener("pointerdown", async (e) => {
       e.preventDefault();
+      primeSensors({ needMotion: false, needOrientation: true }); // in-gesture for iOS
       await startAudio(!built ? (c) => { buildAudio(c); void enableTilt(); } : undefined);
       if (!(await ensureMic())) return;
       activePointer = e.pointerId;

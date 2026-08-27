@@ -9,26 +9,39 @@ export function needsMotionPermission() {
   return typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function";
 }
 
-export async function requestMotionPermission() {
-  if (!needsMotionPermission()) return true;
-  try {
-    const r = await DeviceMotionEvent.requestPermission();
-    return r === "granted";
-  } catch {
-    return false;
+// Single-flight permission requests: iOS shows one prompt per gesture, and a
+// second requestPermission call while the prompt is open resolves denied —
+// so concurrent callers must join the same pending promise. A rejected
+// (out-of-gesture) attempt resets so a later in-gesture call can retry.
+let motionPerm = null;
+let orientationPerm = null;
+
+export function requestMotionPermission() {
+  if (!needsMotionPermission()) return Promise.resolve(true);
+  if (!motionPerm) {
+    motionPerm = DeviceMotionEvent.requestPermission()
+      .then((r) => r === "granted")
+      .catch(() => {
+        motionPerm = null;
+        return false;
+      });
   }
+  return motionPerm;
 }
 
-export async function requestOrientationPermission() {
+export function requestOrientationPermission() {
   if (typeof DeviceOrientationEvent === "undefined" || typeof DeviceOrientationEvent.requestPermission !== "function") {
-    return true;
+    return Promise.resolve(true);
   }
-  try {
-    const r = await DeviceOrientationEvent.requestPermission();
-    return r === "granted";
-  } catch {
-    return false;
+  if (!orientationPerm) {
+    orientationPerm = DeviceOrientationEvent.requestPermission()
+      .then((r) => r === "granted")
+      .catch(() => {
+        orientationPerm = null;
+        return false;
+      });
   }
+  return orientationPerm;
 }
 
 /**

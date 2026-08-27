@@ -238,9 +238,14 @@
       return step % 2 === 1 ? base * (1 + skew) : base * (1 - skew);
     }
 
+    let schedTimer = null;
+
     function scheduler() {
       if (!playing || !ctx) return;
       const now = ctx.currentTime;
+      // After a background gap, resume cleanly instead of bursting every
+      // missed step at once.
+      if (nextTime < now - 0.2) nextTime = now + 0.02;
       while (nextTime <= now + 0.05) {
         const col = stepIndex;
         cells.forEach((row) => row.forEach((c) => c.classList.remove("playing")));
@@ -251,7 +256,7 @@
         nextTime += stepDuration(col);
         stepIndex = (col + 1) % STEPS;
       }
-      requestAnimationFrame(scheduler);
+      schedTimer = setTimeout(scheduler, 25);
     }
 
     const playBtn = document.getElementById("playBtn");
@@ -260,6 +265,7 @@
       if (!ctx) return;
       if (playing) {
         playing = false;
+        clearTimeout(schedTimer);
         playBtn.classList.remove("active");
         playBtn.textContent = "▶";
         cells.forEach((row) => row.forEach((c) => c.classList.remove("playing")));

@@ -25,7 +25,7 @@
     import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
     import { createKSReverb, createKSPool, karplusPluck } from "../../shared/ks.js";
-    import { enableSensors, onOrientation } from "../../shared/sensors.js";
+    import { enableSensors, onOrientation, primeSensors } from "../../shared/sensors.js";
 
     bindLearn();
     const pad = document.getElementById("pad");
@@ -94,6 +94,7 @@
 
     pad.addEventListener("pointerdown", async (ev) => {
       ev.preventDefault();
+      primeSensors(); // start the permission request inside the tap gesture (iOS)
       await startAudio(!built ? buildAudio : undefined);
       if (!built) return;
       void enableTilt();

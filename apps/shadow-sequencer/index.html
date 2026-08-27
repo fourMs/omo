@@ -206,9 +206,22 @@
       return true;
     }
 
+    /** Source rect matching the displayed object-fit: cover crop. */
+    function coverCrop() {
+      const box = video.getBoundingClientRect();
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (!vw || !box.width) return { sx: 0, sy: 0, sw: vw || 1, sh: vh || 1 };
+      const scale = Math.max(box.width / vw, box.height / vh);
+      const sw = box.width / scale;
+      const sh = box.height / scale;
+      return { sx: (vw - sw) / 2, sy: (vh - sh) / 2, sw, sh };
+    }
+
     function sampleBrightness() {
       if (!camReady || !sampleCtx || video.readyState < 2) return null;
-      sampleCtx.drawImage(video, 0, 0, SAMPLE_W, SAMPLE_H);
+      const crop = coverCrop();
+      sampleCtx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, SAMPLE_W, SAMPLE_H);
       const d = sampleCtx.getImageData(0, 0, SAMPLE_W, SAMPLE_H).data;
       let sum = 0;
       for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
