@@ -232,9 +232,9 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
   return {
     state,
 
-    /** Difficulty multiplier on measured activity (0.1–8, default 1). */
+    /** Difficulty multiplier on measured activity (0.1–20, default 1). */
     setSensitivity(mult) {
-      sensitivity = clamp(mult, 0.1, 8);
+      sensitivity = clamp(mult, 0.1, 20);
     },
 
     /** Subscribe to sensors. Call once, after enableSensors() resolves. */

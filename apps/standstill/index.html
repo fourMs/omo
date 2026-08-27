@@ -91,9 +91,11 @@
     const BEST_KEY = "omo-standstill-best";
     const SENS_KEY = "omo-standstill-sens";
 
-    // Difficulty: slider 0–100 → activity multiplier 0.25×–4× (log-spaced).
+    // Difficulty: slider 0–100 → activity multiplier 0.5×–16× (log-spaced).
+    // Tuned on real phones: even Easy should take effort, Expert should
+    // demand near-perfect stillness.
     function applySensitivity(v) {
-      const mult = Math.pow(4, (v - 50) / 50);
+      const mult = 0.5 * Math.pow(32, v / 100);
       // Optional call: if a stale-cached shared/stillness.js predates this
       // API, degrade to a fixed difficulty instead of dying at module load.
       tracker.setSensitivity?.(mult);
