@@ -31,6 +31,7 @@
     <h2>Sound from stillness</h2>
     <p>An <strong>inverse instrument</strong>: sound appears when you <strong>stop moving</strong>. Tap once, hold the phone against your chest, and stand as still as you can.</p>
     <p>After a short calibration a soft wash fades in. Keep still and it <strong>blooms</strong> — new tones join the longer you hold. Any movement silences it instantly; stillness must be earned back slowly.</p>
+    <p>The bloom <strong>breathes</strong> at about six breaths per minute — let your own breath follow the rings as they grow and ease. Slow breathing is also a good standstill strategy.</p>
     <p>You will never reach silence-proof stillness: the wandering dot is your own <strong>micromotion</strong> — balance, breathing, heartbeat — steering the sound's colour and stereo position.</p>
     <p><strong>Championship</strong> runs a 60-second standstill competition: highest average stillness wins.</p>
     <p>The <strong>Difficulty</strong> slider sets how strictly motion counts: left is forgiving (good for a first try), right demands near-perfect stillness. For a fair Championship, everyone should use the same setting.</p>
@@ -66,6 +67,11 @@
 
     const SENSOR_OPTS = { needMotion: true, needOrientation: true };
     const tracker = createStillness();
+
+    // The bloom breathes at ~6 breaths/min — a slow-breathing guide. All
+    // rings and pad voices share this one phase so it can pace the player.
+    const BREATH_SEC = 10;
+    const breathPhase = (nowMs) => (nowMs / 1000 / BREATH_SEC) * Math.PI * 2 - Math.PI / 2;
 
     // Pad tones join as stillness is sustained: [freq, fade-in start s, full s].
     const PAD_STAGES = [
@@ -299,7 +305,9 @@
         } else if (grow === 0) {
           padOn[i] = false;
         }
-        const level = grow * gate * (0.11 - i * 0.015);
+        // Pad voices swell and ease with the shared breath cycle.
+        const breath = 1 + Math.sin(breathPhase(performance.now())) * 0.14;
+        const level = grow * gate * (0.11 - i * 0.015) * breath;
         pads[i].a.gain.gain.setTargetAtTime(level, t, gate < 0.05 ? 0.08 : 0.8);
         pads[i].b.gain.gain.setTargetAtTime(level * 0.7, t, gate < 0.05 ? 0.08 : 0.8);
       });
@@ -367,10 +375,11 @@
       trail.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
       g.stroke();
 
-      // Bloom rings: one per sounding pad voice, breathing slowly.
+      // Bloom rings: one per sounding pad voice, all breathing together at
+      // ~6 breaths/min so the bloom can pace slow breathing.
       const nOn = padOn.filter(Boolean).length;
       for (let i = 0; i < nOn; i++) {
-        const breathe = 1 + Math.sin(now / 1400 + i * 1.7) * 0.05;
+        const breathe = 1 + Math.sin(breathPhase(now) + i * 0.15) * 0.09;
         const r = (60 + i * 42) * dpr * breathe;
         const alpha = st.stillness * (0.34 - i * 0.05) + bloomPulse * 0.3;
         g.strokeStyle = `hsla(${185 + i * 14}, 65%, 78%, ${alpha})`;
