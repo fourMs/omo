@@ -96,6 +96,10 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
   let lastMotionT = 0;
   let sawRealGyro = false;
 
+  // Difficulty: multiplies measured activity. >1 = stricter (harder to hold
+  // the sound), <1 = more forgiving. 1 = calibrated default.
+  let sensitivity = 1;
+
   // Calibrated noise floors (per band). Defaults suit a phone held in hand.
   let floorJerk = 0.012;
   let floorSway = 0.12;
@@ -180,7 +184,7 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
     const tremorAct = Math.max(0, jerkEma - floorJerk) / JERK_REF;
     const swayAct = Math.max(0, sway.mag - floorSway) / SWAY_REF;
     const rotAct = Math.max(0, rotEma - floorRot) / ROT_REF;
-    state.activity = tremorAct + swayAct * 0.7 + rotAct * 0.8;
+    state.activity = (tremorAct + swayAct * 0.7 + rotAct * 0.8) * sensitivity;
 
     // Asymmetric gate: movement closes fast (τ 0.12 s), stillness returns
     // slowly (τ 1.4 s) — you can break the sound instantly but must earn it back.
@@ -227,6 +231,11 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
 
   return {
     state,
+
+    /** Difficulty multiplier on measured activity (0.1–8, default 1). */
+    setSensitivity(mult) {
+      sensitivity = clamp(mult, 0.1, 8);
+    },
 
     /** Subscribe to sensors. Call once, after enableSensors() resolves. */
     start() {

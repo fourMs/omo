@@ -33,10 +33,16 @@
     <p>After a short calibration a soft wash fades in. Keep still and it <strong>blooms</strong> — new tones join the longer you hold. Any movement silences it instantly; stillness must be earned back slowly.</p>
     <p>You will never reach silence-proof stillness: the wandering dot is your own <strong>micromotion</strong> — balance, breathing, heartbeat — steering the sound's colour and stereo position.</p>
     <p><strong>Championship</strong> runs a 60-second standstill competition: highest average stillness wins.</p>
+    <p>The <strong>Difficulty</strong> slider sets how strictly motion counts: left is forgiving (good for a first try), right demands near-perfect stillness. For a fair Championship, everyone should use the same setting.</p>
   </div>
   <div class="control-row standstill-controls">
     <button type="button" class="btn btn-secondary btn-sm" id="calBtn" disabled>Recalibrate</button>
     <button type="button" class="btn btn-sm" id="champBtn" disabled>Championship</button>
+  </div>
+  <div class="control-row">
+    <label for="sens">Difficulty</label>
+    <input type="range" id="sens" min="0" max="100" value="50" aria-label="Difficulty: left is easier, right is harder" />
+    <span id="sensVal">Normal</span>
   </div>
   <p class="status-bar standstill-stats"><span id="stillOut">—</span><span id="heldOut">—</span><span id="modeOut">Tap to begin</span></p>
   <div class="main-stage standstill-stage">
@@ -54,6 +60,8 @@
     const g = canvas.getContext("2d");
     const calBtn = document.getElementById("calBtn");
     const champBtn = document.getElementById("champBtn");
+    const sensSlider = document.getElementById("sens");
+    const sensVal = document.getElementById("sensVal");
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
     const SENSOR_OPTS = { needMotion: true, needOrientation: true };
@@ -75,6 +83,25 @@
     // Championship state.
     let champ = null; // { phase: 'count'|'round'|'done', endT, sum, n, score }
     const BEST_KEY = "omo-standstill-best";
+    const SENS_KEY = "omo-standstill-sens";
+
+    // Difficulty: slider 0–100 → activity multiplier 0.25×–4× (log-spaced).
+    function applySensitivity(v) {
+      const mult = Math.pow(4, (v - 50) / 50);
+      tracker.setSensitivity(mult);
+      sensVal.textContent = v < 20 ? "Easy" : v < 42 ? "Easier" : v <= 58 ? "Normal" : v <= 80 ? "Harder" : "Expert";
+    }
+    try {
+      const stored = parseInt(localStorage.getItem(SENS_KEY), 10);
+      if (Number.isFinite(stored) && stored >= 0 && stored <= 100) sensSlider.value = String(stored);
+    } catch { /* noop */ }
+    applySensitivity(+sensSlider.value);
+    sensSlider.addEventListener("input", () => {
+      applySensitivity(+sensSlider.value);
+      try {
+        localStorage.setItem(SENS_KEY, sensSlider.value);
+      } catch { /* noop */ }
+    });
 
     function makeVoice(c, type, freq, dest) {
       const osc = c.createOscillator();
