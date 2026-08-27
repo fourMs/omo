@@ -14,7 +14,7 @@ omo/
 └── apps/<slug>/        # One folder per instrument (index.html + app.js)
 ```
 
-Each instrument is a **static page**: HTML shell, `shared/app.js` for header (Learn, QR, Audio), and an app-specific script.
+Each instrument is a static page: HTML shell, `shared/app.js` for header (Learn, QR, Audio), and an app-specific script.
 
 ## Hub catalog
 
@@ -46,9 +46,9 @@ node scripts/sync-titles-from-slugs.mjs
 
 ## App shell UI
 
-- **Learn** — `bindLearn()` + pedagogy JSON per slug
-- **QR** — encodes the current instrument URL (`shared/qr.js`)
-- **Audio on** — user gesture unlock for iOS
+- Learn — `bindLearn()` + pedagogy JSON per slug
+- QR — encodes the current instrument URL (`shared/qr.js`)
+- Audio on — user gesture unlock for iOS
 
 Many apps use `body.app-shell` and put live readouts in `control-row` (not hidden `readout-row`).
 
@@ -56,7 +56,7 @@ Many apps use `body.app-shell` and put live readouts in `control-row` (not hidde
 
 - `manifest.webmanifest` — name, icons, `display: standalone`
 - `sw.js` — `CACHE = "omo-vNN"`; bump when shared assets or hub logic change
-- Install path: Safari / Chrome → **Add to Home Screen**
+- Install path: Safari / Chrome → Add to Home Screen
 
 Cached assets include hub, `support.html`, and common `shared/*` modules — not every app bundle. First visit to an app still fetches that app's `index.html` and `app.js`; repeat visits benefit from browser cache + SW.
 

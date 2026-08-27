@@ -1,23 +1,23 @@
 # Browsers & hardware
 
-OMO apps use the **Web Audio API** and browser sensor APIs. There is no native app store build — performance depends on the browser and OS.
+OMO apps use the Web Audio API and browser sensor APIs. There is no native app store build — performance depends on the browser and OS.
 
 ## Recommended browsers
 
 | Platform | Browser | Notes |
 |----------|---------|--------|
-| iPhone / iPad | **Safari** | Best Web Audio + motion unlock flow |
-| Android | **Chrome** | Stable mic and motion |
+| iPhone / iPad | Safari | Best Web Audio + motion unlock flow |
+| Android | Chrome | Stable mic and motion |
 | Desktop (testing) | Chrome / Firefox / Safari | Useful for development; not typical on stage |
 
-**Avoid in-app browsers** (Instagram, Messenger, email). Use **Open in Safari/Chrome** from the share sheet.
+Avoid in-app browsers (Instagram, Messenger, email). Use Open in Safari/Chrome from the share sheet.
 
 ## Audio unlock (iOS)
 
-1. Tap **Audio on** in the header after the page loads.
+1. Tap Audio on in the header after the page loads.
 2. Touch the play surface once if oscillators stay silent.
-3. Disable the hardware mute switch; set media volume to **≥ 70%**.
-4. **Add to Home Screen** for a more stable full-screen session (optional PWA).
+3. Disable the hardware mute switch; set media volume to ≥ 70%.
+4. Add to Home Screen for a more stable full-screen session (optional PWA).
 
 ## Sensors
 
@@ -29,7 +29,7 @@ OMO apps use the **Web Audio API** and browser sensor APIs. There is no native a
 | Compass | Compass Wah (Wah + Choir modes) | Yes (permission) | Varies |
 | Camera | Shadow Sequencer, Video Sonifier, Bow Phone | Prompt | Prompt |
 
-Run **[Device support](https://fourms.github.io/omo/support.html)** before a workshop to see which APIs this device exposes.
+Run [Device support](https://fourms.github.io/omo/support.html) before a workshop to see which APIs this device exposes.
 
 ### Motion permission (iOS 13+)
 
@@ -37,20 +37,20 @@ Motion often stays flat until the user interacts and grants access. In workshops
 
 1. Open any motion app.
 2. Tap the pad, then allow motion when prompted.
-3. If still flat: Settings → Safari → **Motion & Orientation** → allow.
+3. If still flat: Settings → Safari → Motion & Orientation → allow.
 
 ## Volume & acoustics
 
-- Phones are the **only** loudspeakers in typical OMO rules — position bodies so listeners hear the ensemble, not only their own speaker.
+- Phones are the only loudspeakers in typical OMO rules — position bodies so listeners hear the ensemble, not only their own speaker.
 - In noisy rooms, favour drones and sequencers over quiet mic-tracking apps.
-- **[Firefly](https://fourms.github.io/omo/apps/firefly/)** and **[Conductor](https://fourms.github.io/omo/apps/conductor/)** work best when the group can hear each other's pulses.
+- [Firefly](https://fourms.github.io/omo/apps/firefly/) and [Conductor](https://fourms.github.io/omo/apps/conductor/) work best when the group can hear each other's pulses.
 
 ## Offline use
 
-The site registers a **service worker** (`sw.js`) that caches the hub, shared scripts, and core assets. After one online visit, many apps work offline; new app versions bump the cache name (e.g. `omo-v98`) — reload once if behaviour looks stale.
+The site registers a service worker (`sw.js`) that caches the hub, shared scripts, and core assets. After one online visit, many apps work offline; new app versions bump the cache name (e.g. `omo-v98`) — reload once if behaviour looks stale.
 
 ## Hardware quirks
 
-- **[Motion Filter](https://fourms.github.io/omo/apps/motion-filter/)** folder: `apps/motion-filter/` (legacy `motion-wah`, `shake-filter`, `flat-edge`, `filter-ladder` redirect there).
-- Older **KS Pluck** URLs redirect to **[KS String](https://fourms.github.io/omo/apps/ks-string/)**.
+- [Motion Filter](https://fourms.github.io/omo/apps/motion-filter/) folder: `apps/motion-filter/` (legacy `motion-wah`, `shake-filter`, `flat-edge`, `filter-ladder` redirect there).
+- Older KS Pluck URLs redirect to [KS String](https://fourms.github.io/omo/apps/ks-string/).
 - Retired hub apps may still exist as redirect stubs — see [App catalog](App-Catalog) → Retired.

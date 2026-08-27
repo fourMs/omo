@@ -1,4 +1,4 @@
-**[Home](Home)**
+[Home](Home)
 
 ### Guides
 - [App catalog](App-Catalog)

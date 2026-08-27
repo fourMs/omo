@@ -70,9 +70,9 @@ function catalogLines({ site }) {
       ? `Live links use the [GitHub Pages site](${SITE}/) (same paths as the repo).`
       : `Complete list of instruments on the [hub](${SITE}/).`,
     "",
-    `**${entries.length} apps** on the hub — source of truth: \`shared/hub-catalog.js\` (this file is generated from it by \`scripts/generate-wiki.mjs\`). Folder names under \`apps/\` are kebab-case; titles are Title Case.`,
+    `${entries.length} apps on the hub — source of truth: \`shared/hub-catalog.js\` (this file is generated from it by \`scripts/generate-wiki.mjs\`). Folder names under \`apps/\` are kebab-case; titles are Title Case.`,
     "",
-    `The **Teaches** column names the main concept and the matching chapter of [Sensing Sound and Music](${BOOK}/).`,
+    `The Teaches column names the main concept and the matching chapter of [Sensing Sound and Music](${BOOK}/).`,
     "",
     "| Section | Count |",
     "|---------|------:|",
@@ -115,7 +115,7 @@ function catalogLines({ site }) {
   lines.push(
     "## Consolidated instruments (legacy URLs redirect)",
     "",
-    "Several earlier apps became **modes** of a canonical instrument. Old links and QR codes keep working:",
+    "Several earlier apps became modes of a canonical instrument. Old links and QR codes keep working:",
     "",
     "| Old app | Now |",
     "|---------|-----|"
