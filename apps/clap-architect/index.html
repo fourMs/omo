@@ -33,6 +33,19 @@
     .clap-grid-steps button.playhead {
       box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.7);
     }
+    .clap-stage {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 1.05rem;
+      line-height: 1.5;
+      color: var(--muted);
+      padding: 1rem;
+      user-select: none;
+    }
+    .clap-stage.listening { color: var(--accent); }
+    .clap-stage.clapped { background: rgba(110, 231, 183, 0.16); }
   </style>
 </head>
 <body class="app-shell">
@@ -41,18 +54,22 @@
     <h1>Clap Architect</h1>
   </header>
   <div class="learn-panel panel" id="learnPanel">
-    <h2>Clap architect</h2>
-    <p>Turn <strong>Audio on</strong> and allow the <strong>mic</strong>. <strong>Clap</strong> to toggle the highlighted step (orange ring). <strong>Hold</strong> the pad to run the loop.</p>
-    <p>You can also <strong>tap</strong> step numbers to toggle them by hand.</p>
+    <h2>Clap a rhythm, hear it as drums</h2>
+    <p>Turn <strong>Audio on</strong> and allow the <strong>mic</strong>. Tap the big pad (or <strong>Record</strong>): after a <strong>4-click count-in</strong>, <strong>clap a rhythm for two bars</strong> — each clap lands on the nearest of the 8 steps above.</p>
+    <p>The loop then plays your pattern as drums (kick, snare, hat by step). Tap <strong>step numbers</strong> to edit by hand; <strong>▶</strong> stops and restarts. Clap detection is only on while recording, so the drums cannot retrigger it.</p>
+  </div>
+  <div class="control-row">
+    <button type="button" class="btn btn-sm" id="recBtn">Record claps</button>
+    <button type="button" class="btn btn-play btn-sm" id="playBtn">▶</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="clearBtn">Clear</button>
   </div>
   <div class="clap-grid-steps" id="stepRow" aria-label="8 steps"></div>
+  <p class="status-bar" id="status">Audio on · tap the pad to record your claps</p>
   <div class="main-stage">
-    <div id="pad" class="stage-fill play-grid">
-      <div class="touch-dot" id="dot"></div>
-    </div>
+    <div id="stage" class="stage-fill play-grid clap-stage">Tap to record your claps</div>
   </div>
   <script type="module">
-    import { bindLearn, registerAudioBoot, startAudio } from "../../shared/app.js";
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
     import { createMasterBus, getMicStream, primeMicStream } from "../../shared/audio.js";
     import { createOnsetDetector } from "../../shared/onset-detect.js";
     import { playKick, playSnare, playHat } from "../../shared/drum-sounds.js";
@@ -61,17 +78,24 @@
 
     const STEPS = 8;
     const STEP_MS = 400;
+    const LISTEN_BARS = 2;
     const stepRow = document.getElementById("stepRow");
-    const pad = document.getElementById("pad");
+    const stage = document.getElementById("stage");
+    const recBtn = document.getElementById("recBtn");
+    const playBtn = document.getElementById("playBtn");
     const steps = Array(STEPS).fill(false);
     const stepBtns = [];
 
     let ctx, master, built = false;
-    let holding = false;
-    let stepIdx = 0;
-    let timer = null;
     let detector = null;
-    let ignoreOnsetUntil = 0;
+    let micOk = false;
+
+    // mode: 'idle' | 'countin' | 'listening' | 'playing'
+    let mode = "idle";
+    let stepIdx = 0;
+    let barCount = 0;
+    let timer = null;
+    let listenStartT = 0;
 
     for (let i = 0; i < STEPS; i++) {
       const btn = document.createElement("button");
@@ -89,8 +113,13 @@
     function renderSteps() {
       stepBtns.forEach((btn, i) => {
         btn.classList.toggle("on", steps[i]);
-        btn.classList.toggle("playhead", holding && i === stepIdx);
+        btn.classList.toggle("playhead", mode !== "idle" && i === stepIdx);
       });
+    }
+
+    function setStage(text, listening = false) {
+      stage.textContent = text;
+      stage.classList.toggle("listening", listening);
     }
 
     function playStep(i) {
@@ -107,38 +136,107 @@
     }
 
     async function setupMic() {
-      if (detector) return true;
+      if (detector) return micOk;
       try {
         const stream = await getMicStream();
         detector = createOnsetDetector(ctx, stream, {
           onOnset: (t) => {
-            if (t < ignoreOnsetUntil) return;
-            steps[stepIdx] = !steps[stepIdx];
+            if (mode !== "listening") return;
+            // Quantize the clap to the nearest step of the running grid.
+            const stepSec = STEP_MS / 1000;
+            const idx = Math.round((t - listenStartT) / stepSec) % STEPS;
+            steps[(idx + STEPS) % STEPS] = true;
             renderSteps();
-            ignoreOnsetUntil = t + 0.14;
+            stage.classList.add("clapped");
+            setTimeout(() => stage.classList.remove("clapped"), 120);
           },
         });
         detector.start();
-        return true;
+        micOk = true;
       } catch {
-        return false;
+        micOk = false;
+        setStatus("status", "Mic blocked — tap step numbers instead", "warn");
+      }
+      return micOk;
+    }
+
+    function stopClock() {
+      if (timer) clearInterval(timer);
+      timer = null;
+    }
+
+    function setMode(next) {
+      mode = next;
+      playBtn.textContent = mode === "playing" ? "■" : "▶";
+      playBtn.classList.toggle("active", mode === "playing");
+      recBtn.classList.toggle("active", mode === "countin" || mode === "listening");
+      renderSteps();
+    }
+
+    function tickCountin() {
+      if (stepIdx % 2 === 0) playHat(ctx, master);
+      setStage(`Get ready… ${4 - Math.floor(stepIdx / 2)}`, false);
+      if (stepIdx === STEPS - 1) {
+        // Listening starts on the next tick.
+        setTimeout(() => {
+          if (mode !== "countin") return;
+          listenStartT = ctx.currentTime + 0.02;
+          setMode("listening");
+          setStage("Clap now — 2 bars", true);
+          setStatus("status", "Clap your rhythm — each clap lands on a step", "ok");
+        }, STEP_MS - 20);
       }
     }
 
-    function startLoop() {
-      stopLoop();
-      timer = setInterval(() => {
-        if (!holding || !ctx) return;
+    function tick() {
+      if (!ctx) return;
+      stepIdx = (stepIdx + 1) % STEPS;
+      if (stepIdx === 0) barCount++;
+
+      if (mode === "countin") {
+        tickCountin();
+      } else if (mode === "listening") {
+        // Silent — visual playhead only, so the mic hears only your claps.
+        if (barCount >= LISTEN_BARS && stepIdx === 0) startPlaying();
+      } else if (mode === "playing") {
         playStep(stepIdx);
-        stepIdx = (stepIdx + 1) % STEPS;
-        renderSteps();
-      }, STEP_MS);
+      }
+      renderSteps();
     }
 
-    function stopLoop() {
-      if (timer) clearInterval(timer);
-      timer = null;
-      renderSteps();
+    function startClock() {
+      stopClock();
+      stepIdx = -1;
+      barCount = 0;
+      timer = setInterval(tick, STEP_MS);
+      tick();
+    }
+
+    function startPlaying() {
+      if (!steps.some(Boolean)) {
+        setMode("idle");
+        stopClock();
+        setStage("No claps heard — tap to try again");
+        setStatus("status", "No claps detected — tap to record again", "warn");
+        return;
+      }
+      barCount = 0;
+      setMode("playing");
+      setStage("Your claps as drums — ▶ stops · tap to re-record");
+      setStatus("status", "Playing your pattern · clap detection off", "ok");
+    }
+
+    async function startRecording() {
+      primeMicStream();
+      await startAudio(!built ? buildAudio : undefined);
+      if (!built) return;
+      const ok = await setupMic();
+      if (!ok) return;
+      steps.fill(false);
+      setMode("countin");
+      setStage("Get ready… 4");
+      setStatus("status", "Count-in — clap after the clicks", "ok");
+      startClock();
     }
 
     async function boot(c) {
@@ -148,24 +246,36 @@
 
     registerAudioBoot(boot, { mic: true });
 
-    pad.addEventListener("pointerdown", async (e) => {
-      e.preventDefault();
-      primeMicStream();
+    recBtn.addEventListener("click", () => void startRecording());
+
+    playBtn.addEventListener("click", async () => {
       await startAudio(!built ? boot : undefined);
       if (!built) return;
-      holding = true;
-      pad.classList.add("active");
-      startLoop();
+      if (mode === "playing") {
+        setMode("idle");
+        stopClock();
+        setStage("Tap to record your claps");
+        setStatus("status", "Stopped — tap the pad to record", "");
+      } else if (mode === "idle") {
+        if (!steps.some(Boolean)) {
+          setStatus("status", "No pattern yet — record claps or tap steps", "warn");
+          return;
+        }
+        setMode("playing");
+        setStage("Playing — ▶ stops · tap to re-record");
+        startClock();
+      }
     });
 
-    const release = () => {
-      holding = false;
-      pad.classList.remove("active");
-      stopLoop();
-    };
-    pad.addEventListener("pointerup", release);
-    pad.addEventListener("pointercancel", release);
-    pad.addEventListener("lostpointercapture", release);
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      steps.fill(false);
+      renderSteps();
+    });
+
+    stage.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (mode === "idle" || mode === "playing") void startRecording();
+    });
 
     renderSteps();
   </script>
