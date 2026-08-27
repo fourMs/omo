@@ -2,7 +2,7 @@
 
 Live links use the [GitHub Pages site](https://fourms.github.io/omo/) (same paths as the repo).
 
-49 apps on the hub — source of truth: `shared/hub-catalog.js` (this file is generated from it by `scripts/generate-wiki.mjs`). Folder names under `apps/` are kebab-case; titles are Title Case.
+49 apps on the hub. Source of truth: `shared/hub-catalog.js`; this file is generated from it by `scripts/generate-wiki.mjs`. Folder names under `apps/` are kebab-case; titles are Title Case.
 
 The Teaches column names the main concept and the matching chapter of [Sensing Sound and Music](https://fourms.github.io/sensingsoundandmusic/).
 

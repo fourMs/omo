@@ -10,7 +10,7 @@ OMO performs without a central audio server. Timing is social and acoustic: play
 - Countdown before a shared downbeat
 - A shareable URL (QR in header) so others open the same start time
 
-Limitation: each phone schedules locally. Expect roughly 50–100 ms jitter between devices on the same Wi‑Fi — fine for workshops, noticeable for tight studio grid.
+Limitation: each phone schedules locally. Expect roughly 50–100 ms jitter between devices on the same Wi‑Fi: fine for workshops, noticeable for tight studio grid.
 
 ### Facilitator flow
 
@@ -20,7 +20,7 @@ Limitation: each phone schedules locally. Expect roughly 50–100 ms jitter betw
 
 ## Firefly
 
-[Firefly](https://fourms.github.io/omo/apps/firefly/) plays a pulse click and listens for onsets in the room (mic). It slowly pulls its internal phase toward heard attacks — firefly-style entrainment.
+[Firefly](https://fourms.github.io/omo/apps/firefly/) plays a pulse click and listens for onsets in the room (mic). It slowly pulls its internal phase toward heard attacks, firefly-style entrainment.
 
 - Good for pulse / time roles when Conductor links are awkward.
 - Works best when players can hear neighbours' speakers.
@@ -31,11 +31,11 @@ Limitation: each phone schedules locally. Expect roughly 50–100 ms jitter betw
 [Harmonizer](https://fourms.github.io/omo/apps/harmonizer/) tracks chroma from the mic and drives detuned drone voices.
 
 - Assign different roots across the drone row ([Just Equal](https://fourms.github.io/omo/apps/just-equal/), [Compass Wah](https://fourms.github.io/omo/apps/compass-wah/) in Choir mode, [Harmonizer](https://fourms.github.io/omo/apps/harmonizer/)).
-- Not sample-accurate MIDI sync — harmonic following rather than beat clock.
+- Not sample-accurate MIDI sync: harmonic following rather than beat clock.
 
 ## Swarm Bloom
 
-[Swarm Bloom](https://fourms.github.io/omo/apps/swarm-bloom/) combines evolving drones with ensemble-oriented rhythm — mic and group behaviour; use sparingly with large groups.
+[Swarm Bloom](https://fourms.github.io/omo/apps/swarm-bloom/) combines evolving drones with ensemble-oriented rhythm (mic and group behaviour); use sparingly with large groups.
 
 ## Kaoss Pad & sequencers
 
@@ -47,6 +47,6 @@ Limitation: each phone schedules locally. Expect roughly 50–100 ms jitter betw
 ## What we do not ship (yet)
 
 - No WebRTC room or NTP clock in the current repo.
-- No Ableton Link — all sync is acoustic / URL-based.
+- No Ableton Link: all sync is acoustic / URL-based.
 
 For workshop planning, see [Workshop guide](Workshop-Guide) → Ensemble (15 min).

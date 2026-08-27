@@ -1,6 +1,6 @@
 # Browsers & hardware
 
-OMO apps use the Web Audio API and browser sensor APIs. There is no native app store build — performance depends on the browser and OS.
+OMO apps use the Web Audio API and browser sensor APIs. There is no native app store build; performance depends on the browser and OS.
 
 ## Recommended browsers
 
@@ -41,16 +41,16 @@ Motion often stays flat until the user interacts and grants access. In workshops
 
 ## Volume & acoustics
 
-- Phones are the only loudspeakers in typical OMO rules — position bodies so listeners hear the ensemble, not only their own speaker.
+- Phones are the only loudspeakers in typical OMO rules: position bodies so listeners hear the ensemble, not only their own speaker.
 - In noisy rooms, favour drones and sequencers over quiet mic-tracking apps.
 - [Firefly](https://fourms.github.io/omo/apps/firefly/) and [Conductor](https://fourms.github.io/omo/apps/conductor/) work best when the group can hear each other's pulses.
 
 ## Offline use
 
-The site registers a service worker (`sw.js`) that caches the hub, shared scripts, and core assets. After one online visit, many apps work offline; new app versions bump the cache name (e.g. `omo-v98`) — reload once if behaviour looks stale.
+The site registers a service worker (`sw.js`) that caches the hub, shared scripts, and core assets. After one online visit, many apps work offline; new app versions bump the cache name (e.g. `omo-v98`); reload once if behaviour looks stale.
 
 ## Hardware quirks
 
 - [Motion Filter](https://fourms.github.io/omo/apps/motion-filter/) folder: `apps/motion-filter/` (legacy `motion-wah`, `shake-filter`, `flat-edge`, `filter-ladder` redirect there).
 - Older KS Pluck URLs redirect to [KS String](https://fourms.github.io/omo/apps/ks-string/).
-- Retired hub apps may still exist as redirect stubs — see [App catalog](App-Catalog) → Retired.
+- Retired hub apps may still exist as redirect stubs: see [App catalog](App-Catalog) → Retired.

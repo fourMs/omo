@@ -15,7 +15,7 @@ OMO treats mobile phones as real-time instruments, not as controllers or music p
 
 This site is the current browser-based collection of instruments for OMO workshops and performances. It replaces earlier PureData patches deployed via MobMuPlat with Web Audio apps that run in the browser on participants' own phones.
 
-New performers are welcome — see the [OMO project page](https://www.uio.no/ritmo/english/research/labs/fourms/research/projects/omo/) for background, history, and contact.
+New performers are welcome; see the [OMO project page](https://www.uio.no/ritmo/english/research/labs/fourms/research/projects/omo/) for background, history, and contact.
 
 ## Wiki pages
 
@@ -33,6 +33,6 @@ In-repo copies: [`docs/CATALOG.md`](https://github.com/fourMs/omo/blob/main/docs
 
 ## In every app
 
-- Learn — instructions overlay
-- QR — share this instrument's URL
-- Audio on/off — unlock Web Audio (required on iOS)
+- Learn: instructions overlay
+- QR: share this instrument's URL
+- Audio on/off: unlock Web Audio (required on iOS)
