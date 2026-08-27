@@ -15,6 +15,7 @@
   <div class="learn-panel panel" id="learnPanel">
     <h2>Additive synthesis</h2>
     <p>Turn <strong>Audio on</strong>. <strong>Tap the pad</strong> or <strong>hit downward</strong> (phone upright, tap the bottom on a surface). Set partial sliders and <strong>root</strong> first.</p>
+    <p>Where you hit matters: the <strong>middle</strong> strikes at full force, towards the <strong>edges</strong> is softer — left/right also shifts brightness.</p>
     <p>Allow <strong>motion</strong> on iPhone when asked.</p>
   </div>
   <p class="status-bar" id="status">Audio on · tap pad to play</p>
@@ -99,7 +100,7 @@
       flashPad._t = setTimeout(() => pad.classList.remove("active"), 120);
     }
 
-    function strike(nx, impact = 1) {
+    function strike(nx, impact = 1, vel = 1) {
       if (!built || !ctx) return;
       if (ctx.state === "suspended") void ctx.resume();
       const amps = getLevels();
@@ -131,9 +132,11 @@
         const decay = 3.1 * Math.exp(-i * 0.42);
         const peak = Math.max(
           GAIN_FLOOR,
-          amp * bright * hitGain * 0.36 * (0.55 + 0.45 * Math.exp(-i * 0.12))
+          amp * bright * hitGain * vel * 0.36 * (0.55 + 0.45 * Math.exp(-i * 0.12))
         );
-        const strike = peak * (i < 3 ? 1.12 : 1 + 0.08 * Math.max(0, 4 - i));
+        // Soft (edge) hits also round off the attack transient.
+        const overshoot = i < 3 ? 1.12 : 1 + 0.08 * Math.max(0, 4 - i);
+        const strike = peak * (1 + (overshoot - 1) * vel);
         const t1 = t + attack;
         const t2 = t1 + 0.028 + i * 0.004;
         const tEnd = t + attack + decay;
@@ -202,7 +205,10 @@
       if (!(await ensureReady())) return;
       const r = pad.getBoundingClientRect();
       const nx = clamp((e.clientX - r.left) / r.width, 0, 1);
-      strike(nx);
+      const ny = clamp((e.clientY - r.top) / r.height, 0, 1);
+      // Velocity from strike position: full in the middle, soft at the rim.
+      const dist = Math.min(1, Math.hypot((nx - 0.5) * 2, (ny - 0.5) * 2));
+      strike(nx, 1, 1 - 0.65 * dist);
     });
     pad.addEventListener("pointerup", () => pad.classList.remove("active"));
     pad.addEventListener("pointercancel", () => pad.classList.remove("active"));
