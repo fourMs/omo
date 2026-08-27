@@ -60,9 +60,14 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
   const ROT_REF = 40; // deg/s
 
   // Log-scale spans for the band readouts (floor-relative, see calibration).
-  const TREMOR_SPAN = [0.004, 0.4];
-  const SWAY_SPAN = [0.05, 6];
-  const ROT_SPAN = [0.3, 60];
+  // Kept narrow so micromotion-scale activity fills the 0..1 range.
+  const TREMOR_SPAN = [0.002, 0.12];
+  const SWAY_SPAN = [0.02, 2];
+  const ROT_SPAN = [0.12, 20];
+  // Gyro contributions into the accel-based bands: rotation rate resolves
+  // micromotion far finer than the (often quantized) orientation angles.
+  const ROT_TO_SWAY = 0.35; // deg/s of slow rotation → deg-equivalent sway
+  const ROT_TO_JERK = 0.006; // deg/s of fast rotation → jerk-equivalent
 
   const state = {
     running: false,
@@ -89,6 +94,7 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
   let emaShortB = null, emaShortG = null; // tilt, τ≈0.25 s
   let emaLongB = null, emaLongG = null; // tilt, τ≈2.5 s
   let rotEma = 0;
+  let rotSlow = 0; // slow rotation drift (τ≈1.2 s) feeding the sway band
   let swaySpread = 0.4; // running |swayG| envelope, floored (deg)
   let prevOri = null;
   let prevOriT = 0;
@@ -126,6 +132,7 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
     if (rawRot > 0.5) sawRealGyro = true;
     const rot = sawRealGyro ? rawRot : oriRateMag;
     rotEma += alphaFor(0.15, dt) * (rot - rotEma);
+    rotSlow += alphaFor(1.2, dt) * (rotEma - rotSlow);
     state.gyroSource = sawRealGyro ? "sensor" : oriRateMag > 0 || prevOri ? "tilt" : "none";
 
     update(dt);
@@ -168,10 +175,14 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
 
   function update(dt) {
     const sway = swayNow();
+    // Accel + gyro combined per band: slow rotation joins sway, fast
+    // rotation wobble joins tremor.
+    const swayC = sway.mag + rotSlow * ROT_TO_SWAY;
+    const jerkC = jerkEma + Math.abs(rotEma - rotSlow) * ROT_TO_JERK;
 
     if (state.calibrating) {
-      calSamples.jerk.push(jerkEma);
-      calSamples.sway.push(sway.mag);
+      calSamples.jerk.push(jerkC);
+      calSamples.sway.push(swayC);
       calSamples.rot.push(rotEma);
       state.calibrationProgress = clamp01(
         1 - (calEndT - performance.now()) / calSamples.durMs
@@ -180,7 +191,8 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
       return;
     }
 
-    // Floor-relative activity per band, each normalised so 1 = clearly moving.
+    // Gate activity uses the FAST signals only — the combined (gyro-slow)
+    // signals linger after movement and would delay earn-back recovery.
     const tremorAct = Math.max(0, jerkEma - floorJerk) / JERK_REF;
     const swayAct = Math.max(0, sway.mag - floorSway) / SWAY_REF;
     const rotAct = Math.max(0, rotEma - floorRot) / ROT_REF;
@@ -196,8 +208,8 @@ export function createStillness({ stillAfter = 0.7, breakBelow = 0.35 } = {}) {
     else if (state.stillness < breakBelow) state.stillSeconds = 0;
 
     // Band readouts, log-scaled above the calibrated floor.
-    state.tremor = logNorm(Math.max(0, jerkEma - floorJerk), TREMOR_SPAN[0], TREMOR_SPAN[1]);
-    state.sway = logNorm(Math.max(0, sway.mag - floorSway * 0.5), SWAY_SPAN[0], SWAY_SPAN[1]);
+    state.tremor = logNorm(Math.max(0, jerkC - floorJerk), TREMOR_SPAN[0], TREMOR_SPAN[1]);
+    state.sway = logNorm(Math.max(0, swayC - floorSway * 0.5), SWAY_SPAN[0], SWAY_SPAN[1]);
     state.rotation = logNorm(Math.max(0, rotEma - floorRot * 0.5), ROT_SPAN[0], ROT_SPAN[1]);
 
     // Sideways sway against its own running spread (standstill-style EMA with

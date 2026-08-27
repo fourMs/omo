@@ -30,6 +30,9 @@
   </div>
   <div class="control-row">
     <button type="button" class="btn btn-secondary btn-sm" id="calBtn" disabled>Recalibrate</button>
+    <label for="sens">Sensitivity</label>
+    <input type="range" id="sens" min="0" max="100" value="50" aria-label="Band sensitivity" />
+    <span id="sensVal">Normal</span>
   </div>
   <p class="status-bar micromotion-stats"><span id="stillOut">—</span><span id="srcOut">Tap to begin</span></p>
   <div class="main-stage">
@@ -46,7 +49,31 @@
     const canvas = document.getElementById("stage");
     const g = canvas.getContext("2d");
     const calBtn = document.getElementById("calBtn");
+    const sensSlider = document.getElementById("sens");
+    const sensVal = document.getElementById("sensVal");
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    // Sensitivity: gamma on the 0..1 band values — high settings lift tiny
+    // micromotion into the audible/visible range. Remembered per phone.
+    const SENS_KEY = "omo-micromotion-sens";
+    let bandGamma = 1;
+    function applySensitivity(v) {
+      bandGamma = 0.5 * Math.pow(4, v / 100); // 0.5×–2×
+      sensVal.textContent = v < 25 ? "Low" : v <= 65 ? "Normal" : v <= 88 ? "High" : "Max";
+    }
+    try {
+      const stored = parseInt(localStorage.getItem(SENS_KEY), 10);
+      if (Number.isFinite(stored) && stored >= 0 && stored <= 100) sensSlider.value = String(stored);
+    } catch { /* noop */ }
+    applySensitivity(+sensSlider.value);
+    sensSlider.addEventListener("input", () => {
+      applySensitivity(+sensSlider.value);
+      try {
+        localStorage.setItem(SENS_KEY, sensSlider.value);
+      } catch { /* noop */ }
+    });
+
+    const bandVal = (v) => Math.pow(clamp(v, 0, 1), 1 / bandGamma);
 
     const SENSOR_OPTS = { needMotion: true, needOrientation: true };
     const tracker = createStillness();
@@ -195,19 +222,23 @@
       const fast = gate < 0.05 ? 0.07 : 0.35;
 
       // Door-I rule: each voice keeps a whisper floor and rises with its band.
-      const swayLevel = (0.12 + 0.88 * st.sway) * gate * 0.34;
+      const sway = bandVal(st.sway);
+      const tremor = bandVal(st.tremor);
+      const rotation = bandVal(st.rotation);
+
+      const swayLevel = (0.12 + 0.88 * sway) * gate * 0.34;
       swayVoice.gain.gain.setTargetAtTime(swayLevel, t, fast);
-      swayVoice.band.frequency.setTargetAtTime(220 * Math.pow(2, st.sway * 1.2), t, 0.25);
+      swayVoice.band.frequency.setTargetAtTime(220 * Math.pow(2, sway * 1.2), t, 0.25);
       if (swayVoice.pan) swayVoice.pan.pan.setTargetAtTime(st.swayX * 0.9, t, 0.35);
 
-      const tremLevel = (0.08 + 0.92 * st.tremor) * gate * 0.26;
+      const tremLevel = (0.08 + 0.92 * tremor) * gate * 0.26;
       tremorVoice.gain.gain.setTargetAtTime(tremLevel, t, fast);
-      tremorVoice.band.frequency.setTargetAtTime(1200 * Math.pow(2, st.tremor), t, 0.15);
-      tremorVoice.lfo.frequency.setTargetAtTime(4 + st.tremor * 8, t, 0.2);
+      tremorVoice.band.frequency.setTargetAtTime(1200 * Math.pow(2, tremor), t, 0.15);
+      tremorVoice.lfo.frequency.setTargetAtTime(4 + tremor * 8, t, 0.2);
 
       const hasRot = st.gyroSource !== "none";
-      const rotLevel = hasRot ? (0.08 + 0.92 * st.rotation) * gate * 0.15 : 0;
-      const cents = 4 + st.rotation * 42;
+      const rotLevel = hasRot ? (0.08 + 0.92 * rotation) * gate * 0.15 : 0;
+      const cents = 4 + rotation * 42;
       rotVoice.up.gain.gain.setTargetAtTime(rotLevel, t, fast);
       rotVoice.down.gain.gain.setTargetAtTime(rotLevel, t, fast);
       rotVoice.up.osc.detune.setTargetAtTime(cents, t, 0.2);
@@ -248,7 +279,7 @@
       if (now - histTick > 80 && !st.calibrating) {
         histTick = now;
         LANES.forEach((lane, i) => {
-          history[i][histPos] = st[lane.key];
+          history[i][histPos] = bandVal(st[lane.key]);
         });
         histPos = (histPos + 1) % HISTORY;
       }
@@ -275,7 +306,7 @@
           g.stroke();
 
           // Live level block at the right edge.
-          const v = st[lane.key];
+          const v = bandVal(st[lane.key]);
           g.fillStyle = `hsla(${lane.hue}, 80%, 70%, 0.85)`;
           g.fillRect(w - 8 * dpr, top + laneH - v * laneH, 6 * dpr, Math.max(2 * dpr, v * laneH));
         }
