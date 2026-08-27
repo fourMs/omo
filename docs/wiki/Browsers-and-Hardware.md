@@ -43,7 +43,7 @@ Motion often stays flat until the user interacts and grants access. In workshops
 
 - Phones are the **only** loudspeakers in typical OMO rules — position bodies so listeners hear the ensemble, not only their own speaker.
 - In noisy rooms, favour drones and sequencers over quiet mic-tracking apps.
-- **Firefly** and **Conductor** work best when the group can hear each other's pulses.
+- **[Firefly](https://fourms.github.io/omo/apps/firefly/)** and **[Conductor](https://fourms.github.io/omo/apps/conductor/)** work best when the group can hear each other's pulses.
 
 ## Offline use
 
@@ -51,6 +51,6 @@ The site registers a **service worker** (`sw.js`) that caches the hub, shared sc
 
 ## Hardware quirks
 
-- **Motion Filter** folder: `apps/motion-filter/` (legacy `motion-wah`, `shake-filter`, `flat-edge`, `filter-ladder` redirect there).
-- Older **KS Pluck** URLs redirect to **KS String**.
+- **[Motion Filter](https://fourms.github.io/omo/apps/motion-filter/)** folder: `apps/motion-filter/` (legacy `motion-wah`, `shake-filter`, `flat-edge`, `filter-ladder` redirect there).
+- Older **KS Pluck** URLs redirect to **[KS String](https://fourms.github.io/omo/apps/ks-string/)**.
 - Retired hub apps may still exist as redirect stubs — see [App catalog](App-Catalog) → Retired.

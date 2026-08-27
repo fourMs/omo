@@ -36,7 +36,7 @@ A motion-capture system measures **position**; your phone measures **acceleratio
 
 **A closer look: the markers that would not stand still.** In the standstill research, reflective markers placed on *stands* appeared to "respond" to music — until the explanation turned out to be the measurement chain's own noise floor plus floor vibration from the loudspeakers. The human results survive because they sit well above that floor; the marker "results" do not. The lesson: *before trusting a small effect, measure something dead alongside something living.* This is why both apps begin with a **2-second calibration** — they learn your phone's noise floor while you hold still, so that sensor noise is not mistaken for your body. (Recalibrate after changing grip; phones differ a lot.)
 
-The **Micromotion** app adds the decomposition: postural **sway** lives below ~1 Hz, **tremor** and heartbeat-range jitter around 2–8 Hz, and **rotation** comes from the gyroscope — estimated from tilt on phones without one, and the readout tells you which source you are hearing. Three bands, three voices: you can *listen* your way around your own nervous system.
+The **[Micromotion](https://fourms.github.io/omo/apps/micromotion/)** app adds the decomposition: postural **sway** lives below ~1 Hz, **tremor** and heartbeat-range jitter around 2–8 Hz, and **rotation** comes from the gyroscope — estimated from tilt on phones without one, and the readout tells you which source you are hearing. Three bands, three voices: you can *listen* your way around your own nervous system.
 
 ## The inverse gate is asymmetric
 
