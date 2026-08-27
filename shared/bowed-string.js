@@ -67,8 +67,10 @@ export function createBowedString(ctx, dest, freqHz = 220) {
       const press = bow * bow;
       bowAmp.gain.setTargetAtTime(press * 0.04, t, 0.07);
       bowIn.gain.setTargetAtTime(press * 0.006, t, 0.07);
-      const loop = bow > 0.04 ? 0.94 + press * 0.028 : 0;
-      fb.gain.setTargetAtTime(loop, t, 0.12);
+      // Keep the loop clearly below unity (max 0.935) and spin it up
+      // gently — near-unity feedback engaged abruptly howls at bow onset.
+      const loop = bow > 0.04 ? 0.9 + press * 0.035 : 0;
+      fb.gain.setTargetAtTime(loop, t, 0.2);
       out.gain.setTargetAtTime(bow > 0.03 ? 0.05 + press * 0.12 : 0, t, 0.08);
     },
 
@@ -80,7 +82,7 @@ export function createBowedString(ctx, dest, freqHz = 220) {
       const t = ctx.currentTime;
       bowAmp.gain.setTargetAtTime(0, t, 0.08);
       bowIn.gain.setTargetAtTime(0, t, 0.08);
-      fb.gain.setTargetAtTime(0.92, t, 0.2);
+      fb.gain.setTargetAtTime(0.9, t, 0.2);
       out.gain.setTargetAtTime(0.04, t, 0.15);
       fb.gain.setTargetAtTime(0, t + 2.2, 0.7);
       out.gain.setTargetAtTime(0, t + 2.5, 0.4);

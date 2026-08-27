@@ -101,7 +101,7 @@
       ctx = c;
       ({ master } = createMasterBus(c, 0.55));
       voice = ctx.createGain();
-      voice.gain.value = 1.85;
+      voice.gain.value = 1.4;
       voice.connect(master);
       bowed = createBowedString(ctx, voice, pitchHz);
       built = true;
@@ -136,10 +136,13 @@
       hudCtx.clearRect(0, 0, w, h);
 
       if (camReady && video.readyState >= 2 && video.videoWidth > 0) {
+        // Aspect-preserving centre crop (cover) — stretching the frame to
+        // the container squeezes the image.
+        const crop = coverCrop(video.videoWidth, video.videoHeight, w, h);
         hudCtx.save();
         hudCtx.translate(w, 0);
         hudCtx.scale(-1, 1);
-        hudCtx.drawImage(video, 0, 0, w, h);
+        hudCtx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, w, h);
         hudCtx.restore();
       } else {
         hudCtx.fillStyle = "#0f172a";
@@ -174,12 +177,26 @@
 
     const camWrap = document.getElementById("camWrap");
 
+    /** Source rect that covers a target of tw×th from a vw×vh frame. */
+    function coverCrop(vw, vh, tw, th) {
+      const scale = Math.max(tw / vw, th / vh);
+      const sw = tw / scale;
+      const sh = th / scale;
+      return { sx: (vw - sw) / 2, sy: (vh - sh) / 2, sw, sh };
+    }
+
     function measureHandBow() {
       if (!video.videoWidth) {
         handTrack = { present: false, nx: 0.5, ny: 0.25, mass: 0 };
         return 0;
       }
-      sctx.drawImage(video, 0, 0, CAM_W, CAM_H);
+      // Analyse the same crop the HUD shows so the hand dot lines up.
+      const box = camWrap.getBoundingClientRect();
+      const crop =
+        box.width > 0 && box.height > 0
+          ? coverCrop(video.videoWidth, video.videoHeight, box.width, box.height)
+          : { sx: 0, sy: 0, sw: video.videoWidth, sh: video.videoHeight };
+      sctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, CAM_W, CAM_H);
       const img = sctx.getImageData(0, 0, CAM_W, CAM_H);
       const n = CAM_W * Math.floor(CAM_H * BOW_ZONE);
       if (!handState || handState.prevGray.length !== n) {
@@ -205,7 +222,9 @@
       if (camReady && video.readyState >= 2) {
         const target = measureHandBow();
         if (holding) {
-          cameraBow = Math.min(1, cameraBow * 0.72 + target * 0.28);
+          // Gentle attack — slamming the bow to full pressure excites the
+          // feedback loop into a squeal.
+          cameraBow = Math.min(1, cameraBow * 0.86 + target * 0.14);
         }
       }
       drawCamHud();
