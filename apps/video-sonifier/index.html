@@ -250,7 +250,7 @@
       padVoices.oscs.forEach((o, i) => {
         o.frequency.setTargetAtTime(midiToFreq(smoothRootMidi + chord[i]), t, 0.45);
       });
-      padVoices.gain.gain.setTargetAtTime(Math.max(GAIN_FLOOR, even * 0.09), t, 0.35);
+      padVoices.gain.gain.setTargetAtTime(Math.max(GAIN_FLOOR, even * 0.12), t, 0.35);
     }
 
     function measureTexture(cells) {
@@ -293,13 +293,13 @@
       const ny = GRID_H > 1 ? row / (GRID_H - 1) : 0.5;
       const midi = midiForCell(col, row);
       const t = ctx.currentTime;
-      const dur = 0.12 + even * 0.45 + Math.random() * (0.06 + tex * 0.12);
+      const dur = 0.16 + even * 0.55 + Math.random() * (0.08 + tex * 0.12);
 
       const peak = Math.max(
         GAIN_FLOOR,
         (0.04 + even * 0.06 + level * (0.08 + tex * 0.12)) * (0.2 + smoothStillness * 0.8)
       );
-      const attack = 0.045;
+      const attack = 0.07;
       const release = 0.07;
       const end = t + dur;
 
@@ -313,20 +313,20 @@
       const vibG = ctx.createGain();
       vib.type = "sine";
       vib.frequency.value = 5 + col * 0.15;
-      vibG.gain.value = 3 + tex * 4;
+      vibG.gain.value = 2 + tex * 2.5;
       vib.connect(vibG);
       vibG.connect(osc.detune);
 
       const filt = ctx.createBiquadFilter();
       filt.type = "lowpass";
       filt.Q.value = 0.7;
-      const fTarget = 450 + level * 1600 + ny * 1100;
+      const fTarget = 320 + level * 1000 + ny * 700;
       filt.frequency.setValueAtTime(180, t);
       filt.frequency.exponentialRampToValueAtTime(Math.max(80, fTarget), t + attack * 1.5);
 
       const gn = ctx.createGain();
       const send = ctx.createGain();
-      send.gain.value = 0.22;
+      send.gain.value = 0.28;
       const pan = ctx.createStereoPanner();
       pan.pan.value = nx * 2 - 1;
       osc.connect(filt);
@@ -337,7 +337,7 @@
       send.connect(reverb);
 
       gn.gain.setValueAtTime(GAIN_FLOOR, t);
-      gn.gain.exponentialRampToValueAtTime(peak, t + attack);
+      gn.gain.linearRampToValueAtTime(peak, t + attack);
       gn.gain.setValueAtTime(peak, end - release);
       gn.gain.exponentialRampToValueAtTime(GAIN_FLOOR, end);
 
@@ -511,14 +511,19 @@
       ({ master: masterOut } = createMasterBus(c, 0.58));
       ampGain = ctx.createGain();
       ampGain.gain.value = 0;
-      ampGain.connect(masterOut);
+      const tone = ctx.createBiquadFilter();
+      tone.type = "lowpass";
+      tone.frequency.value = 4000;
+      tone.Q.value = 0.5;
+      ampGain.connect(tone);
+      tone.connect(masterOut);
       dryGain = ctx.createGain();
-      dryGain.gain.value = 0.85;
+      dryGain.gain.value = 0.75;
       dryGain.connect(ampGain);
       reverb = ctx.createConvolver();
-      reverb.buffer = reverbImpulse(c, 1.6);
+      reverb.buffer = reverbImpulse(c, 2.4);
       reverbWet = ctx.createGain();
-      reverbWet.gain.value = 0.32;
+      reverbWet.gain.value = 0.42;
       reverb.connect(reverbWet);
       reverbWet.connect(ampGain);
       buildPad(c);
