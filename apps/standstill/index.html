@@ -74,11 +74,12 @@
     const breathPhase = (nowMs) => (nowMs / 1000 / BREATH_SEC) * Math.PI * 2 - Math.PI / 2;
 
     // Pad tones join as stillness is sustained: [freq, fade-in start s, full s].
+    // At least 10 s between blooms — each one has to be earned.
     const PAD_STAGES = [
-      [146.83, 3, 7], // D3
-      [220.0, 8, 13], // A3
-      [293.66, 14, 20], // D4
-      [440.0, 22, 30], // A4 shimmer
+      [146.83, 10, 16], // D3
+      [220.0, 20, 27], // A3
+      [293.66, 30, 38], // D4
+      [440.0, 40, 50], // A4 shimmer
     ];
 
     let ctx, master, built = false, running = false;

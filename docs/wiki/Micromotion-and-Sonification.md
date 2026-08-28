@@ -40,7 +40,7 @@ The [Micromotion](https://fourms.github.io/omo/apps/micromotion/) app adds the d
 
 ## The inverse gate is asymmetric
 
-One design detail worth discussing with students: movement silences the sound almost instantly (~0.1 s), but stillness returns it slowly (~1.5 s), and the bloom voices need sustained stillness (3–30 s) to join. The asymmetry is the pedagogy: you can *break* the sound with a flick, but you must *earn* it back with your whole body. It also mirrors how the measurement works: one jerk proves you moved; only time proves you are still.
+One design detail worth discussing with students: movement silences the sound almost instantly (~0.1 s), but stillness returns it slowly (~1.5 s), and the bloom voices need sustained stillness (10–50 s) to join. The asymmetry is the pedagogy: you can *break* the sound with a flick, but you must *earn* it back with your whole body. It also mirrors how the measurement works: one jerk proves you moved; only time proves you are still.
 
 ## Workshop script: the standstill session (30–40 min)
 
