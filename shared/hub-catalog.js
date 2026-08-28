@@ -310,6 +310,14 @@ export const HUB_APPS = [
     teaches: "Motion bands and sensor limits · The body",
   },
   {
+    href: "apps/spacetime-matrix/",
+    title: "Spacetime Matrix",
+    section: "drones",
+    synth: "Register + texture crossfade",
+    sensors: "Motion · gyro · touch",
+    teaches: "Spatiotemporal action levels · The body",
+  },
+  {
     href: "apps/swarm-bloom/",
     title: "Swarm Bloom",
     section: "drones",

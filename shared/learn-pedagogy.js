@@ -256,6 +256,11 @@ export const LEARN_PEDAGOGY = {
     "Also a lesson in sensing: accelerometers measure acceleration, not position, and phones without a gyroscope estimate rotation from tilt — the readout shows which source you are hearing.",
   ],
 
+  "spacetime-matrix": [
+    "The spatial–temporal matrix (Jensenius 2015): every action has a size in space and a duration in time, each at micro, meso or macro level — a vocabulary developed for rehearsing microinteraction in the Sverm project. The corner combinations are the hardest to perform: a tiny action stretched over many seconds, or a metre of motion in a fraction of a second.",
+    "The phone cannot measure position, so both axes are estimated: for oscillating movement the ratio of jerk to acceleration gives the dominant frequency, and size is the distance travelled per half cycle (mean speed × T/2). Slow sweeps barely register on the accelerometer, so the gyroscope fills in via an effective arm radius — and a true micro–macro action sits below sensor noise entirely, which is why that cell is won by being read as still. Approximation as a teaching point about sensor limits.",
+  ],
+
   // Legacy URLs (redirect apps) — same pedagogy as canonical instrument
   "hold-loop-tilt": "See Sampler: hold the centre button to record, release to loop, tilt to shape.",
   "spectral-soup": "See Spectral Freeze → Soup mode: the spectrum is averaged while you hold, playing back as a live pad.",

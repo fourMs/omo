@@ -2,14 +2,14 @@
 
 Complete list of instruments on the [hub](https://fourms.github.io/omo/).
 
-49 apps on the hub. Source of truth: `shared/hub-catalog.js`; this file is generated from it by `scripts/generate-wiki.mjs`. Folder names under `apps/` are kebab-case; titles are Title Case.
+50 apps on the hub. Source of truth: `shared/hub-catalog.js`; this file is generated from it by `scripts/generate-wiki.mjs`. Folder names under `apps/` are kebab-case; titles are Title Case.
 
 The Teaches column names the main concept and the matching chapter of [Sensing Sound and Music](https://fourms.github.io/sensingsoundandmusic/).
 
 | Section | Count |
 |---------|------:|
 | Rhythm | 9 |
-| Drones & motion | 10 |
+| Drones & motion | 11 |
 | Melody | 9 |
 | Synthesis | 7 |
 | Texture | 10 |
@@ -51,6 +51,7 @@ The Teaches column names the main concept and the matching chapter of [Sensing S
 | [Motion Filter](../apps/motion-filter/) | `motion-filter` | Tilt · shake · ladder · flat | Touch · motion · tilt | Action–sound mappings · The body |
 | [Shepard Glide](../apps/shepard-glide/) | `shepard-glide` | Shepard tone | Touch · tilt | Shepard illusion · Psychoacoustics |
 | [Sound Saber](../apps/sound-saber/) | `sound-saber` | Pulse · delay · ring | Touch · motion | Motion as timbre · The body |
+| [Spacetime Matrix](../apps/spacetime-matrix/) | `spacetime-matrix` | Register + texture crossfade | Motion · gyro · touch | Spatiotemporal action levels · The body |
 | [Standstill](../apps/standstill/) | `standstill` | Inverse stillness bloom | Motion · tilt | Micromotion and standstill · The body |
 | [Swarm Bloom](../apps/swarm-bloom/) | `swarm-bloom` | Evo drones + rhythm | Mic · ensemble | Emergent ensemble roles · The body |
 

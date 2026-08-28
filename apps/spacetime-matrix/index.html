@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#05070a" />
+  <title>Spacetime Matrix — OMO</title>
+  <link rel="stylesheet" href="../../shared/ui.css" />
+  <style>
+    .stm-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+    .stm-stats {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .stm-stats span { font-variant-numeric: tabular-nums; }
+    .mode-btn[aria-pressed="true"] {
+      background: rgba(120, 190, 235, 0.3);
+      border-color: rgba(140, 205, 245, 0.9);
+      color: #eaf5ff;
+    }
+  </style>
+</head>
+<body class="app-shell stm-app">
+  <header class="app-header">
+    <a class="back-link" href="../../">←</a>
+    <h1>Spacetime Matrix</h1>
+  </header>
+  <div class="learn-panel panel" id="learnPanel">
+    <h2>Nine ways to move</h2>
+    <p>Actions have a size in <strong>space</strong> and a duration in <strong>time</strong>, each at one of three levels: micro (&lt;1&nbsp;cm · &lt;0.5&nbsp;s), meso (1–100&nbsp;cm · 0.5–10&nbsp;s) or macro (&gt;1&nbsp;m · &gt;10&nbsp;s). Crossing them gives the spatial–temporal matrix of nine action types, from a micro–micro tremor to a macro–macro full-body sweep (Jensenius 2015).</p>
+    <p><strong>Explore</strong>: move the phone and the dot shows where your action sits in the matrix. The sound is the map: small actions ring high and thin, large actions hum low; fast actions shimmer, slower ones breathe, and very slow ones hold a steady tone.</p>
+    <p><strong>Practice</strong>: tap a cell to make it the target — sound only lives while you move at that size <em>and</em> that speed. <strong>Tour</strong> visits five cells, saving the hardest for last: the corner combinations. Micro–macro is special: a true micro–macro action moves less than a millimetre per second, below what a phone can sense — it appears as a state of standstill, so you win that cell by making the phone read you as still, and the stillness itself sings.</p>
+    <p>The phone estimates action size and period from its accelerometer and gyroscope, so the values are approximate on purpose — the levels are zones, not walls. On a computer without motion sensors, drag the dot to play the matrix directly.</p>
+  </div>
+  <div class="control-row">
+    <button type="button" class="btn btn-secondary btn-sm mode-btn" id="exploreBtn" aria-pressed="true">Explore</button>
+    <button type="button" class="btn btn-secondary btn-sm mode-btn" id="practiceBtn" aria-pressed="false">Practice</button>
+    <button type="button" class="btn btn-secondary btn-sm mode-btn" id="tourBtn" aria-pressed="false">Tour</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="calBtn" disabled>Recalibrate</button>
+  </div>
+  <p class="status-bar stm-stats"><span id="estOut">—</span><span id="modeOut">Tap to begin</span></p>
+  <div class="main-stage">
+    <canvas id="stage" class="stm-canvas" aria-label="Spatial-temporal matrix"></canvas>
+  </div>
+  <script type="module">
+    import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
+    import { createMasterBus } from "../../shared/audio.js";
+    import { primeSensors, onMotionGyro } from "../../shared/sensors.js";
+
+    bindLearn();
+
+    const canvas = document.getElementById("stage");
+    const g = canvas.getContext("2d");
+    const calBtn = document.getElementById("calBtn");
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const clamp01 = (v) => clamp(v, 0, 1);
+    const alphaFor = (tau, dt) => 1 - Math.exp(-dt / Math.max(tau, 1e-3));
+
+    // ------------------------------------------------------------------
+    // The matrix (Jensenius 2015, Table 1). Zone edges in log10 units;
+    // the two inner edges are the published level boundaries.
+    // ------------------------------------------------------------------
+    const LEVELS = ["micro", "meso", "macro"];
+    const S_EDGES = [-3.5, -2, 0, 1]; // log10 metres: <1 cm | 1–100 cm | >1 m
+    const T_EDGES = [-1.5, Math.log10(0.5), 1, 2]; // log10 seconds: <0.5 s | 0.5–10 s | >10 s
+    const S_RANGES = ["<1 cm", "1–100 cm", ">1 m"];
+    const T_RANGES = ["<0.5 s", "0.5–10 s", ">10 s"];
+    const SIZE_TEXT = ["smaller than a centimetre", "hand-sized (1–100 cm)", "larger than a metre"];
+    const TIME_TEXT = ["faster than half a second", "over a few seconds", "for longer than 10 seconds"];
+    const COL_HUES = [185, 45, 275];
+
+    // Piecewise-linear log value → continuous zone coordinate 0..3.
+    function toZone(x, edges) {
+      if (x <= edges[0]) return 0;
+      if (x >= edges[3]) return 3;
+      for (let i = 0; i < 3; i++) {
+        if (x < edges[i + 1]) return i + (x - edges[i]) / (edges[i + 1] - edges[i]);
+      }
+      return 3;
+    }
+    function fromZone(u, edges) {
+      const i = clamp(Math.floor(u), 0, 2);
+      return edges[i] + (u - i) * (edges[i + 1] - edges[i]);
+    }
+    // Triangular crossfade weights over the three zones (centres 0.5/1.5/2.5).
+    function zoneWeights(u) {
+      const w = [0, 1, 2].map((i) => Math.max(0, 1 - Math.abs(u - (i + 0.5))));
+      const sum = w[0] + w[1] + w[2] || 1;
+      return w.map((v) => v / sum);
+    }
+    const cellName = (si, ti) => `${LEVELS[si]}–${LEVELS[ti]}`;
+
+    // ------------------------------------------------------------------
+    // Estimator: place phone movement on the two axes. For oscillatory
+    // motion, |jerk|/|accel| ≈ 2πf, so a running rectified-mean ratio gives
+    // the dominant frequency without an FFT. Action size is then travel per
+    // half cycle — mean speed × T/2, which holds for any periodic movement.
+    // Slow sweeps barely register on the accelerometer, so the gyro provides
+    // a parallel velocity estimate via an effective radius (wrist-scale for
+    // gentle rotation, arm-scale for vigorous swings), and the channel with
+    // more velocity wins. All noise floors are per-device calibrated.
+    // ------------------------------------------------------------------
+    const DEG = Math.PI / 180;
+
+    function createSpaceTime() {
+      const state = {
+        hasMotion: false,
+        calibrating: false,
+        calibrationProgress: 0,
+        gyroSource: "none",
+        presence: 0, // 0..1 confidence that the phone is moving at all
+        A: 0.001, // estimated action size (m)
+        T: 1, // estimated action period (s)
+        uS: 0.5, // zone coordinates 0..3
+        uT: 1.5,
+      };
+
+      let grav = null, prevHp = null, prevW = null, lastT = 0;
+      let aRms = 0, jRms = 0, wRms = 0, dwRms = 0;
+      let floorA = 0.02, floorJ = 0.8, floorW = 0.02, floorDW = 0.35;
+      let logA = -3, logT = 0;
+      let stillAct = 0, stoppedFor = 0;
+      let cal = null, calEnd = 0, calDone = null;
+
+      function handle(m) {
+        // Desktop Chrome fires devicemotion with all-null (→ 0) readings; a
+        // real sensor always carries noise, so all-zero events don't count.
+        if (m.x || m.y || m.z || m.rotAlpha || m.rotBeta || m.rotGamma) state.hasMotion = true;
+        state.gyroSource = m.gyroSource;
+        const now = performance.now();
+        const dt = lastT ? clamp((now - lastT) / 1000, 0.004, 0.1) : 1 / 60;
+        lastT = now;
+
+        // High-pass accel (removes gravity when only accelerationIncludingGravity exists).
+        if (!grav) grav = { x: m.x, y: m.y, z: m.z };
+        const ga = alphaFor(1.2, dt);
+        grav.x += ga * (m.x - grav.x);
+        grav.y += ga * (m.y - grav.y);
+        grav.z += ga * (m.z - grav.z);
+        const hp = { x: m.x - grav.x, y: m.y - grav.y, z: m.z - grav.z };
+        const aMag = Math.hypot(hp.x, hp.y, hp.z);
+        const jMag = prevHp ? Math.hypot(hp.x - prevHp.x, hp.y - prevHp.y, hp.z - prevHp.z) / dt : 0;
+        prevHp = hp;
+
+        const w = { x: m.rotAlpha * DEG, y: m.rotBeta * DEG, z: m.rotGamma * DEG };
+        const wMag = Math.hypot(w.x, w.y, w.z);
+        const dwMag = prevW ? Math.hypot(w.x - prevW.x, w.y - prevW.y, w.z - prevW.z) / dt : 0;
+        prevW = w;
+
+        const al = alphaFor(2.5, dt);
+        aRms += al * (aMag - aRms);
+        jRms += al * (jMag - jRms);
+        wRms += al * (wMag - wRms);
+        dwRms += al * (dwMag - dwRms);
+
+        if (state.calibrating) {
+          cal.a.push(aRms);
+          cal.j.push(jRms);
+          cal.w.push(wRms);
+          cal.dw.push(dwMag);
+          state.calibrationProgress = clamp01(1 - (calEnd - now) / cal.durMs);
+          if (now >= calEnd) finishCalibration();
+          return;
+        }
+
+        // Stop detector: the slow trackers above need seconds to drain, which
+        // would leave sound hanging after a vigorous action ends. Fast jerk +
+        // rotation activity recognises a true stop within ~1 s (slow sweeps
+        // are safe: their rotation rate crosses zero only briefly).
+        stillAct += alphaFor(0.2, dt) * (jMag / (floorJ * 3) + wMag / (floorW * 3) - stillAct);
+        stoppedFor = stillAct < 1 ? stoppedFor + dt : 0;
+        const stopped = stoppedFor > 0.8;
+        if (stopped) {
+          const drain = alphaFor(0.4, dt);
+          aRms -= drain * aRms;
+          jRms -= drain * jRms;
+          wRms -= drain * wRms;
+          dwRms -= drain * dwRms;
+        }
+
+        const aA = Math.max(0, aRms - floorA);
+        const jA = Math.max(0, jRms - floorJ);
+        const wA = Math.max(0, wRms - floorW);
+        const dwA = Math.max(0, dwRms - floorDW);
+
+        let fAcc = 0, vAcc = 0;
+        if (aA > 0.005) {
+          fAcc = clamp(jA / (2 * Math.PI * Math.max(aA, 1e-6)), 0.01, 30);
+          vAcc = aA / (2 * Math.PI * fAcc);
+        }
+        let fRot = 0, vRot = 0;
+        if (wA > 0.008) {
+          fRot = clamp(dwA / (2 * Math.PI * Math.max(wA, 1e-6)), 0.01, 30);
+          // Effective radius: gentle rotation is wrist-scale, hard swings arm-scale.
+          const radius = 0.07 + 0.38 * clamp01((wA - 0.2) / 1.5);
+          vRot = wA * radius;
+        }
+
+        const v = Math.max(vAcc, vRot);
+        const pres = stopped ? 0 : clamp01((v - 0.0015) / 0.004);
+        // Presence rises quickly, releases slowly — strokes read as one action.
+        state.presence += alphaFor(pres > state.presence ? 0.25 : 0.8, dt) * (pres - state.presence);
+
+        if (pres > 0.02 && vAcc + vRot > 0) {
+          const f = (fAcc * vAcc + fRot * vRot) / (vAcc + vRot);
+          const T = clamp(1 / Math.max(f, 0.01), 0.03, 100);
+          const A = clamp((v * T) / 2, 0.0004, 8);
+          const sm = alphaFor(0.7, dt);
+          logA += sm * (Math.log10(A) - logA);
+          logT += sm * (Math.log10(T) - logT);
+          state.A = Math.pow(10, logA);
+          state.T = Math.pow(10, logT);
+          state.uS = toZone(logA, S_EDGES);
+          state.uT = toZone(logT, T_EDGES);
+        }
+      }
+
+      function finishCalibration() {
+        const q = (arr, p) => {
+          if (!arr.length) return 0;
+          const s = [...arr].sort((x, y) => x - y);
+          return s[Math.min(s.length - 1, Math.floor(p * s.length))];
+        };
+        floorA = Math.max(0.012, q(cal.a, 0.75) * 1.6);
+        floorJ = Math.max(0.5, q(cal.j, 0.75) * 1.6);
+        floorW = Math.max(0.012, q(cal.w, 0.75) * 1.6);
+        floorDW = Math.max(0.2, q(cal.dw, 0.75) * 1.6);
+        cal = null;
+        state.calibrating = false;
+        state.calibrationProgress = 1;
+        state.presence = 0;
+        calDone?.();
+        calDone = null;
+      }
+
+      return {
+        state,
+        start() {
+          onMotionGyro(handle);
+        },
+        calibrate(seconds = 2) {
+          cal = { a: [], j: [], w: [], dw: [], durMs: seconds * 1000 };
+          calEnd = performance.now() + seconds * 1000;
+          state.calibrating = true;
+          state.calibrationProgress = 0;
+          return new Promise((resolve) => {
+            calDone = resolve;
+            // Without an accelerometer no motion events arrive — resolve on a
+            // timer so hasMotion can tell the app what happened.
+            setTimeout(() => {
+              if (state.calibrating) finishCalibration();
+            }, seconds * 1000 + 1200);
+          });
+        },
+      };
+    }
+
+    const tracker = createSpaceTime();
+    const st = tracker.state;
+
+    // ------------------------------------------------------------------
+    // App state: modes, target, tour, pointer fallback.
+    // ------------------------------------------------------------------
+    let mode = "explore"; // 'explore' | 'practice' | 'tour'
+    let target = null; // { si, ti } in practice/tour
+    let reward = 0; // 0..1 in-target bloom
+    let holdSec = 0;
+    let cheered = false;
+    const HOLD_NEED = 4;
+    const TOUR = [
+      [0, 0],
+      [1, 1],
+      [2, 2],
+      [0, 2],
+      [2, 0],
+    ];
+    let tourStep = 0;
+    let tourDone = false;
+    let pointerMode = false; // no motion sensor: drag the dot directly
+    let pointerHeld = false;
+    let running = false;
+    let sensorMsg = null;
+    const trail = []; // recent {x: uS, y: uT}
+    const TRAIL_MAX = 110;
+
+    // ------------------------------------------------------------------
+    // Sound: one instrument, crossfaded by matrix position. Space picks
+    // the register (high sines / mid triangles / low saws), time picks the
+    // texture (shimmer + fast tremolo / breathing swell / steady hold).
+    // Stacked fifths and a long reverb — the sound cannot be wrong.
+    // ------------------------------------------------------------------
+    let ctx, master, built = false;
+    let hiG, midG, lowG, shimG, trem, lfo, lfoDepth, chimeBus;
+
+    function makeIR(c, seconds) {
+      const len = Math.floor(c.sampleRate * seconds);
+      const buf = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+          d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+        }
+      }
+      return buf;
+    }
+
+    function noiseSource(c) {
+      const buf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      src.start();
+      return src;
+    }
+
+    function oscStack(c, type, freqs, detunes, out) {
+      freqs.forEach((f, i) => {
+        const osc = c.createOscillator();
+        osc.type = type;
+        osc.frequency.value = f;
+        osc.detune.value = detunes[i] || 0;
+        osc.connect(out);
+        osc.start();
+      });
+    }
+
+    function build(c) {
+      ctx = c;
+      ({ master } = createMasterBus(c, 0.5));
+
+      const conv = c.createConvolver();
+      conv.buffer = makeIR(c, 2.8);
+      const wet = c.createGain();
+      wet.gain.value = 0.4;
+      conv.connect(wet);
+      wet.connect(master);
+      const dry = c.createGain();
+      dry.gain.value = 0.8;
+      dry.connect(master);
+
+      // Shared tremolo stage: rate follows the action period continuously.
+      trem = c.createGain();
+      trem.gain.value = 1;
+      lfo = c.createOscillator();
+      lfo.frequency.value = 1;
+      lfoDepth = c.createGain();
+      lfoDepth.gain.value = 0;
+      lfo.connect(lfoDepth);
+      lfoDepth.connect(trem.gain);
+      lfo.start();
+      trem.connect(dry);
+      trem.connect(conv);
+
+      // Micro-space: thin high sines.
+      hiG = c.createGain();
+      hiG.gain.value = 0;
+      oscStack(c, "sine", [1046.5, 1568.0, 2093.0], [0, 5, -4], hiG);
+      hiG.connect(trem);
+
+      // Meso-space: mid triangles in stacked fifths.
+      midG = c.createGain();
+      midG.gain.value = 0;
+      oscStack(c, "triangle", [261.63, 392.0, 587.33], [0, -3, 4], midG);
+      midG.connect(trem);
+
+      // Macro-space: low saws through a dark lowpass.
+      lowG = c.createGain();
+      lowG.gain.value = 0;
+      const lowFilt = c.createBiquadFilter();
+      lowFilt.type = "lowpass";
+      lowFilt.frequency.value = 260;
+      oscStack(c, "sawtooth", [65.41, 98.0], [0, 3], lowFilt);
+      lowFilt.connect(lowG);
+      lowG.connect(trem);
+
+      // Micro-time: granular noise shimmer on top.
+      shimG = c.createGain();
+      shimG.gain.value = 0;
+      const shimFilt = c.createBiquadFilter();
+      shimFilt.type = "bandpass";
+      shimFilt.frequency.value = 2800;
+      shimFilt.Q.value = 8;
+      noiseSource(c).connect(shimFilt);
+      shimFilt.connect(shimG);
+      shimG.connect(trem);
+
+      chimeBus = c.createGain();
+      chimeBus.gain.value = 0.5;
+      chimeBus.connect(conv);
+      chimeBus.connect(dry);
+
+      built = true;
+    }
+
+    registerAudioBoot(build);
+
+    function chime() {
+      if (!built) return;
+      const t0 = ctx.currentTime;
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = f;
+        const gn = ctx.createGain();
+        const at = t0 + i * 0.09;
+        gn.gain.setValueAtTime(0.0001, at);
+        gn.gain.exponentialRampToValueAtTime(0.22, at + 0.02);
+        gn.gain.exponentialRampToValueAtTime(0.0001, at + 1.1);
+        osc.connect(gn);
+        gn.connect(chimeBus);
+        osc.start(at);
+        osc.stop(at + 1.2);
+      });
+    }
+
+    function updateAudio(dt) {
+      if (!built || !running) return;
+      const t = ctx.currentTime;
+
+      // Reward gate (practice/tour): sound blooms only in the target cell.
+      // micro–macro is special: a true one sits below sensor noise — per the
+      // 2015 paper it "appears as a state of standstill" — so that cell is won
+      // by making the phone read you as still, and stillness itself sings.
+      const stillGate = target && target.si === 0 && target.ti === 2 && !pointerMode;
+      const zoneMargin = 0.18; // soft cell edges so the hard corners stay winnable
+      const inTarget = target
+        ? stillGate
+          ? !st.calibrating && st.hasMotion && st.presence < 0.25
+          : st.presence > 0.1 &&
+            st.uS > target.si - zoneMargin &&
+            st.uS < target.si + 1 + zoneMargin &&
+            st.uT > target.ti - zoneMargin &&
+            st.uT < target.ti + 1 + zoneMargin
+        : false;
+      if (mode !== "explore") {
+        if (inTarget) {
+          reward += alphaFor(1.1, dt) * (1 - reward);
+          holdSec += dt;
+        } else {
+          reward += alphaFor(0.45, dt) * (0 - reward);
+          holdSec = Math.max(0, holdSec - dt * 2);
+        }
+        if (!tourDone && holdSec >= HOLD_NEED && !cheered) {
+          cheered = true;
+          if (mode === "tour") advanceTour();
+          else chime();
+        }
+      }
+
+      let overall = st.calibrating ? 0 : st.presence;
+      if (mode !== "explore") overall = (st.calibrating ? 0 : stillGate ? 1 : st.presence) * reward * reward;
+
+      // While the standstill cell blooms, the voice is its cell's character
+      // (high and steady), not wherever the dot happened to freeze.
+      const wS = zoneWeights(stillGate && reward > 0.05 ? 0.5 : st.uS);
+      const wT = zoneWeights(stillGate && reward > 0.05 ? 2.5 : st.uT);
+
+      const fast = overall < 0.03 ? 0.09 : 0.25;
+      hiG.gain.setTargetAtTime(0.15 * wS[0] * overall, t, fast);
+      midG.gain.setTargetAtTime(0.24 * wS[1] * overall, t, fast);
+      lowG.gain.setTargetAtTime(0.34 * wS[2] * overall, t, fast);
+      shimG.gain.setTargetAtTime(0.1 * wT[0] * overall, t, fast);
+
+      lfo.frequency.setTargetAtTime(clamp(1.6 / st.T, 0.08, 12), t, 0.3);
+      lfoDepth.gain.setTargetAtTime(0.6 * wT[0] + 0.42 * wT[1], t, 0.4);
+    }
+
+    // ------------------------------------------------------------------
+    // Modes, targets, tour.
+    // ------------------------------------------------------------------
+    const modeBtns = {
+      explore: document.getElementById("exploreBtn"),
+      practice: document.getElementById("practiceBtn"),
+      tour: document.getElementById("tourBtn"),
+    };
+
+    function describeTarget() {
+      if (!target) return "Tap a cell to pick a target";
+      if (target.si === 0 && target.ti === 2 && !pointerMode) {
+        return "micro–macro: move so little, so slowly, that the phone reads you as still";
+      }
+      return `${cellName(target.si, target.ti)}: move ${SIZE_TEXT[target.si]}, ${TIME_TEXT[target.ti]}`;
+    }
+
+    function setMode(m) {
+      mode = m;
+      reward = 0;
+      holdSec = 0;
+      cheered = false;
+      Object.entries(modeBtns).forEach(([k, b]) => b.setAttribute("aria-pressed", String(k === m)));
+      if (m === "explore") {
+        target = null;
+        setStatus("modeOut", "Explore — sound follows the dot", "ok");
+      } else if (m === "practice") {
+        setStatus("modeOut", describeTarget(), target ? "ok" : "warn");
+      } else {
+        tourStep = 0;
+        tourDone = false;
+        target = { si: TOUR[0][0], ti: TOUR[0][1] };
+        setStatus("modeOut", `Tour 1/${TOUR.length} — ${describeTarget()}`, "ok");
+      }
+    }
+
+    function advanceTour() {
+      chime();
+      tourStep += 1;
+      reward = 0;
+      holdSec = 0;
+      cheered = false;
+      if (tourStep >= TOUR.length) {
+        tourDone = true;
+        target = null;
+        setStatus("modeOut", "Tour complete — all five held. Explore freely!", "ok");
+        return;
+      }
+      target = { si: TOUR[tourStep][0], ti: TOUR[tourStep][1] };
+      setStatus("modeOut", `Tour ${tourStep + 1}/${TOUR.length} — ${describeTarget()}`, "ok");
+    }
+
+    modeBtns.explore.addEventListener("click", () => setMode("explore"));
+    modeBtns.practice.addEventListener("click", () => setMode("practice"));
+    modeBtns.tour.addEventListener("click", () => setMode("tour"));
+
+    // ------------------------------------------------------------------
+    // Begin / calibration.
+    // ------------------------------------------------------------------
+    const SENSOR_OPTS = { needMotion: true, needOrientation: true };
+
+    async function begin() {
+      try {
+        const permission = primeSensors(SENSOR_OPTS);
+        await startAudio(!built ? build : undefined);
+        if (running) return;
+        const ok = await permission;
+        if (!ok) {
+          sensorMsg = "Motion blocked — allow Motion & Orientation\nfor this site, then tap to retry";
+          setStatus("modeOut", "Motion permission needed", "warn");
+          return;
+        }
+        sensorMsg = null;
+        tracker.start();
+        running = true;
+        calBtn.disabled = false;
+        await recalibrate();
+      } catch (err) {
+        sensorMsg = `Could not start: ${err?.message || err}\nTap to retry`;
+        setStatus("modeOut", "Error — tap to retry", "warn");
+      }
+    }
+
+    async function recalibrate() {
+      setStatus("modeOut", "Calibrating — hold still", "warn");
+      await tracker.calibrate(2);
+      if (!st.hasMotion) {
+        pointerMode = true;
+        setStatus("modeOut", "No motion sensor — drag the dot", "warn");
+        return;
+      }
+      setStatus("modeOut", "Move the phone — find all nine cells", "ok");
+    }
+
+    // ------------------------------------------------------------------
+    // Pointer input: tap picks a target (practice); drag moves the dot
+    // when there is no motion sensor (desktop demo mode).
+    // ------------------------------------------------------------------
+    let grid = { ml: 0, mt: 0, gw: 1, gh: 1 };
+    let downAt = 0, downX = 0, downY = 0;
+
+    function pointerToZones(e) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      const px = (e.clientX - rect.left) * dpr;
+      const py = (e.clientY - rect.top) * dpr;
+      return {
+        uS: clamp(((px - grid.ml) / grid.gw) * 3, 0, 3),
+        uT: clamp(((py - grid.mt) / grid.gh) * 3, 0, 3),
+        inside: px >= grid.ml && py >= grid.mt,
+      };
+    }
+
+    function applyPointer(e) {
+      const z = pointerToZones(e);
+      st.uS = z.uS;
+      st.uT = z.uT;
+      st.A = Math.pow(10, fromZone(z.uS, S_EDGES));
+      st.T = Math.pow(10, fromZone(z.uT, T_EDGES));
+      st.presence = 1;
+    }
+
+    canvas.addEventListener(
+      "pointerdown",
+      (e) => {
+        e.preventDefault();
+        downAt = performance.now();
+        downX = e.clientX;
+        downY = e.clientY;
+        if (!running) {
+          void begin();
+          return;
+        }
+        if (pointerMode) {
+          pointerHeld = true;
+          try {
+            canvas.setPointerCapture(e.pointerId);
+          } catch { /* older Safari */ }
+          applyPointer(e);
+        }
+      },
+      { passive: false }
+    );
+    canvas.addEventListener("pointermove", (e) => {
+      if (pointerMode && pointerHeld) applyPointer(e);
+    });
+    canvas.addEventListener("pointerup", (e) => {
+      if (pointerHeld) pointerHeld = false;
+      const quick = performance.now() - downAt < 300 && Math.hypot(e.clientX - downX, e.clientY - downY) < 12;
+      if (running && quick && (mode === "practice")) {
+        const z = pointerToZones(e);
+        if (z.inside) {
+          target = { si: clamp(Math.floor(z.uS), 0, 2), ti: clamp(Math.floor(z.uT), 0, 2) };
+          reward = 0;
+          holdSec = 0;
+          cheered = false;
+          setStatus("modeOut", describeTarget(), "ok");
+        }
+      }
+    });
+    calBtn.addEventListener("click", () => {
+      if (running && !pointerMode) void recalibrate();
+    });
+
+    // Pointer-mode presence release so sound tails off after a drag.
+    function decayPointerPresence(dt) {
+      if (pointerMode && !pointerHeld) {
+        st.presence += alphaFor(0.9, dt) * (0 - st.presence);
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Rendering.
+    // ------------------------------------------------------------------
+    function resizeCanvas() {
+      const box = canvas.parentElement.getBoundingClientRect();
+      const dpr = devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(box.width * dpr));
+      canvas.height = Math.max(1, Math.floor(box.height * dpr));
+    }
+
+    function fmtSize(A) {
+      if (A < 0.01) return `${(A * 1000).toFixed(1)} mm`;
+      if (A < 1) return `${(A * 100).toFixed(A < 0.1 ? 1 : 0)} cm`;
+      return `${A.toFixed(1)} m`;
+    }
+    function fmtPeriod(T) {
+      if (T < 1) return `${T.toFixed(2)} s`;
+      if (T < 10) return `${T.toFixed(1)} s`;
+      if (T < 60) return `${T.toFixed(0)} s`;
+      return `${(T / 60).toFixed(1)} min`;
+    }
+
+    function draw(now) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const dpr = devicePixelRatio || 1;
+      g.fillStyle = "#05070a";
+      g.fillRect(0, 0, w, h);
+
+      if (!running) {
+        g.fillStyle = "rgba(190, 215, 235, 0.85)";
+        g.font = `${16 * dpr}px system-ui, sans-serif`;
+        g.textAlign = "center";
+        if (sensorMsg) {
+          g.font = `${13 * dpr}px system-ui, sans-serif`;
+          sensorMsg.split("\n").forEach((line, i) => {
+            g.fillText(line, w / 2, h / 2 + (i - 0.5) * 20 * dpr);
+          });
+        } else {
+          g.fillText("Tap to begin", w / 2, h / 2);
+        }
+        return;
+      }
+
+      const ml = 64 * dpr, mt = 46 * dpr, mr = 10 * dpr, mb = 12 * dpr;
+      const gw = w - ml - mr;
+      const gh = h - mt - mb;
+      grid = { ml, mt, gw, gh };
+      const cw = gw / 3, ch = gh / 3;
+
+      // Axis words.
+      g.font = `${10 * dpr}px system-ui, sans-serif`;
+      g.fillStyle = "rgba(160, 180, 200, 0.55)";
+      g.textAlign = "left";
+      g.fillText("space →", ml, 12 * dpr);
+      g.save();
+      g.translate(12 * dpr, mt + 4 * dpr);
+      g.rotate(Math.PI / 2);
+      g.fillText("time →", 0, 0);
+      g.restore();
+
+      // Column headers (space) and row labels (time).
+      for (let c = 0; c < 3; c++) {
+        const cx = ml + c * cw + cw / 2;
+        g.textAlign = "center";
+        g.fillStyle = `hsla(${COL_HUES[c]}, 55%, 72%, 0.9)`;
+        g.font = `${12 * dpr}px system-ui, sans-serif`;
+        g.fillText(LEVELS[c], cx, 26 * dpr);
+        g.fillStyle = "rgba(160, 180, 200, 0.6)";
+        g.font = `${9.5 * dpr}px system-ui, sans-serif`;
+        g.fillText(S_RANGES[c], cx, 39 * dpr);
+      }
+      for (let r = 0; r < 3; r++) {
+        const cy = mt + r * ch + ch / 2;
+        g.textAlign = "center";
+        g.fillStyle = "rgba(190, 210, 230, 0.85)";
+        g.font = `${12 * dpr}px system-ui, sans-serif`;
+        g.fillText(LEVELS[r], ml / 2 + 6 * dpr, cy - 3 * dpr);
+        g.fillStyle = "rgba(160, 180, 200, 0.6)";
+        g.font = `${9.5 * dpr}px system-ui, sans-serif`;
+        g.fillText(T_RANGES[r], ml / 2 + 6 * dpr, cy + 10 * dpr);
+      }
+
+      // Cells.
+      const curSi = clamp(Math.floor(st.uS), 0, 2);
+      const curTi = clamp(Math.floor(st.uT), 0, 2);
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          const x = ml + c * cw, y = mt + r * ch;
+          const isCur = c === curSi && r === curTi && st.presence > 0.05;
+          g.fillStyle = `hsla(${COL_HUES[c]}, 45%, 55%, ${isCur ? 0.05 + 0.13 * st.presence : 0.045})`;
+          g.fillRect(x + 1, y + 1, cw - 2, ch - 2);
+          g.strokeStyle = "rgba(140, 165, 190, 0.25)";
+          g.lineWidth = 1 * dpr;
+          g.strokeRect(x + 1, y + 1, cw - 2, ch - 2);
+          g.fillStyle = "rgba(170, 190, 210, 0.4)";
+          g.font = `${9.5 * dpr}px system-ui, sans-serif`;
+          g.textAlign = "right";
+          g.fillText(cellName(c, r), x + cw - 6 * dpr, y + ch - 6 * dpr);
+        }
+      }
+
+      // Target cell (practice/tour).
+      if (target) {
+        const x = ml + target.si * cw, y = mt + target.ti * ch;
+        if (reward > 0.01) {
+          g.fillStyle = `hsla(${COL_HUES[target.si]}, 70%, 62%, ${reward * 0.3})`;
+          g.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+        }
+        const pulse = 0.55 + 0.35 * Math.sin(now / 280);
+        g.strokeStyle = `hsla(${COL_HUES[target.si]}, 80%, 68%, ${pulse})`;
+        g.lineWidth = 2.5 * dpr;
+        g.strokeRect(x + 2, y + 2, cw - 4, ch - 4);
+        if (holdSec > 0.05 && mode === "tour") {
+          const cx = x + cw / 2, cy = y + ch / 2;
+          g.strokeStyle = "rgba(235, 245, 255, 0.85)";
+          g.lineWidth = 3 * dpr;
+          g.beginPath();
+          g.arc(cx, cy, 17 * dpr, -Math.PI / 2, -Math.PI / 2 + (Math.min(holdSec, HOLD_NEED) / HOLD_NEED) * Math.PI * 2);
+          g.stroke();
+        }
+      }
+      if (mode === "tour" && !tourDone) {
+        g.fillStyle = "rgba(200, 220, 240, 0.75)";
+        g.font = `${11 * dpr}px system-ui, sans-serif`;
+        g.textAlign = "right";
+        g.fillText(`Tour ${tourStep + 1}/${TOUR.length}`, w - mr - 4 * dpr, 14 * dpr);
+      }
+
+      // Trail + dot.
+      const px = ml + (clamp(st.uS, 0, 3) / 3) * gw;
+      const py = mt + (clamp(st.uT, 0, 3) / 3) * gh;
+      if (st.presence > 0.05 && !st.calibrating) {
+        trail.push({ x: px, y: py });
+        if (trail.length > TRAIL_MAX) trail.shift();
+      }
+      if (trail.length > 1) {
+        g.lineWidth = 1.5 * dpr;
+        for (let i = 1; i < trail.length; i++) {
+          g.strokeStyle = `hsla(${COL_HUES[curSi]}, 70%, 70%, ${(i / trail.length) * 0.3})`;
+          g.beginPath();
+          g.moveTo(trail[i - 1].x, trail[i - 1].y);
+          g.lineTo(trail[i].x, trail[i].y);
+          g.stroke();
+        }
+      }
+      const dotA = 0.2 + 0.8 * st.presence;
+      const dotR = (8 + 7 * st.presence) * dpr;
+      const grad = g.createRadialGradient(px, py, 0, px, py, dotR * 2.4);
+      grad.addColorStop(0, `hsla(${COL_HUES[curSi]}, 85%, 75%, ${dotA})`);
+      grad.addColorStop(1, `hsla(${COL_HUES[curSi]}, 85%, 75%, 0)`);
+      g.fillStyle = grad;
+      g.beginPath();
+      g.arc(px, py, dotR * 2.4, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = `hsla(${COL_HUES[curSi]}, 90%, 82%, ${dotA})`;
+      g.beginPath();
+      g.arc(px, py, dotR * 0.5, 0, Math.PI * 2);
+      g.fill();
+
+      if (st.calibrating) {
+        g.fillStyle = "rgba(235, 240, 250, 0.9)";
+        g.font = `${14 * dpr}px system-ui, sans-serif`;
+        g.textAlign = "center";
+        g.fillText(`Calibrating ${Math.round(st.calibrationProgress * 100)}% — hold still`, w / 2, h - 16 * dpr);
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Frame loop.
+    // ------------------------------------------------------------------
+    let lastFrame = 0, statTick = 0;
+    function frame(now) {
+      const dt = lastFrame ? clamp((now - lastFrame) / 1000, 0.001, 0.1) : 1 / 60;
+      lastFrame = now;
+      if (running) {
+        decayPointerPresence(dt);
+        updateAudio(dt);
+        if (now - statTick > 200) {
+          statTick = now;
+          if (!st.calibrating && st.presence > 0.08) {
+            const si = clamp(Math.floor(st.uS), 0, 2);
+            const ti = clamp(Math.floor(st.uT), 0, 2);
+            setStatus("estOut", `~${fmtSize(st.A)} · ~${fmtPeriod(st.T)} → ${cellName(si, ti)}`);
+          } else if (!st.calibrating) {
+            setStatus("estOut", pointerMode ? "Drag the dot" : "Still");
+          }
+        }
+      }
+      draw(now);
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
