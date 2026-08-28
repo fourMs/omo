@@ -23,6 +23,15 @@
   <ul class="support-list" id="list"></ul>
   <p class="status-bar">Tap <strong>Test motion</strong> on iOS — permission only unlocks after a gesture.</p>
   <button type="button" class="btn btn-play" id="motionBtn">Test motion</button>
+  <div class="panel" style="margin-top: 1rem; padding: 0.85rem 1rem;">
+    <h2 style="font-size: 1rem; margin: 0 0 0.5rem;">Motion sensors on iPhone</h2>
+    <ol style="margin: 0 0 0.6rem; padding-left: 1.2rem; line-height: 1.5;">
+      <li>Open the app in Safari itself — not inside Instagram, Messenger, or an e-mail app (use Open in Safari from the share sheet).</li>
+      <li>Tap the play surface once. Safari asks to access Motion and Orientation.</li>
+      <li>Tap Allow, then hold the phone still while the app calibrates.</li>
+    </ol>
+    <p style="margin: 0; line-height: 1.5;">No dialog, or tapped Cancel by mistake? Reload the page and tap again — Safari only re-asks after a reload. If that fails, close the tab and open the link fresh. Lockdown Mode blocks motion sensors entirely.</p>
+  </div>
   <script type="module">
     const list = document.getElementById("list");
     const row = (name, status, cls) => {

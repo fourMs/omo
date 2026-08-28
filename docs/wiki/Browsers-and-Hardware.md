@@ -31,13 +31,21 @@ Avoid in-app browsers (Instagram, Messenger, email). Use Open in Safari/Chrome f
 
 Run [Device support](https://fourms.github.io/omo/support.html) before a workshop to see which APIs this device exposes.
 
-### Motion permission (iOS 13+)
+### Motion permission (iPhone and iPad)
 
-Motion often stays flat until the user interacts and grants access. In workshops:
+iOS only exposes motion sensors after an explicit tap and an Allow in a per-site dialog. On current iOS there is no motion toggle in Settings; everything happens in that dialog.
 
-1. Open any motion app.
-2. Tap the pad, then allow motion when prompted.
-3. If still flat: Settings → Safari → Motion & Orientation → allow.
+1. Open the app in Safari itself, not inside Instagram, Messenger, or an e-mail app. In-app browsers often never show the dialog; use Open in Safari from the share sheet.
+2. Tap the play surface once. Safari asks: "fourms.github.io" Would Like to Access Motion and Orientation.
+3. Tap Allow. The app then calibrates; hold the phone still until it finishes.
+
+If the dialog never appears, or someone tapped Cancel:
+
+- Reload the page (pull down, or the reload button) and tap the surface again. Safari refuses to re-ask until the page is reloaded — this is the fix for nearly every stuck phone in a workshop.
+- Still nothing: close the tab completely and open the link fresh, for example by scanning the QR code again.
+- Chrome and Firefox on iOS run on Safari's engine, so the same steps apply; if they misbehave, plain Safari is the reliable path.
+- Lockdown Mode (Settings → Privacy & Security) blocks browser motion sensors entirely.
+- Very old devices (iOS 12) have no dialog; there, enable Settings → Safari → Motion & Orientation Access.
 
 ## Volume & acoustics
 

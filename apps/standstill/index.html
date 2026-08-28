@@ -202,7 +202,7 @@
         if (running) return;
         const ok = await permission;
         if (!ok) {
-          sensorMsg = "Motion blocked — allow Motion & Orientation\nfor this site, then tap to retry";
+          sensorMsg = "Motion blocked — reload this page,\ntap once, and choose Allow";
           setStatus("modeOut", "Motion permission needed", "warn");
           return;
         }
