@@ -39,7 +39,7 @@ Open hub → [Piano](https://fourms.github.io/omo/apps/piano/) (or [Kaoss Pad](h
 
 ### Stillness (optional, 10 min)
 
-[Standstill](https://fourms.github.io/omo/apps/standstill/): everyone holds the phone to the chest and stands still; sound blooms with stillness and any movement silences it. Run one 60-second Championship heat. [Micromotion](https://fourms.github.io/omo/apps/micromotion/) splits what remains into sway, tremor, and rotation lanes. Full script and background: [Micromotion & Sonification](https://github.com/fourMs/omo/wiki/Micromotion-and-Sonification).
+[Standstill](https://fourms.github.io/omo/apps/standstill/): everyone holds the phone to the chest and stands still; sound blooms with stillness and any movement silences it. Run one 3-minute Championship heat. [Micromotion](https://fourms.github.io/omo/apps/micromotion/) splits what remains into sway, tremor, and rotation lanes. Full script and background: [Micromotion & Sonification](https://github.com/fourMs/omo/wiki/Micromotion-and-Sonification).
 
 ### AI (10 min)
 

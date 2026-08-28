@@ -37,7 +37,7 @@ Open hub → **Piano** (or **Kaoss Pad** on Lead program). Everyone finds one no
 
 ### Stillness (optional, 10 min)
 
-**Standstill** — everyone holds the phone to the chest and stands still; sound blooms with stillness and any movement silences it. Run one 60-second **Championship** heat. **Micromotion** splits what remains into sway, tremor, and rotation lanes. Full script and background: **[Micromotion & Sonification](https://github.com/fourMs/omo/wiki/Micromotion-and-Sonification)**.
+**Standstill** — everyone holds the phone to the chest and stands still; sound blooms with stillness and any movement silences it. Run one 3-minute **Championship** heat. **Micromotion** splits what remains into sway, tremor, and rotation lanes. Full script and background: **[Micromotion & Sonification](https://github.com/fourMs/omo/wiki/Micromotion-and-Sonification)**.
 
 ### AI (10 min)
 

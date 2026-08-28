@@ -33,7 +33,7 @@
     <p>After a short calibration a soft wash fades in. Keep still and it <strong>blooms</strong> — new tones join the longer you hold. Any movement silences it instantly; stillness must be earned back slowly.</p>
     <p>The bloom <strong>breathes</strong> at about six breaths per minute — let your own breath follow the rings as they grow and ease. Slow breathing is also a good standstill strategy.</p>
     <p>You will never reach silence-proof stillness: the wandering dot is your own <strong>micromotion</strong> — balance, breathing, heartbeat — steering the sound's colour and stereo position.</p>
-    <p><strong>Championship</strong> runs a 60-second standstill competition: highest average stillness wins.</p>
+    <p><strong>Championship</strong> runs a 3-minute standstill competition, like the real Norwegian Championship of Standstill (which runs six): highest average stillness wins.</p>
     <p>The <strong>Difficulty</strong> slider sets how strictly motion counts: left is forgiving (good for a first try), right demands near-perfect stillness. For a fair Championship, everyone should use the same setting.</p>
   </div>
   <div class="control-row standstill-controls">
@@ -258,8 +258,8 @@
       if (!champ) return;
       if (champ.phase === "count" && now >= champ.endT) {
         champ.phase = "round";
-        champ.endT = now + 60000;
-        setStatus("modeOut", "Championship — 60 s", "ok");
+        champ.endT = now + 180000;
+        setStatus("modeOut", "Championship — 3 min", "ok");
       } else if (champ.phase === "round") {
         champ.sum += tracker.state.stillness;
         champ.n++;
@@ -410,8 +410,10 @@
         } else if (champ.phase === "round") {
           const leftS = Math.ceil((champ.endT - now) / 1000);
           const mean = champ.n ? champ.sum / champ.n : 0;
+          const mm = Math.floor(leftS / 60);
+          const ss = String(leftS % 60).padStart(2, "0");
           g.font = `${22 * dpr}px system-ui, sans-serif`;
-          g.fillText(`${leftS}s · ${Math.round(mean * 100)}%`, cx, 40 * dpr);
+          g.fillText(`${mm}:${ss} · ${Math.round(mean * 100)}%`, cx, 40 * dpr);
         } else {
           g.font = `${44 * dpr}px system-ui, sans-serif`;
           g.fillText(`${champ.score}%`, cx, cy - 90 * dpr);

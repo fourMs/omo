@@ -49,7 +49,7 @@ Before: phones on max volume, silent-mode off; open [standstill](https://fourms.
 1. Frame it (3 min). "This instrument is played by not playing it." Explain the inverse mapping and the ~6.5 mm/s finding. Nobody will reach silence-proof stillness; that is the point.
 2. Calibrate (2 min). Everyone taps once, holds the phone against the chest, stands still through the calibration ring. Discuss: why does the app need to learn *your* phone first?
 3. Solo standstill (5 min). Stand apart, eyes soft. Let the room fill as people settle: the ensemble sound *is* the group's collective stillness. Anyone who moves drops out audibly, so listen for it.
-4. Championship (10 min). Run the built-in 60-second Championship in heats. Compare scores; ask the winners what they did with their breathing, their knees, their gaze. (The research suggests strategies: soft knees, distant gaze, slow breath.)
+4. Championship (10 min). Run the built-in 3-minute Championship, in one or two heats. Compare scores; ask the winners what they did with their breathing, their knees, their gaze. (The research suggests strategies: soft knees, distant gaze, slow breath.)
 5. Micromotion listening (10 min). Switch to [micromotion](https://fourms.github.io/omo/apps/micromotion/). Explore the three lanes: slow deliberate breathing (watch sway), holding breath (does tremor change?), turning the head only (rotation). Phones without a gyroscope show "tilt estimate"; use it to discuss what accelerometers cannot measure.
 6. Discuss (5 min). Where was the music? Is standing still a *sound-producing action*? What did the inverse mapping change about how you attended to your own body?
 
