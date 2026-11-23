@@ -41,6 +41,7 @@
   <div class="learn-panel panel" id="learnPanel">
     <h2>Green button swell</h2>
     <p>Turn <strong>Audio on</strong>, then <strong>hold</strong> the green circle — drag your finger inside for more vibrato. Release anywhere to fade out.</p>
+    <p>Where you touch shapes the sound. Near the centre it is a soft, round tone; towards the edge it grows brighter, wider and more resonant. Around the circle the colour changes: the top is brassy, the bottom hollow, the left dark and the right nasal. Each hold starts soft and blooms into its bright colour over about a second.</p>
   </div>
   <div class="green-button-stage" id="stage" role="button" aria-label="Hold green button to swell">
     <div class="btn" id="swellBtn"></div>
@@ -48,17 +49,14 @@
   <script type="module">
     import { bindLearn, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
+    import { createGreenSwell } from "../../shared/green-swell.js";
 
     bindLearn();
-
-    const SWELL_LEVEL = 0.62;
-    const BASE_PITCH_CENTS = 11;
-    const BASE_AMP_DEPTH = 0.09;
 
     const stage = document.getElementById("stage");
     const btn = document.getElementById("swellBtn");
 
-    let ctx, master, osc, swellGain, pitchDepth, ampDepth, pitchLfo, ampLfo;
+    let ctx, voice;
     let built = false;
     let holding = false;
     let activePointer = null;
@@ -68,84 +66,31 @@
 
     function build(c) {
       ctx = c;
-      ({ master } = createMasterBus(c, 0.62));
-      osc = ctx.createOscillator();
-      osc.type = "sine";
-      osc.frequency.value = 220;
-
-      const toneGain = ctx.createGain();
-      toneGain.gain.value = 1;
-      const toneOffset = ctx.createConstantSource();
-      toneOffset.offset.value = 1;
-      toneOffset.connect(toneGain.gain);
-
-      pitchLfo = ctx.createOscillator();
-      pitchLfo.type = "sine";
-      pitchLfo.frequency.value = 5.2 + Math.random() * 1.5;
-      pitchDepth = ctx.createGain();
-      pitchDepth.gain.value = BASE_PITCH_CENTS;
-      pitchLfo.connect(pitchDepth);
-      pitchDepth.connect(osc.detune);
-
-      ampLfo = ctx.createOscillator();
-      ampLfo.type = "sine";
-      ampLfo.frequency.value = 0.28 + Math.random() * 0.12;
-      ampDepth = ctx.createGain();
-      ampDepth.gain.value = BASE_AMP_DEPTH;
-      ampLfo.connect(ampDepth);
-      ampDepth.connect(toneGain.gain);
-
-      swellGain = ctx.createGain();
-      swellGain.gain.value = 0;
-      osc.connect(toneGain);
-      toneGain.connect(swellGain);
-      swellGain.connect(master);
-
-      toneOffset.start();
-      pitchLfo.start();
-      ampLfo.start();
-      osc.start();
+      // Master 0.5 keeps the brightest rim position below 0.7 peak after
+      // the compressor (measured offline), so 150% app volume does not clip.
+      const { master } = createMasterBus(c, 0.5);
+      voice = createGreenSwell(c, master);
       built = true;
     }
 
-    function stageCenter() {
-      const r = stage.getBoundingClientRect();
-      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, r };
+    /** Finger position relative to the green circle: d 0 (centre)..1 (rim and beyond), angle (rad, 0 = right, up positive). */
+    function circlePos(e) {
+      const r = btn.getBoundingClientRect();
+      const rad = Math.max(1, r.width / 2);
+      const x = (e.clientX - (r.left + r.width / 2)) / rad;
+      const y = (e.clientY - (r.top + r.height / 2)) / rad;
+      return { d: Math.min(1, Math.hypot(x, y)), angle: Math.atan2(-y, x) };
     }
 
-    function swellOn() {
-      if (!built || !ctx || !holding) return;
-      const t = ctx.currentTime;
-      swellGain.gain.cancelScheduledValues(t);
-      swellGain.gain.setTargetAtTime(SWELL_LEVEL, t, 0.12);
-    }
-
-    function swellOff() {
-      if (!built || !ctx) return;
-      const t = ctx.currentTime;
-      swellGain.gain.cancelScheduledValues(t);
-      swellGain.gain.setTargetAtTime(0, t, 0.25);
-      pitchDepth.gain.setTargetAtTime(BASE_PITCH_CENTS, t, 0.1);
-      ampDepth.gain.setTargetAtTime(BASE_AMP_DEPTH, t, 0.1);
-    }
-
-    function updateMoveVibrato(e) {
-      if (!built || !ctx || !holding) return;
-      const { cx, cy, r } = stageCenter();
-      const nx = (e.clientX - cx) / (r.width / 2);
-      const ny = (e.clientY - cy) / (r.height / 2);
-      const dist = Math.min(1, Math.hypot(nx, ny));
-
+    function updateShape(e) {
+      if (!built || !holding) return;
       const dx = e.clientX - lastMoveX;
       const dy = e.clientY - lastMoveY;
       lastMoveX = e.clientX;
       lastMoveY = e.clientY;
       moveEnergy = moveEnergy * 0.82 + Math.min(1, Math.hypot(dx, dy) / 14) * 0.18;
-
-      const t = ctx.currentTime;
-      pitchDepth.gain.setTargetAtTime(BASE_PITCH_CENTS + dist * 14 + moveEnergy * 18, t, 0.04);
-      ampDepth.gain.setTargetAtTime(BASE_AMP_DEPTH + dist * 0.1 + moveEnergy * 0.12, t, 0.04);
-      pitchLfo.frequency.setTargetAtTime(5 + dist * 2 + moveEnergy * 3, t, 0.06);
+      const { d, angle } = circlePos(e);
+      voice.shape(d, angle, moveEnergy);
     }
 
     function startHold(e) {
@@ -162,12 +107,10 @@
         /* noop */
       }
       if (built) {
-        const t = ctx.currentTime;
-        osc.frequency.cancelScheduledValues(t);
-        osc.frequency.setTargetAtTime(180 + Math.random() * 80, t, 0.2);
+        const { d, angle } = circlePos(e);
+        voice.hold(180 + Math.random() * 80, d, angle);
       }
-      swellOn();
-      updateMoveVibrato(e);
+      updateShape(e);
     }
 
     function endHold(e) {
@@ -176,7 +119,7 @@
       activePointer = null;
       stage.classList.remove("holding");
       btn.classList.remove("active");
-      swellOff();
+      if (built) voice.release();
     }
 
     function onDocPointerUp(e) {
@@ -201,8 +144,8 @@
       (e) => {
         if (!holding || e.pointerId !== activePointer) return;
         e.preventDefault();
-        swellOn();
-        updateMoveVibrato(e);
+        if (built) voice.sustain();
+        updateShape(e);
       },
       { passive: false }
     );

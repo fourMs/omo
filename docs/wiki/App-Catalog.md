@@ -44,7 +44,7 @@ The Teaches column names the main concept and the matching chapter of [Sensing S
 | App | Synth / role | Sensors | Teaches |
 |-----|--------------|---------|---------|
 | [Compass Wah](https://fourms.github.io/omo/apps/compass-wah/) | Compass wah or choir | Touch · compass · tilt | Orientation as control · The body |
-| [Green Button](https://fourms.github.io/omo/apps/green-button/) | Swarm tones | Touch · motion | Swell, vibrato, ensemble density · Electroacoustics |
+| [Green Button](https://fourms.github.io/omo/apps/green-button/) | Swarm tones, timbre by touch position | Touch | Swell, vibrato, ensemble density · Electroacoustics |
 | [Harmonizer](https://fourms.github.io/omo/apps/harmonizer/) | Chroma drones | Mic · touch | Chroma and room harmony · Machine listening |
 | [Just Equal](https://fourms.github.io/omo/apps/just-equal/) | Detuned sines | Touch | Just vs equal temperament · Harmony and melody |
 | [Micromotion](https://fourms.github.io/omo/apps/micromotion/) | Band-split stillness voices | Motion · gyro (optional) | Motion bands and sensor limits · The body |
