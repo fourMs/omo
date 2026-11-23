@@ -51,7 +51,7 @@
   </div>
   <script type="module">
     import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
-    import { createMasterBus, getMicStream } from "../../shared/audio.js";
+    import { createMasterBus, getMicStream, primeMicStream } from "../../shared/audio.js";
     import { createOnsetDetector } from "../../shared/onset-detect.js";
     import { createFireflyPulse } from "../../shared/pulse-sync.js";
 
@@ -133,6 +133,9 @@
     }
 
     async function start() {
+      // Ask for the mic synchronously, inside the tap: iOS Safari drops the
+      // mic if getUserMedia first runs after the audio unlock.
+      if (!micStream && document.getElementById("listen").checked) primeMicStream()?.catch(() => {});
       await startAudio(!built ? buildAudio : undefined);
       if (!built || !engine) return;
       if (document.getElementById("listen").checked) {
@@ -167,6 +170,7 @@
     document.getElementById("listen").addEventListener("change", async (e) => {
       if (!running) return;
       if (e.target.checked) {
+        if (!micStream) primeMicStream()?.catch(() => {});
         if (await ensureMic()) detector?.start();
       } else {
         detector?.stop();
@@ -175,7 +179,9 @@
 
     bpmEl.addEventListener("input", (e) => {
       document.getElementById("bpmVal").textContent = e.target.value;
-      if (!running) engine?.setBpm(+e.target.value);
+      // While running, moving the slider restarts the tempo from there;
+      // listening then pulls it towards the neighbours again.
+      engine?.setBpm(+e.target.value);
     });
 
     window.addEventListener("pagehide", () => {

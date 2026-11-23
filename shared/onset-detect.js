@@ -16,6 +16,12 @@ export function createOnsetDetector(ctx, stream, { onOnset, minGap = 0.14 } = {}
   analyser.fftSize = 2048;
   src.connect(hp);
   hp.connect(analyser);
+  // iOS Safari only pulls audio through nodes that reach the destination;
+  // without this silent path the analyser reads zeros and no onset fires.
+  const silent = ctx.createGain();
+  silent.gain.value = 0;
+  analyser.connect(silent);
+  silent.connect(ctx.destination);
 
   const buf = new Float32Array(analyser.fftSize);
   let noise = 0.015;
@@ -55,6 +61,7 @@ export function createOnsetDetector(ctx, stream, { onOnset, minGap = 0.14 } = {}
       this.stop();
       try {
         src.disconnect();
+        silent.disconnect();
       } catch {
         /* noop */
       }

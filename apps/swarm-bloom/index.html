@@ -63,7 +63,7 @@
   </div>
   <script type="module">
     import { bindLearn, registerAudioBoot, setStatus, startAudio } from "../../shared/app.js";
-    import { connectMicAnalyser, createMasterBus, getMicStream } from "../../shared/audio.js";
+    import { connectMicAnalyser, createMasterBus, getMicStream, primeMicStream } from "../../shared/audio.js";
     import { chromaFromSpectrum } from "../../shared/chroma-detect.js";
     import { createOnsetDetector } from "../../shared/onset-detect.js";
     import { createEvoSoundscapeEngine } from "../../shared/evo-soundscape.js";
@@ -207,6 +207,9 @@
     }
 
     async function start() {
+      // Ask for the mic synchronously, inside the tap: iOS Safari drops the
+      // mic if getUserMedia first runs after the audio unlock.
+      if (!micStream && document.getElementById("listen").checked) primeMicStream()?.catch(() => {});
       await startAudio(!built ? buildAudio : undefined);
       if (!built || !engine) return;
       engine.setBpm(+document.getElementById("bpm").value);
@@ -247,6 +250,7 @@
     document.getElementById("listen").addEventListener("change", async (e) => {
       if (!running) return;
       if (e.target.checked) {
+        if (!micStream) primeMicStream()?.catch(() => {});
         if (await ensureMic()) detector?.start();
       } else detector?.stop();
     });
