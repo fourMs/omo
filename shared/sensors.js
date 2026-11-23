@@ -9,22 +9,66 @@ export function needsMotionPermission() {
   return typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function";
 }
 
-// Single-flight permission requests: iOS shows one prompt per gesture, and a
-// second requestPermission call while the prompt is open resolves denied —
-// so concurrent callers must join the same pending promise. A rejected
-// (out-of-gesture) attempt resets so a later in-gesture call can retry.
+// Single-flight permission requests: iOS shows one prompt per gesture, so
+// concurrent callers join the same pending promise. A failed or denied
+// attempt resets, so a later call can ask again.
+//
+// Gesture retry: WebKit only lets requestPermission() prompt during a user
+// activation. touchend and click count as one on iOS; a touch-driven
+// pointerdown or touchstart may not, and most apps start on pointerdown. When the request is refused for lack of a gesture
+// (NotAllowedError), we wait for the next touchend or click (normally the
+// end of the same tap) and ask again from there; callers keep awaiting the
+// original promise, which then settles with the real Allow or Deny.
 let motionPerm = null;
 let orientationPerm = null;
+const gestureRetries = [];
+
+function onRetryGesture() {
+  window.removeEventListener("touchend", onRetryGesture, true);
+  window.removeEventListener("click", onRetryGesture, true);
+  const queued = gestureRetries.splice(0);
+  queued.forEach((fn) => fn());
+}
+
+function retryOnNextGesture(fn) {
+  gestureRetries.push(fn);
+  if (gestureRetries.length === 1) {
+    window.addEventListener("touchend", onRetryGesture, { capture: true, passive: true });
+    window.addEventListener("click", onRetryGesture, { capture: true, passive: true });
+  }
+}
+
+/** @param {() => Promise<string>} ask the requestPermission call */
+function askWithGestureRetry(ask) {
+  return new Promise((resolve) => {
+    const attempt = (isRetry) => {
+      let p;
+      try {
+        p = Promise.resolve(ask());
+      } catch (err) {
+        p = Promise.reject(err);
+      }
+      p.then(
+        (r) => resolve(r === "granted"),
+        (err) => {
+          if (!isRetry && err?.name === "NotAllowedError") retryOnNextGesture(() => attempt(true));
+          else resolve(false);
+        }
+      );
+    };
+    attempt(false);
+  });
+}
 
 export function requestMotionPermission() {
   if (!needsMotionPermission()) return Promise.resolve(true);
+  // One iOS permission covers both APIs: join a request already under way.
+  if (!motionPerm && orientationPerm) return orientationPerm;
   if (!motionPerm) {
-    motionPerm = DeviceMotionEvent.requestPermission()
-      .then((r) => r === "granted")
-      .catch(() => {
-        motionPerm = null;
-        return false;
-      });
+    motionPerm = askWithGestureRetry(() => DeviceMotionEvent.requestPermission()).then((ok) => {
+      if (!ok) motionPerm = null;
+      return ok;
+    });
   }
   return motionPerm;
 }
@@ -33,35 +77,42 @@ export function requestOrientationPermission() {
   if (typeof DeviceOrientationEvent === "undefined" || typeof DeviceOrientationEvent.requestPermission !== "function") {
     return Promise.resolve(true);
   }
+  if (!orientationPerm && motionPerm) return motionPerm;
   if (!orientationPerm) {
-    orientationPerm = DeviceOrientationEvent.requestPermission()
-      .then((r) => r === "granted")
-      .catch(() => {
-        orientationPerm = null;
-        return false;
-      });
+    orientationPerm = askWithGestureRetry(() => DeviceOrientationEvent.requestPermission()).then((ok) => {
+      if (!ok) orientationPerm = null;
+      return ok;
+    });
   }
   return orientationPerm;
 }
 
 /**
+ * On iOS one "Motion and Orientation" permission covers both APIs, so when
+ * motion is needed only the motion request is made: a second, orientation
+ * request after an await would run outside the tap gesture and could be
+ * refused. Elsewhere there is nothing to ask for and both resolve true.
  * @param {{ needMotion?: boolean, needOrientation?: boolean }} [opts]
  */
 export async function enableSensors({ needMotion = true, needOrientation = true } = {}) {
-  const m = !needMotion || (await requestMotionPermission());
-  const o = !needOrientation || (await requestOrientationPermission());
-  return m && o;
+  if (needMotion && needsMotionPermission()) return requestMotionPermission();
+  return needOrientation ? requestOrientationPermission() : true;
 }
 
 let sensorPrime = null;
 
-/** Start permission requests on the same user gesture (before any await). */
+/**
+ * Start permission requests on the same user gesture (before any await).
+ * A false result is not cached, so a later tap can try again.
+ */
 export function primeSensors(opts) {
   if (!sensorPrime) {
-    sensorPrime = enableSensors(opts).catch(() => {
-      sensorPrime = null;
-      return false;
-    });
+    sensorPrime = enableSensors(opts)
+      .catch(() => false)
+      .then((ok) => {
+        if (!ok) sensorPrime = null;
+        return ok;
+      });
   }
   return sensorPrime;
 }
