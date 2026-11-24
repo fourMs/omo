@@ -70,9 +70,9 @@ export const HUB_APPS = [
     href: "apps/green-button/",
     title: "Green Button",
     section: "drones",
-    synth: "Swarm tones, timbre by touch position",
+    synth: "Swell whose timbre follows the finger; evolves while held still",
     sensors: "Touch",
-    teaches: "Swell, vibrato, ensemble density · Electroacoustics",
+    teaches: "Swell, timbre by position, evolution that learns from listening · Electroacoustics",
   },
   {
     href: "apps/just-equal/",

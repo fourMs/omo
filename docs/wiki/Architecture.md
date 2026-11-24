@@ -39,6 +39,8 @@ node scripts/sync-titles-from-slugs.mjs
 | `hold-play.js` | Hold-to-sound pad pattern |
 | `shepard.js` | Log-frequency Shepard glide |
 | `pulse-sync.js` | Firefly entrainment |
+| `green-swell.js` | Green Button voice: timbre by position, evolved genome |
+| `green-evolve.js` | Green Button evolver: novelty search, fitness from how long people hold |
 | `harmony-sync.js` | Chroma following |
 | `ml.js` | k-NN / feature helpers for AI apps |
 | `workshop.js` | Hub `?section=` filter, section colours |

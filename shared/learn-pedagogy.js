@@ -51,8 +51,8 @@ export const LEARN_PEDAGOGY = {
   ],
 
   "green-button": [
-    "Hold the green circle to swell a sine drone; finger motion inside adds vibrato and shimmer.",
-    "Simple hold-to-play drone — one big button, collective density when many phones swell together.",
+    "Hold the green circle to swell a drone: the centre is soft, the rim bright, and the angle picks the colour. Hold still and the sound evolves, breeding new variations by novelty search.",
+    "One big button with rich control: position shapes the timbre, and the phone learns which evolved variations people keep holding through. Collective density when many phones swell together.",
   ],
 
   "just-equal": [

@@ -44,7 +44,7 @@ The Teaches column names the main concept and the matching chapter of [Sensing S
 | App | Folder | Synth / role | Sensors | Teaches |
 |-----|--------|--------------|---------|---------|
 | [Compass Wah](../apps/compass-wah/) | `compass-wah` | Compass wah or choir | Touch · compass · tilt | Orientation as control · The body |
-| [Green Button](../apps/green-button/) | `green-button` | Swarm tones, timbre by touch position | Touch | Swell, vibrato, ensemble density · Electroacoustics |
+| [Green Button](../apps/green-button/) | `green-button` | Swell whose timbre follows the finger; evolves while held still | Touch | Swell, timbre by position, evolution that learns from listening · Electroacoustics |
 | [Harmonizer](../apps/harmonizer/) | `harmonizer` | Chroma drones | Mic · touch | Chroma and room harmony · Machine listening |
 | [Just Equal](../apps/just-equal/) | `just-equal` | Detuned sines | Touch | Just vs equal temperament · Harmony and melody |
 | [Micromotion](../apps/micromotion/) | `micromotion` | Band-split stillness voices | Motion · gyro (optional) | Motion bands and sensor limits · The body |
