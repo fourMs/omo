@@ -13,6 +13,9 @@
  * On each hold the bright layer blooms in more slowly than the core swell,
  * and its filter opens two octaves as it does, so the sound grows from soft
  * to sharp. Vibrato (pitch and amplitude LFOs) is shared by all layers.
+ *
+ * evolve() lets an evolved genome (green-evolve.js) move the sound while the
+ * player holds still: vowel, mix, a glassy overtone, beating and tremolo.
  */
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -55,7 +58,12 @@ export function createGreenSwell(ctx, dest) {
   ampDepth.connect(toneGain.gain);
   const swellGain = gain(0);
   toneGain.connect(swellGain);
-  swellGain.connect(dest);
+  // Level trim: the bright rim and the evolved sound are turned down a little
+  // so their peaks stay below 0.7 after the master bus (measured offline over
+  // a full tremolo cycle), without changing their colour.
+  const trim = gain(1);
+  swellGain.connect(trim);
+  trim.connect(dest);
 
   const core = osc("sine");
   const coreLevel = gain(0.6);
@@ -106,32 +114,69 @@ export function createGreenSwell(ctx, dest) {
   bloom.connect(bloomCents);
   bloomCents.connect(lowpass.detune);
 
+  // Evolved overtone: a glassy sine on a harmonic chosen by the genome,
+  // silent until the player has held still for a while.
+  const partial = osc("sine");
+  const partialLevel = gain(0);
+  partial.connect(partialLevel);
+  partialLevel.connect(toneGain);
+
   const voices = [core, bodyA, bodyB, saw, square];
   voices.forEach((o) => pitchDepth.connect(o.detune));
+  pitchDepth.connect(partial.detune);
 
-  [pitchLfo, ampLfo, bloom, ...voices].forEach((n) => n.start());
+  [pitchLfo, ampLfo, bloom, partial, ...voices].forEach((n) => n.start());
 
   let f0 = 220;
   let spread = 4;
+  let lastD = 0;
+  let lastAngle = 0;
+  // Evolved genome (six genes, -1..1) and how far it may move the sound (0..1).
+  let evo = [0, 0, 0, 0, 0, 0];
+  let evoDepth = 0;
+  const harmonic = (g) => [2, 3, 4, 5, 6, 7][Math.min(5, Math.floor(((g + 1) / 2) * 6))];
 
   function setTimbre(d, angle, t, tau) {
-    // Distance: soft centre → bright, wide, resonant rim.
-    spread = 4 + 22 * d;
+    lastD = d;
+    lastAngle = angle;
+    const [gVowel, gMix, , , gBeat] = evo;
+    const k = evoDepth;
+    // Distance: soft centre → bright, wide, resonant rim; the genome adds beating.
+    spread = 4 + 22 * d + 18 * ((gBeat + 1) / 2) * k;
     bodyA.detune.setTargetAtTime(-spread, t, tau);
     bodyB.detune.setTargetAtTime(spread, t, tau);
     // Sawtooth and square share one detune so their mix stays coherent.
     saw.detune.setTargetAtTime(spread * 0.5, t, tau);
     square.detune.setTargetAtTime(spread * 0.5, t, tau);
-    lowpass.frequency.setTargetAtTime(clamp(f0 * Math.pow(2, 2 + 3 * d), 200, 9000), t, tau);
+    // The last third towards the rim is where it turns bright: the filter
+    // opens further, the bright layer rises and the soft core and body give
+    // way, so the rim is sharper without being much louder.
+    const rim = d * d * d;
+    lowpass.frequency.setTargetAtTime(clamp(f0 * Math.pow(2, 2 + 3 * d + 1.6 * rim), 200, 14000), t, tau);
     lowpass.Q.setTargetAtTime(0.7 + 3 * d * d, t, tau);
-    brightLevel.gain.setTargetAtTime(0.2 + 0.45 * d, t, tau);
+    formant.gain.setTargetAtTime(7 + 5 * rim, t, tau);
+    brightLevel.gain.setTargetAtTime(0.2 + 0.45 * d + 0.35 * rim, t, tau);
+    coreLevel.gain.setTargetAtTime(0.6 - 0.3 * rim, t, tau);
+    trim.gain.setTargetAtTime((1 - 0.2 * rim) * (1 - 0.1 * k), t, tau);
+    bodyALevel.gain.setTargetAtTime(0.3 - 0.12 * rim, t, tau);
+    bodyBLevel.gain.setTargetAtTime(0.16 - 0.06 * rim, t, tau);
     // Angle (0 = right, π/2 = top): top sawtooth, bottom square;
     // left a dark formant near 700 Hz, right a nasal one near 2.4 kHz.
     const up = 0.5 + 0.5 * Math.sin(angle);
     const right = 0.5 + 0.5 * Math.cos(angle);
-    sawMix.gain.setTargetAtTime(0.15 + 0.6 * up, t, tau);
-    squareMix.gain.setTargetAtTime(0.15 + 0.6 * (1 - up), t, tau);
-    formant.frequency.setTargetAtTime(700 * Math.pow(2, 1.8 * right), t, tau);
+    // The genome tilts the sawtooth/square mix and moves the vowel up to an octave.
+    const mix = Math.max(0, Math.min(1, up + 0.45 * gMix * k));
+    sawMix.gain.setTargetAtTime(0.15 + 0.6 * mix, t, tau);
+    squareMix.gain.setTargetAtTime(0.15 + 0.6 * (1 - mix), t, tau);
+    formant.frequency.setTargetAtTime(700 * Math.pow(2, 1.8 * right + gVowel * k), t, tau);
+  }
+
+  function setEvolved(t, tau) {
+    const [, , gHarm, gLevel, , gTrem] = evo;
+    const k = evoDepth;
+    partial.frequency.setTargetAtTime(f0 * harmonic(gHarm), t, tau);
+    partialLevel.gain.setTargetAtTime(0.12 * ((gLevel + 1) / 2) * k, t, tau);
+    ampLfo.frequency.setTargetAtTime(0.3 * Math.pow(2, 2 * gTrem * k), t, tau);
   }
 
   return {
@@ -143,7 +188,9 @@ export function createGreenSwell(ctx, dest) {
         o.frequency.cancelScheduledValues(t);
         o.frequency.setTargetAtTime(o === bodyB ? f0 * 2 : f0, t, 0.2);
       });
+      evoDepth = 0;
       setTimbre(d, angle, t, 0.02);
+      setEvolved(t, 0.02);
       swellGain.gain.cancelScheduledValues(t);
       swellGain.gain.setTargetAtTime(SWELL_LEVEL, t, SWELL_TAU);
       bloom.offset.cancelScheduledValues(t);
@@ -167,8 +214,22 @@ export function createGreenSwell(ctx, dest) {
       pitchLfo.frequency.setTargetAtTime(5 + d * 2 + moveEnergy * 3, t, 0.06);
     },
 
+    /**
+     * Morph towards an evolved genome (six genes, -1..1) at depth 0..1, over
+     * time constant tau (s). Genes: vowel shift, sawtooth/square tilt, overtone
+     * harmonic, overtone level, beating, tremolo rate.
+     */
+    evolve(genome, depth, tau = 2.5) {
+      const t = ctx.currentTime;
+      evo = genome.slice(0, 6);
+      evoDepth = Math.max(0, Math.min(1, depth));
+      setTimbre(lastD, lastAngle, t, tau);
+      setEvolved(t, tau);
+    },
+
     release() {
       const t = ctx.currentTime;
+      partialLevel.gain.setTargetAtTime(0, t, RELEASE_TAU);
       swellGain.gain.cancelScheduledValues(t);
       swellGain.gain.setTargetAtTime(0, t, RELEASE_TAU);
       bloom.offset.cancelScheduledValues(t);

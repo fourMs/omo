@@ -42,6 +42,7 @@
     <h2>Green button swell</h2>
     <p>Turn <strong>Audio on</strong>, then <strong>hold</strong> the green circle — drag your finger inside for more vibrato. Release anywhere to fade out.</p>
     <p>Where you touch shapes the sound. Near the centre it is a soft, round tone; towards the edge it grows brighter, wider and more resonant. Around the circle the colour changes: the top is brassy, the bottom hollow, the left dark and the right nasal. Each hold starts soft and blooms into its bright colour over about a second.</p>
+    <p>Hold still and the sound starts to evolve: after a few seconds it breeds new variations of itself (vowel, colour, a glassy overtone, beating, tremolo), straying further the longer you stay still. Move and you take it back. The phone remembers which variations people keep holding through and which make them let go, and breeds more of the ones that are listened to.</p>
   </div>
   <div class="green-button-stage" id="stage" role="button" aria-label="Hold green button to swell">
     <div class="btn" id="swellBtn"></div>
@@ -50,11 +51,39 @@
     import { bindLearn, startAudio } from "../../shared/app.js";
     import { createMasterBus } from "../../shared/audio.js";
     import { createGreenSwell } from "../../shared/green-swell.js";
+    import { createEvolver } from "../../shared/green-evolve.js";
 
     bindLearn();
 
     const stage = document.getElementById("stage");
     const btn = document.getElementById("swellBtn");
+
+    // Holding still lets the sound evolve: after STILL_START_S without motion a
+    // new genome is bred every STEP_S, and its depth grows over DEPTH_RAMP_S.
+    const STILL_START_S = 3;
+    const STEP_S = 4;
+    const DEPTH_RAMP_S = 18;
+    const evolver = createEvolver();
+    let lastMotion = 0;
+    let lastStep = 0;
+    let genome = null;
+    let prevDepth = 0;
+    let evoTimer = null;
+
+    function evolveTick() {
+      if (!holding || !built) return;
+      const now = performance.now() / 1000;
+      const still = now - lastMotion;
+      const depth = Math.max(0, Math.min(1, (still - (STILL_START_S - 1)) / DEPTH_RAMP_S));
+      if (still >= STILL_START_S && now - lastStep >= STEP_S) {
+        genome = evolver.next(now);
+        lastStep = now;
+        voice.evolve(genome, depth, 2.5);
+      } else if (genome && Math.abs(depth - prevDepth) > 0.01) {
+        voice.evolve(genome, depth, depth < prevDepth ? 0.4 : 1.5);
+      }
+      prevDepth = depth;
+    }
 
     let ctx, voice;
     let built = false;
@@ -88,6 +117,7 @@
       const dy = e.clientY - lastMoveY;
       lastMoveX = e.clientX;
       lastMoveY = e.clientY;
+      if (Math.hypot(dx, dy) > 3) lastMotion = performance.now() / 1000;
       moveEnergy = moveEnergy * 0.82 + Math.min(1, Math.hypot(dx, dy) / 14) * 0.18;
       const { d, angle } = circlePos(e);
       voice.shape(d, angle, moveEnergy);
@@ -99,6 +129,13 @@
       lastMoveX = e.clientX;
       lastMoveY = e.clientY;
       moveEnergy = 0;
+      lastMotion = performance.now() / 1000;
+      lastStep = 0;
+      genome = null;
+      prevDepth = 0;
+      evolver.begin();
+      clearInterval(evoTimer);
+      evoTimer = setInterval(evolveTick, 250);
       stage.classList.add("holding");
       btn.classList.add("active");
       try {
@@ -114,9 +151,12 @@
     }
 
     function endHold(e) {
+      if (!holding) return;
       if (activePointer != null && e.pointerId !== activePointer) return;
       holding = false;
       activePointer = null;
+      clearInterval(evoTimer);
+      evolver.release(performance.now() / 1000);
       stage.classList.remove("holding");
       btn.classList.remove("active");
       if (built) voice.release();
@@ -132,6 +172,10 @@
       async (e) => {
         e.preventDefault();
         if (holding) return;
+        // Only a touch that lands inside the green circle starts a hold.
+        const r = btn.getBoundingClientRect();
+        const rad = Math.max(1, r.width / 2);
+        if (Math.hypot(e.clientX - (r.left + rad), e.clientY - (r.top + r.height / 2)) > rad) return;
         await startAudio(!built ? build : undefined);
         startHold(e);
         document.addEventListener("pointerup", onDocPointerUp, true);

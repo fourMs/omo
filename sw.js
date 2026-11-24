@@ -1,4 +1,4 @@
-const CACHE = "omo-v121";
+const CACHE = "omo-v122";
 const ASSETS = [
   "./",
   "./index.html",
@@ -41,6 +41,7 @@ const ASSETS = [
   "./shared/bowed-string.js",
   "./shared/stillness.js",
   "./shared/green-swell.js",
+  "./shared/green-evolve.js",
   "./manifest.webmanifest",
 ];
 
